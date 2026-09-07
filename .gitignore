@@ -10,6 +10,11 @@
 *.userosscache
 *.sln.docstates
 *.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.*.local.json
+secrets.json
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
@@ -406,6 +411,14 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# macOS
+.DS_Store
+._*
 
 # VS Code files for those working on multiple tools
 .vscode/*
