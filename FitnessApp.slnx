@@ -2,8 +2,12 @@
   <Folder Name="/src/">
     <Project Path="src/FitnessApp.Application/FitnessApp.Application.csproj" />
     <Project Path="src/FitnessApp.Client/FitnessApp.Client.csproj" />
+    <Project Path="src/FitnessApp.Contracts/FitnessApp.Contracts.csproj" />
     <Project Path="src/FitnessApp.Domain/FitnessApp.Domain.csproj" />
     <Project Path="src/FitnessApp.Infrastructure/FitnessApp.Infrastructure.csproj" />
     <Project Path="src/FitnessApp.Server/FitnessApp.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FitnessApp.IntegrationTests/FitnessApp.IntegrationTests.csproj" />
   </Folder>
 </Solution>

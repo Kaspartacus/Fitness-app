@@ -1,0 +1,73 @@
+@page "/login"
+@inject AuthenticationClient Authentication
+@inject NavigationManager Navigation
+
+<PageTitle>Log ind</PageTitle>
+
+<main class="foundation" aria-labelledby="login-title">
+    <p class="eyebrow">FitnessApp</p>
+    <h1 id="login-title">Log ind</h1>
+    <p class="intro">Brug din godkendte konto for at fortsætte.</p>
+
+    @if (Logout is "unconfirmed")
+    {
+        <p class="form-notice" role="status">Du er logget ud lokalt. Serverlogout kunne ikke bekræftes.</p>
+    }
+
+    <EditForm Model="model" OnValidSubmit="LoginAsync" FormName="login" class="auth-form">
+        <DataAnnotationsValidator />
+
+        <div class="form-field">
+            <label for="email">E-mail</label>
+            <input id="email" @bind="model.Email" @bind:event="oninput" autocomplete="email" inputmode="email" />
+            <ValidationMessage For="@(() => model.Email)" />
+        </div>
+
+        <div class="form-field">
+            <label for="password">Adgangskode</label>
+            <input id="password" type="password" @bind="model.Password" @bind:event="oninput" autocomplete="current-password" />
+            <ValidationMessage For="@(() => model.Password)" />
+        </div>
+
+        @if (errorMessage is not null)
+        {
+            <p class="form-error" role="alert">@errorMessage</p>
+        }
+
+        <button class="button" type="submit" disabled="@isSubmitting">
+            @(isSubmitting ? "Logger ind…" : "Log ind")
+        </button>
+    </EditForm>
+</main>
+
+@code {
+    [SupplyParameterFromQuery(Name = "logout")]
+    public string? Logout { get; set; }
+
+    private readonly FitnessApp.Contracts.Authentication.LoginRequest model = new();
+    private bool isSubmitting;
+    private string? errorMessage;
+
+    private async Task LoginAsync()
+    {
+        isSubmitting = true;
+        errorMessage = null;
+
+        try
+        {
+            errorMessage = await Authentication.LoginAsync(model);
+            if (errorMessage is null)
+            {
+                Navigation.NavigateTo("/");
+            }
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "Der kunne ikke oprettes forbindelse. Prøv igen.";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}

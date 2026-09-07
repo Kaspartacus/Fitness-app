@@ -1,9 +1,84 @@
 ﻿@page "/"
+@attribute [Authorize]
+@inject AuthenticationClient Authentication
 
-<PageTitle>FitnessApp</PageTitle>
+<PageTitle>Hjem</PageTitle>
 
-<main class="foundation" aria-labelledby="foundation-title">
+<main class="foundation" aria-labelledby="home-title">
     <p class="eyebrow">FitnessApp</p>
-    <h1 id="foundation-title">Grundstruktur klar</h1>
-    <p>Den første tekniske grundsten er på plads.</p>
+    @if (isLoading)
+    {
+        <h1 id="home-title">Indlæser…</h1>
+        <p role="status">Kontrollerer din session.</p>
+    }
+    else if (user is not null)
+    {
+        <h1 id="home-title">Hej, @user.DisplayName</h1>
+        <p>Du er logget sikkert ind.</p>
+        <button class="button button-secondary" type="button" @onclick="LogoutAsync" disabled="@isLoggingOut">
+            @(isLoggingOut ? "Logger ud…" : "Log ud")
+        </button>
+    }
+    else if (errorMessage is not null)
+    {
+        <h1 id="home-title">Kunne ikke indlæse</h1>
+        <p class="form-error" role="alert">@errorMessage</p>
+        <button class="button button-secondary" type="button" @onclick="LoadAsync" disabled="@isRequestInProgress">
+            @(isRequestInProgress ? "Prøver igen…" : "Prøv igen")
+        </button>
+    }
 </main>
+
+@code {
+    private FitnessApp.Contracts.Authentication.AuthenticatedUserResponse? user;
+    private bool isLoading = true;
+    private bool isLoggingOut;
+    private bool isRequestInProgress;
+    private string? errorMessage;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (isRequestInProgress)
+        {
+            return;
+        }
+
+        isRequestInProgress = true;
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var result = await Authentication.GetCurrentUserAsync();
+            if (result.Status is CurrentUserStatus.Succeeded)
+            {
+                user = result.User;
+            }
+            else if (result.Status is CurrentUserStatus.Unavailable)
+            {
+                user = null;
+                errorMessage = "Vi kunne ikke hente din konto. Kontrollér forbindelsen, og prøv igen.";
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            isRequestInProgress = false;
+        }
+    }
+
+    private async Task LogoutAsync()
+    {
+        isLoggingOut = true;
+        try
+        {
+            await Authentication.LogoutAsync();
+        }
+        finally
+        {
+            isLoggingOut = false;
+        }
+    }
+}

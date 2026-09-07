@@ -52,12 +52,81 @@ body {
     line-height: 1.6;
 }
 
+.foundation .intro {
+    margin-bottom: 1.5rem;
+}
+
 .foundation .eyebrow {
     color: #69e1bc;
     font-size: 0.8rem;
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
+}
+
+.auth-form {
+    display: grid;
+    gap: 1.25rem;
+    margin-top: 1.75rem;
+}
+
+.form-field {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.form-field label {
+    font-weight: 650;
+}
+
+.form-field input {
+    min-height: 3rem;
+    width: 100%;
+    border: 1px solid #46514d;
+    border-radius: 0.75rem;
+    padding: 0.75rem 0.875rem;
+    background: #171c1a;
+    color: #f3f4ef;
+    font: inherit;
+}
+
+.validation-message,
+.form-error {
+    color: #ffb4ab !important;
+    font-size: 0.9rem;
+}
+
+.form-notice {
+    margin-bottom: 1rem !important;
+    color: #f3d58a !important;
+}
+
+.button {
+    min-height: 3rem;
+    border: 0;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: #69e1bc;
+    color: #102019;
+    font: inherit;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.button-secondary {
+    margin-top: 1.5rem;
+    background: transparent;
+    color: #69e1bc;
+    border: 1px solid #4b655d;
+}
+
+.button:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.status-message {
+    color: #aeb8b4;
 }
 
 a:focus-visible,

@@ -4,16 +4,23 @@
     <ProjectReference Include="..\FitnessApp.Application\FitnessApp.Application.csproj" />
     <ProjectReference Include="..\FitnessApp.Infrastructure\FitnessApp.Infrastructure.csproj" />
     <ProjectReference Include="..\FitnessApp.Client\FitnessApp.Client.csproj" />
+    <ProjectReference Include="..\FitnessApp.Contracts\FitnessApp.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.3">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>FitnessApp.Server-development</UserSecretsId>
   </PropertyGroup>
 
 </Project>

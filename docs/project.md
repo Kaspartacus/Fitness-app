@@ -16,28 +16,36 @@ Detailed visual work requires direct Figma access or screenshots/exports supplie
 
 ## Implemented now
 
-- A .NET 10 solution in `FitnessApp.slnx` with five projects under `src/`.
+- A .NET 10 solution in `FitnessApp.slnx` with six projects under `src/` and an integration-test project under `tests/`.
 - A standalone Blazor WebAssembly client served by the ASP.NET Core server from the same origin.
-- Empty Application, Domain, and Infrastructure layers with only the required project references.
-- A minimal Danish foundation page. No product module, API, persistence, authentication, or deployment implementation exists yet.
+- EF Core SQLite persistence in Infrastructure with the initial Identity/session migration; database files live outside `wwwroot` and are ignored by Git.
+- ASP.NET Core Identity users, password hashing and policy, `Admin` and `User` roles, lockout, and `Pending`, `Approved`, and `Rejected` account states.
+- An explicit local command that creates the first Approved administrator from User Secrets once, refuses existing-account elevation, and is safe to rerun.
+- Signed HS256 JWT login through ASP.NET Core JwtBearer, approximately 15-minute access tokens, strict issuer/audience/algorithm/signature/expiry checks, login rate limiting, and generic Danish failures.
+- Persisted sessions plus live approval and role checks on protected requests, so logout, approval revocation, and role revocation take effect for an existing access token immediately.
+- A memory-only same-origin API token client, Danish login form, protected home page with recoverable-load retry, and local logout with an explicit warning when server revocation cannot be confirmed. External 401 responses neither receive the token nor clear the application session. Reloading the browser deliberately requires login again.
+- Structured JSON console logging for login, lockout, logout, and unexpected errors without credential or token payloads.
+- Real SQLite integration coverage for the authentication and bootstrap security cases in this slice.
 
 ## Architecture
 
 FitnessApp is a modular monolith with layered responsibilities:
 
 ```text
-Client --HTTP--> Server --> Application --> Domain
-                         \-> Infrastructure --> Application + Domain
+Client --HTTP contracts--> Server --> Application --> Domain
+        \-> Contracts <-----/          ^
+Server ------------------------------> Infrastructure --> Domain
 Server --static hosting/build only--> Client
 ```
 
 - `FitnessApp.Client` contains Blazor WebAssembly UI and does not reference server implementation projects.
-- `FitnessApp.Server` is the ASP.NET Core host, future API, and composition root. It references Application and Infrastructure. Its Client reference exists solely to include static WebAssembly assets.
-- `FitnessApp.Application` contains use cases and references Domain.
+- `FitnessApp.Server` is the ASP.NET Core host, authentication API, and composition root. It references Application and Infrastructure. Its Client reference exists solely to include static WebAssembly assets.
+- `FitnessApp.Contracts` contains the concrete login/current-user transport DTOs shared by Client and Server; it contains no persistence types.
+- `FitnessApp.Application` contains authentication service contracts and references Domain.
 - `FitnessApp.Domain` contains business rules and domain types, with no dependency on EF Core, UI frameworks, or another solution project.
-- `FitnessApp.Infrastructure` will contain persistence and external integrations and references Application and Domain.
+- `FitnessApp.Infrastructure` contains Identity and EF Core SQLite persistence and references Application and Domain.
 
-Transport contracts will be added only when an actual client/server contract requires them. Persistence entities will never be shared with the client.
+Persistence entities are never shared with the client.
 
 ## Product invariants (planned)
 
@@ -51,6 +59,8 @@ Transport contracts will be added only when an actual client/server contract req
 
 ## Deferred decisions and scope
 
-The database provider and authentication design are intentionally undecided. EF Core is intended but not installed. Database schema, administrator bootstrap, authorization, password reset, Docker/Raspberry Pi deployment, remote-access design, Garmin integration, CI, and all product features are deferred to later focused tasks.
+SQLite, Identity, and JWT access tokens are selected and implemented for the current local authentication slice. Registration and administrator approval UI/API are the next planned slice. Password-reset delivery still requires a product and operational decision. Refresh tokens, remember-me behavior, production signing-key rotation, Docker/Raspberry Pi deployment, remote-access design, Garmin integration, CI/CD, vault selection, log shipping, and all fitness product modules remain deferred.
 
 Paid infrastructure and paid SaaS dependencies are out of scope. Future choices must remain compatible with Linux/ARM64 unless a documented decision changes that constraint.
+
+CI/CD secrets must use GitHub Actions Secrets when workflows are introduced. Raspberry Pi runtime secrets require separate provisioning. A genuinely no-license-cost vault may be evaluated together with its operating burden; no hosted service, including Azure Key Vault, is assumed to remain permanently free. Private Grafana/Loki with bounded retention is a future observability candidate, not part of the current implementation.
