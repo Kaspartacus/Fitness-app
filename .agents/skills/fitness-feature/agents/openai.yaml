@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fitness Feature"
+  short_description: "Implement a FitnessApp vertical slice end to end"
+  default_prompt: "Use $fitness-feature to implement this FitnessApp slice safely."

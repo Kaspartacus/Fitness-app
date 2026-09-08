@@ -18,32 +18,18 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
 
-      - name: Restore tools
-        run: dotnet tool restore
+      - name: Verify
+        env:
+          VERIFY_DIFF_BASE: ${{ github.event.pull_request.base.sha }}
+        run: ./scripts/verify.sh verify
 
-      - name: Restore dependencies
-        run: dotnet restore FitnessApp.slnx --disable-parallel
-
-      - name: Build
-        run: >-
-          dotnet build FitnessApp.slnx
-          --no-restore
-          --disable-build-servers
-          --verbosity minimal
-          -m:1
-          -p:BuildInParallel=false
-
-      - name: Test
-        run: >-
-          dotnet test FitnessApp.slnx
-          --no-build
-          --no-restore
-          --disable-build-servers
-          --verbosity normal
-          -m:1
+      - name: Audit dependencies
+        run: ./scripts/verify.sh audit
