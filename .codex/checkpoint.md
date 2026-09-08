@@ -11,7 +11,8 @@ Recover the existing repository-native Codex development workflow into `main` wi
 - Branch: `fix/integrate-codex-workflow`
 - Base: `origin/main` at PR #1 merge `5771df9df5f9f93716482899e0232f3f7ceb70b4`
 - Provenance: PR #2 merge `3586df3d357683593355db4161aab820b862b257`
-- Last completed tooling commit: `b1a62658bbc0378dfead06e467e80d05dc5862a1`
+- Recovery merge commit: `42980a6e79785416ed952226ef83fc598246a677`
+- Open pull request: `https://github.com/Kaspartacus/Fitness-app/pull/3`
 
 ## Completed
 
@@ -23,7 +24,7 @@ Recover the existing repository-native Codex development workflow into `main` wi
 
 ## Worktree expectation
 
-- Recovery changes are ready for the recovery merge commit; verify with `git status` before continuing.
+- Clean after the final checkpoint handoff commit; verify with `git status` before continuing.
 
 ## Verification
 
@@ -38,6 +39,6 @@ Recover the existing repository-native Codex development workflow into `main` wi
 
 ## Exact next action
 
-Complete the final hygiene review, commit and push the recovery branch, and open a normal pull request targeting `main`. Do not merge it.
+Review pull request #3 and its required checks. Do not merge unless explicitly authorized by the repository owner.
 
 On resume, verify Git and filesystem state before relying on this file. Do not store credentials, tokens, personal data, or session transcripts here.
