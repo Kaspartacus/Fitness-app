@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fitness PR"
+  short_description: "Prepare and verify a FitnessApp pull request"
+  default_prompt: "Use $fitness-pr to prepare this branch for review."

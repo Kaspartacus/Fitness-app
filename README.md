@@ -113,17 +113,19 @@ The server issues signed HS256 JWT access tokens with a 15-minute lifetime and e
 
 The client attaches the bearer token only to same-origin `/api/` requests and reacts automatically only to 401 responses from that same API. Recoverable home-page failures offer a retry. Logout always clears the local memory-only session; if server revocation cannot be confirmed, the login page says so rather than claiming a complete server logout. Memory-only storage reduces durable token exposure but means a reload, closed tab, or expired token requires login again. Refresh tokens and “remember me” are intentionally deferred. Compared with cookie authentication, bearer JWTs avoid cookie/CSRF semantics and fit an API client, but they require careful attachment, XSS protection, short lifetimes, and explicit server-side revocation; the persisted session supplies that revocation for this slice.
 
+## Development workflow
+
+Repository-native Codex skills, read-only reviewer agents, the resume checkpoint/hook, and the shared local/CI verification entrypoint are documented in [docs/development-workflow.md](docs/development-workflow.md). Project hooks require explicit review and trust through `/hooks`; the repository does not bypass that protection.
+
 ## Verification
 
 ```bash
-dotnet build FitnessApp.slnx --no-restore
-dotnet test FitnessApp.slnx --no-build
-dotnet list FitnessApp.slnx package --vulnerable --include-transitive --no-restore
-git diff --check
+./scripts/verify.sh verify
+./scripts/verify.sh audit
 ```
 
 The integration suite uses isolated real SQLite databases, not EF InMemory. The latest verification passed 37 of 37 tests. A fresh direct/transitive NuGet advisory retrieval completed against `https://api.nuget.org/v3/index.json` and reported no known vulnerable packages in all seven projects. See [docs/progress.md](docs/progress.md) for exact build, browser, migration, bootstrap, design, and environment results.
 
 ## Future operations
 
-Pull requests targeting `main` run the lightweight `.github/workflows/pr-verification.yml` restore/build/test workflow with read-only repository permissions and no production secrets or deployment. When deployment work begins, CI/CD secrets belong in GitHub Actions Secrets and the Raspberry Pi requires separate runtime secret provisioning. Evaluate a genuinely no-license-cost vault together with its operational burden before adoption; do not assume Azure Key Vault or another hosted service remains permanently free. A private Grafana/Loki dashboard with bounded retention is a future logging candidate. No deployment, vault, container, Pi, cloud, or log-shipping infrastructure is included in this slice.
+Pull requests targeting `main` run `.github/workflows/pr-verification.yml`, which calls the same shared verification script with read-only repository permissions and no production secrets or deployment. When deployment work begins, CI/CD secrets belong in GitHub Actions Secrets and the Raspberry Pi requires separate runtime secret provisioning. Evaluate a genuinely no-license-cost vault together with its operational burden before adoption; do not assume Azure Key Vault or another hosted service remains permanently free. A private Grafana/Loki dashboard with bounded retention is a future logging candidate. No deployment, vault, container, Pi, cloud, or log-shipping infrastructure is included in this slice.

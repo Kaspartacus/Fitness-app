@@ -14,7 +14,7 @@
 - Target C# and .NET 10. The browser application must run as Blazor WebAssembly, hosted from the ASP.NET Core server on the same origin.
 - Maintain the dependency direction described in [docs/project.md](docs/project.md): Client over HTTP; Server to Application and Infrastructure; Application to Domain; Infrastructure to Application and Domain; Domain to no other solution project.
 - A Server-to-Client project reference is allowed only for static WebAssembly hosting/build integration. API implementation must not depend on client types.
-- Keep feature responsibilities separated within the five existing projects. Do not create empty future modules or a contracts project without a concrete need.
+- Keep feature responsibilities separated within the six existing `src/` projects, including the already established Contracts project. Do not create empty future modules or new projects without a concrete need.
 - Avoid paid services and platform-specific dependencies that prevent future Linux/ARM64 deployment.
 
 ## Security and data rules
@@ -27,7 +27,14 @@
 
 ## Design and verification
 
-- Follow the Figma workflow in [docs/project.md](docs/project.md) before each feature. Inspect the relevant design and existing code, surface missing behavior and unresolved decisions, and implement agreed functionality end to end. Visual similarity alone is not feature completion.
+- Follow the design workflow in [docs/project.md](docs/project.md) and [docs/design-reference.md](docs/design-reference.md) before each feature. Inspect the relevant current evidence and existing code, surface missing behavior and unresolved decisions, and implement agreed functionality end to end. Distinguish direct visual verification, consistent extensions, and unavailable evidence. Visual similarity alone is not feature completion.
 - Reuse existing components and styling, remove superseded code in the active scope, and never change the Figma file unless explicitly authorized.
-- Before handoff, run `dotnet restore FitnessApp.slnx`, `dotnet build FitnessApp.slnx --no-restore`, applicable non-tautological tests, `git diff --check`, `git status`, and a final diff review.
+- Before handoff, run `./scripts/verify.sh verify`, applicable non-tautological tests not already covered there, `git status`, and a final diff review. Run `./scripts/verify.sh audit` when dependencies change or current advisory evidence is required.
 - Start the server and verify the page plus WebAssembly assets in a browser when browser tooling is available. Record exact evidence and blockers in [docs/progress.md](docs/progress.md).
+
+## Branches, review, and resume
+
+- Use focused branches and pull requests for reviewable work. Commit, push, merge, deployment, and Figma changes require the user's current authorization; prior workflow permission is not permanent authority.
+- Run a separate correctness review for substantial changes. Also run a security review when authentication, roles, authorization, ownership, secrets, logging, dependencies, configuration, or deployment changes. AI review supplements rather than replaces human approval.
+- Keep `.codex/checkpoint.md` current at meaningful milestones with the objective, branch and last commit, completed and uncommitted work, verification, blockers, and exact next action. On resume, verify Git and filesystem state rather than trusting the checkpoint alone.
+- Keep `AGENTS.md` for durable rules, `docs/project.md` for product and architecture, and `docs/progress.md` for current implementation evidence and next work. See [docs/development-workflow.md](docs/development-workflow.md) for tools and activation details.
