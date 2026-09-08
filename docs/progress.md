@@ -37,6 +37,7 @@ Last updated: 2026-09-07
 - Clean serial `dotnet restore FitnessApp.slnx`: passed for all seven projects.
 - Final serial `dotnet build FitnessApp.slnx --no-restore`: passed with 0 errors. Three NU1900 warnings remained because advisory metadata DNS lookup for `api.nuget.org` failed in Client, Infrastructure, and Server.
 - `dotnet test FitnessApp.slnx --no-build --no-restore`: **37 passed, 0 failed, 0 skipped**.
+- Pull request #1's `build-and-test` GitHub Actions job passed in 58 seconds on the initial feature commit.
 - The 12 new registration/administration tests passed, including concurrent duplicate registration, public privilege-input rejection, rate limiting, 401/403 authorization, bounded pending selection, approval/rejection, audit metadata, repeated decisions, and simultaneous opposing decisions.
 - Two isolated migration tests passed: latest migration on an empty SQLite database, and upgrade from `20260907121032_InitialIdentity` while preserving an existing account, password hash, approval status, and role assignment with new metadata left null.
 - `dotnet-ef migrations has-pending-model-changes --no-build` passed outside the sandbox and confirmed that the EF model matches the tracked migration snapshot.
@@ -57,4 +58,4 @@ Last updated: 2026-09-07
 - Approval does not verify email ownership, and the application sends no email. Password reset is not implemented.
 - Access tokens remain memory-only; reload, tab closure, or expiry requires login. Refresh tokens and remember-me are not implemented.
 - No deployment, runtime secret vault, log shipping, Raspberry Pi/Docker setup, or fitness module was added.
-- The feature can be committed and opened as a pull request. It must remain unmerged while required PR checks are pending and while the missing registration/administrator Figma frames and local phone-width browser pass remain unresolved design-verification gaps.
+- Pull request #1 is open. Its code revision passed the required PR workflow, but it must remain unmerged while the missing registration/administrator Figma frames and local phone-width browser pass remain unresolved design-verification gaps.
