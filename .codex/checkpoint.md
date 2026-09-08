@@ -10,6 +10,7 @@ Introduce a small repository-native Codex development workflow without changing 
 
 - Branch: `chore/codex-development-workflow`
 - Base: `feature/registration-admin-approval`
+- Review: draft pull request #2, <https://github.com/Kaspartacus/Fitness-app/pull/2>
 - Last completed base commit: `9c6a5fd2a046f70aa7db14cc591ef26759b9ae4c`
 - Last completed tooling commit: `b1a62658bbc0378dfead06e467e80d05dc5862a1`
 
@@ -19,10 +20,11 @@ Introduce a small repository-native Codex development workflow without changing 
 - Four focused project skills, two read-only reviewer agents, one shared verification entrypoint, one resume-context hook, CI reuse, and workflow documentation have been implemented on this branch.
 - Codex detected `$fitness-review` and successfully ran both project custom agents as bounded no-history, read-only reviews. Their stale-audit-assets and incomplete-whitespace-check findings were fixed.
 - The shared verify mode, 37 tests, audit classifier self-test, direct hook test, and format checks passed. A live advisory retrieval reported no findings; later standalone audit retries correctly exited 3 on incomplete NuGet DNS retrieval.
+- The branch was pushed normally and draft pull request #2 was opened against the still-open pull request #1 branch.
 
 ## Worktree expectation
 
-- No uncommitted work is expected after this checkpoint is committed; verify with `git status`. The branch remains to be pushed and opened as a stacked draft pull request.
+- No uncommitted work is expected after this checkpoint is committed; verify with `git status`.
 
 ## Verification
 
@@ -35,6 +37,6 @@ Introduce a small repository-native Codex development workflow without changing 
 
 ## Exact next action
 
-Push the tooling branch, open a draft pull request based on `feature/registration-admin-approval`, and verify its current checks without merging.
+Inspect the latest pull request #2 checks and hand the draft to the user for review without merging.
 
 On resume, verify Git and filesystem state before relying on this file. Do not store credentials, tokens, personal data, or session transcripts here.
