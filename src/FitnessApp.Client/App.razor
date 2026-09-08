@@ -2,8 +2,21 @@
     <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
-                <NotAuthorized>
-                    <RedirectToLogin />
+                <NotAuthorized Context="authenticationState">
+                    @if (authenticationState.User.Identity?.IsAuthenticated is true)
+                    {
+                        <main class="state-page" aria-labelledby="forbidden-title">
+                            <section class="state-panel">
+                                <h1 id="forbidden-title">Ingen adgang</h1>
+                                <p>Din bruger har ikke adgang til denne side.</p>
+                                <a class="button button-primary" href="/">Gå til forsiden</a>
+                            </section>
+                        </main>
+                    }
+                    else
+                    {
+                        <RedirectToLogin />
+                    }
                 </NotAuthorized>
                 <Authorizing>
                     <p class="status-message" role="status">Kontrollerer adgang…</p>

@@ -1,6 +1,6 @@
 # FitnessApp
 
-FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slice provides SQLite persistence, a one-time local administrator bootstrap, signed JWT login, live session validation, a protected Danish home page, and logout.
+FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, a one-time local administrator bootstrap, public registration with administrator approval, signed JWT login, live session validation, a protected Danish home page, and logout.
 
 Product scope and the distinction between implemented and deferred work are documented in [docs/project.md](docs/project.md). Verification evidence and blockers are tracked in [docs/progress.md](docs/progress.md).
 
@@ -97,6 +97,14 @@ dotnet run --project src/FitnessApp.Server --launch-profile https
 
 Open <https://localhost:7192>. Only approved users can log in or use protected APIs.
 
+## Registration and administrator approval
+
+Visitors can choose **Opret bruger** on the login page. A valid submission creates one `Pending` Identity account with only the ordinary `User` role. It creates neither an access token nor a server session. Duplicate email submissions receive the same neutral accepted response as a new request and never overwrite the existing account. The endpoint has its own IP-partitioned rate limit.
+
+After signing in, an administrator opens **Brugeranmodninger** from the protected home page. The bounded list contains only eligible pending registrations and supports `Pending → Approved` or `Pending → Rejected`. Rejection requires explicit confirmation. Decisions are atomic, so an already processed or concurrently decided request cannot be overwritten. Registration time, decision time, and deciding administrator ID are stored in UTC; the browser shows the registration time in the user's local timezone.
+
+Approval permits a later login but does **not** prove ownership of the submitted email address. The application sends no email in this slice. Ordinary users do not see administrator navigation, and every administrator endpoint independently requires the live `Admin` role.
+
 ## Authentication behavior and current limitation
 
 The server issues signed HS256 JWT access tokens with a 15-minute lifetime and explicit 30-second clock skew. JwtBearer validates the signature, algorithm, issuer, audience, and expiry. Every protected request also checks the persisted session and current account approval state. Logout revokes that session immediately. Login uses Identity password validation, lockout, and an IP-partitioned rate limit; failures deliberately return the same Danish message.
@@ -112,8 +120,8 @@ dotnet list FitnessApp.slnx package --vulnerable --include-transitive --no-resto
 git diff --check
 ```
 
-The integration suite uses isolated real SQLite databases, not EF InMemory. The latest correction-pass verification passed 23 of 23 tests, and the explicit direct/transitive NuGet audit reported no known vulnerable packages from the configured NuGet source. See [docs/progress.md](docs/progress.md) for exact build, browser, bootstrap, and environment results.
+The integration suite uses isolated real SQLite databases, not EF InMemory. The latest verification passed 37 of 37 tests. The explicit direct/transitive NuGet command reported no vulnerable packages from its available data, but NuGet advisory retrieval also emitted NU1900 for three projects because `api.nuget.org` DNS resolution was unavailable; the audit is therefore not treated as fully verified. See [docs/progress.md](docs/progress.md) for exact build, browser, migration, bootstrap, design, and environment results.
 
 ## Future operations
 
-When deployment work begins, CI/CD secrets belong in GitHub Actions Secrets and the Raspberry Pi requires separate runtime secret provisioning. Evaluate a genuinely no-license-cost vault together with its operational burden before adoption; do not assume Azure Key Vault or another hosted service remains permanently free. A private Grafana/Loki dashboard with bounded retention is a future logging candidate. No workflow, vault, container, Pi, cloud, or log-shipping infrastructure is included in this slice.
+Pull requests targeting `main` run the lightweight `.github/workflows/pr-verification.yml` restore/build/test workflow with read-only repository permissions and no production secrets or deployment. When deployment work begins, CI/CD secrets belong in GitHub Actions Secrets and the Raspberry Pi requires separate runtime secret provisioning. Evaluate a genuinely no-license-cost vault together with its operational burden before adoption; do not assume Azure Key Vault or another hosted service remains permanently free. A private Grafana/Loki dashboard with bounded retention is a future logging candidate. No deployment, vault, container, Pi, cloud, or log-shipping infrastructure is included in this slice.

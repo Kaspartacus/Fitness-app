@@ -8,11 +8,11 @@ The application is intended to run eventually on a Raspberry Pi through Docker a
 
 Planned modules are Home, Nutrition, Strength Training, Running, Calendar, Weight Goals, Users, and Profile/Settings. They will be delivered as small vertical slices rather than pre-created empty modules.
 
-The visual reference is the [FitnessApp Figma Make file](https://www.figma.com/make/dFJcR42XWiqVhBtA1bfyOS/Fitness-app?t=hqsbdqLY14eE7ijT-0). It illustrates approximately 90% of the intended functionality; this is design coverage, not implementation progress. It is not a complete functional specification: some controls are nonfunctional, and some flows, states, and requirements are absent. React source returned by Figma is reference material only and must be translated into Blazor.
+The visual reference is the [FitnessApp Figma Make file](https://www.figma.com/make/dFJcR42XWiqVhBtA1bfyOS/Fitness-app?t=hqsbdqLY14eE7ijT-0) and its [published prototype](https://trance-vine-53032594.figma.site/). It illustrates approximately 90% of the intended functionality; this is design coverage, not implementation progress. It is not a complete functional specification: some controls are nonfunctional, and some flows, states, and requirements are absent. React source returned by Figma is reference material only and must be translated into Blazor.
 
 Before implementing a feature, inspect its relevant design and existing code. Identify intended actions, validation, persistence, authorization, loading and empty states, errors, and success feedback. Surface unresolved product decisions and suggest useful small improvements; obtain agreement before material scope additions. Implement agreed behavior end to end through the relevant UI, API, business logic, and persistence layers. Do not treat visual matching as completion or silently reproduce nonfunctional prototype behavior. Reuse existing components and styling, remove superseded code within the active scope, and keep implemented behavior clearly separated from planned behavior.
 
-Detailed visual work requires direct Figma access or screenshots/exports supplied by the user. Until then, do not claim visual fidelity. The intended visual direction is charcoal backgrounds, elevated dark cards, off-white text, muted secondary text, a mint/teal accent, accessible labels, visible keyboard focus, and large touch targets.
+For the registration slice, the published prototype was inspected at desktop and phone widths. It established the login composition, `#0f0f13` background, `#252533` controls, `#4db89e` mint accent, off-white text, Inter/system typography, pill geometry, spacing, and the exact pulse-mark SVG. The prototype contained no registration, confirmation, or administrator-review screens, so those states are consistent extensions rather than pixel-verified Figma matches. The direct Make integration returned only a resource-listing instruction and no readable source or screenshot; do not claim exact fidelity for screens absent from the published prototype.
 
 ## Implemented now
 
@@ -24,8 +24,12 @@ Detailed visual work requires direct Figma access or screenshots/exports supplie
 - Signed HS256 JWT login through ASP.NET Core JwtBearer, approximately 15-minute access tokens, strict issuer/audience/algorithm/signature/expiry checks, login rate limiting, and generic Danish failures.
 - Persisted sessions plus live approval and role checks on protected requests, so logout, approval revocation, and role revocation take effect for an existing access token immediately.
 - A memory-only same-origin API token client, Danish login form, protected home page with recoverable-load retry, and local logout with an explicit warning when server revocation cannot be confirmed. External 401 responses neither receive the token nor clear the application session. Reloading the browser deliberately requires login again.
-- Structured JSON console logging for login, lockout, logout, and unexpected errors without credential or token payloads.
-- Real SQLite integration coverage for the authentication and bootstrap security cases in this slice.
+- Public Danish registration with client/server validation, Identity password rules, neutral duplicate handling, duplicate submission protection, a separate rate limit, and creation of only a `Pending` account with the `User` role and no login session.
+- Administrator-only pending-registration navigation and a bounded review API/UI with local timestamp display, explicit rejection confirmation, retryable failures, atomic approval/rejection, stale-decision conflicts, and persisted UTC decision metadata.
+- A second EF Core migration adding nullable registration/decision metadata without inventing historical values for existing users.
+- Structured JSON console logging for login, lockout, logout, registration, administrator decisions, and unexpected errors without credential, token, request-body, email, or display-name payloads.
+- A lightweight pull-request workflow for restore, build, and tests with read-only permissions and no deployment or production secrets.
+- Real SQLite integration coverage for authentication, bootstrap, registration, administration, concurrency, and empty/upgrade migration cases.
 
 ## Architecture
 
@@ -59,7 +63,7 @@ Persistence entities are never shared with the client.
 
 ## Deferred decisions and scope
 
-SQLite, Identity, and JWT access tokens are selected and implemented for the current local authentication slice. Registration and administrator approval UI/API are the next planned slice. Password-reset delivery still requires a product and operational decision. Refresh tokens, remember-me behavior, production signing-key rotation, Docker/Raspberry Pi deployment, remote-access design, Garmin integration, CI/CD, vault selection, log shipping, and all fitness product modules remain deferred.
+SQLite, Identity, JWT access tokens, registration, and administrator approval are implemented. Email ownership verification and password-reset delivery still require product and operational decisions. Refresh tokens, remember-me behavior, production signing-key rotation, Docker/Raspberry Pi deployment, remote-access design, Garmin integration, deployment automation, vault selection, log shipping, and all fitness product modules remain deferred.
 
 Paid infrastructure and paid SaaS dependencies are out of scope. Future choices must remain compatible with Linux/ARM64 unless a documented decision changes that constraint.
 

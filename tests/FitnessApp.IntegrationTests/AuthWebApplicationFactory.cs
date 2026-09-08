@@ -14,7 +14,9 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace FitnessApp.IntegrationTests;
 
-internal sealed class AuthWebApplicationFactory(int loginPermitLimit = 10)
+internal sealed class AuthWebApplicationFactory(
+    int loginPermitLimit = 10,
+    int registrationPermitLimit = 5)
     : WebApplicationFactory<Program>
 {
     private readonly string databasePath = Path.Combine(
@@ -44,6 +46,9 @@ internal sealed class AuthWebApplicationFactory(int loginPermitLimit = 10)
                 ["Authentication:Jwt:ClockSkewSeconds"] = "0",
                 ["Authentication:LoginRateLimit:PermitLimit"] = loginPermitLimit.ToString(),
                 ["Authentication:LoginRateLimit:WindowSeconds"] = "60",
+                ["Authentication:RegistrationRateLimit:PermitLimit"] = registrationPermitLimit.ToString(),
+                ["Authentication:RegistrationRateLimit:WindowSeconds"] = "60",
+                ["Logging:LogLevel:Default"] = "Warning",
                 ["Testing:EnableTestEndpoints"] = "true"
             });
         });
@@ -83,7 +88,8 @@ internal sealed class AuthWebApplicationFactory(int loginPermitLimit = 10)
     public async Task<ApplicationUser> CreateUserAsync(
         AccountApprovalStatus approvalStatus,
         string role = AuthenticationConstants.UserRole,
-        string? email = null)
+        string? email = null,
+        DateTimeOffset? registeredAt = null)
     {
         await using var scope = Services.CreateAsyncScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -94,7 +100,8 @@ internal sealed class AuthWebApplicationFactory(int loginPermitLimit = 10)
             Email = userEmail,
             EmailConfirmed = true,
             DisplayName = "Testbruger",
-            ApprovalStatus = approvalStatus
+            ApprovalStatus = approvalStatus,
+            RegisteredAt = registeredAt?.UtcDateTime
         };
 
         var creation = await userManager.CreateAsync(user, ValidPassword);

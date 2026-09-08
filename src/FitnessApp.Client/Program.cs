@@ -17,5 +17,7 @@ builder.Services.AddHttpClient(AuthenticationClient.ClientName, client =>
         client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress))
     .AddHttpMessageHandler<ApiAuthorizationHandler>();
 builder.Services.AddScoped<AuthenticationClient>();
+builder.Services.AddScoped<RegistrationClient>();
+builder.Services.AddScoped<UserAdministrationClient>();
 
 await builder.Build().RunAsync();

@@ -2,57 +2,59 @@
 
 Last updated: 2026-09-07
 
-## Completed authentication slice
+## Completed authentication foundation
 
-- Added the concrete `FitnessApp.Contracts` project for login and authenticated-user HTTP DTOs without exposing Infrastructure types to Client.
-- Added `Pending`, `Approved`, and `Rejected` account approval states in Domain.
-- Added EF Core SQLite and ASP.NET Core Identity persistence in Infrastructure, including users, roles, lockout configuration, persisted sessions, path-safe database configuration, and the tracked `20260907121032_InitialIdentity` migration.
-- Added `Admin` and `User` roles. Only currently Approved accounts can receive a token or pass protected-request validation.
-- Added the explicit `bootstrap-admin` command. It reads credentials from server-side configuration/User Secrets, has no HTTP route or password argument, creates an Approved Admin once, refuses to elevate an existing account, and makes no changes after initialization.
-- Added maintained JwtBearer/JWT libraries and signed HS256 access tokens. Configuration validation rejects missing/invalid signing keys and invalid issuer, audience, lifetime, or skew configuration. Validation requires a signed token, HS256, issuer, audience, expiry, persisted active session, and current Approved status.
-- Added `/api/auth/login`, `/api/auth/me`, and `/api/auth/logout`, no-store authentication responses, generic Danish login failures, Identity lockout, IP-partitioned login rate limiting, correct 401/403 behavior, and an API fallback that prevents unknown `/api` routes from returning `index.html`.
-- Added structured JSON console logging with event IDs 1000-1003 and 5000 plus trace/request scopes. Credential values, bearer tokens, signing keys, and request bodies are not logged; EF sensitive-data logging is not enabled.
-- Added a Danish accessible login form, loading/error states, protected home page, authenticated display name, logout, and invalid-session redirect behavior. Recoverable home-load failures now finish loading and offer a duplicate-safe retry. Logout clears memory locally for success, 401, server errors, and network errors; an unconfirmed server logout is stated explicitly on the login page.
-- Tokens remain in client memory and are attached only to same-origin `/api/` requests. Automatic 401 clearing/navigation is restricted to the same API, while login 401 remains a form error and external responses cannot clear the session.
-- Added 23 integration and lightweight client tests backed by isolated SQLite databases and test-only generated secrets. Coverage includes approved admin login, generic invalid credentials, Pending/Rejected denial, missing/expired/tampered/wrong-issuer/wrong-audience/wrong-algorithm token rejection, valid protected access, Admin-policy denial, live role revocation, server-side logout invalidation, client logout failure outcomes, recoverable current-user retry, same-origin/external handler boundaries, live approval revocation, safe bootstrap/elevation refusal, lockout, rate limiting, and unknown API routing.
-- Added a repository-local `dotnet-ef` tool manifest and ignored SQLite database and sidecar files while keeping migrations tracked.
+- The .NET 10 hosted Blazor WebAssembly solution uses separate Client, Server, Contracts, Application, Domain, and Infrastructure projects.
+- ASP.NET Core Identity and EF Core persist users, `Admin`/`User` roles, lockout state, approval state, and server-side sessions in SQLite.
+- The explicit `bootstrap-admin` command creates the first Approved administrator once, refuses to elevate an existing account, and is idempotent.
+- HS256 JWT login validates signature, algorithm, issuer, audience, expiry, persisted session, live approval, and live role membership. Logout immediately revokes the current session.
+- Client tokens remain in memory and are attached only to same-origin `/api/` calls. Reloading or closing the tab requires login again.
+- Existing generic login failures, lockout, rate limiting, protected-home retry, same-origin handling, and failure-aware logout behavior remain intact.
 
-## Final corrective findings
+## Completed registration and administrator-approval slice
 
-- The wrong-algorithm fixture initially changed both algorithm and signing key. It now uses one generated 512-bit signing key for the server, an accepted HS256 token, and an otherwise-valid rejected HS384 token, isolating explicit allowed-algorithm enforcement. Production issuance and validation remain HS256-only.
-- Tampering with the last Base64URL character was flaky because unused padding bits can change without changing decoded signature bytes. The test now changes the first signature byte deterministically.
-- The Server project briefly contained a duplicate Contracts reference. The duplicate was removed.
-- Generated `bin`, `obj`, malformed `bin\Debug`, and recursively nested build output were removed. A subsequent clean build did not recreate the malformed or recursive paths.
-- `InputText` with an overridden `oninput` event produced a runtime `ChangeEventArgs`/`string` mismatch. The two fields now use native Blazor-bound inputs with `@bind:event="oninput"`, retaining `EditForm` and DataAnnotations validation.
-- `IHttpClientFactory` creates message handlers in a separate DI scope. A scoped memory-token provider therefore gave the handler a different instance from the UI. The browser-local provider is now explicitly a Client singleton, so both UI authorization and the same-origin API handler use the same in-memory token. No persistent browser storage was introduced.
-- Login now uses ordinary internal Blazor navigation to the protected home route. Logout still replaces the history entry to avoid returning to an authenticated view.
-- HTTP responses from login/current-user/logout calls are disposed. Recoverable current-user failures no longer collapse into the invalid-session path, and failed server logout cannot strand a disabled button or imply that revocation succeeded.
-- The test-only Admin-policy endpoint returns HTTP 200 on authorized success so live role revocation is verified precisely as 200 → 403 with the exact same JWT, while `/api/auth/me` remains 200 for the still-Approved account.
-- README secret setup now uses a `zsh` masked prompt, OpenSSL-generated 384-bit key, Python JSON encoding, and `dotnet user-secrets set` standard input. An isolated temporary User Secrets id verified the syntax and preservation of a pre-existing entry; only that task-created id was cleared.
+- Added a Danish registration flow from the login page with display name, email, password, and password confirmation. DataAnnotations run in the client and server, and Identity enforces the persisted password policy and normalized uniqueness.
+- Public input maps through an explicit request contract and cannot set roles, approval state, email confirmation, or decision metadata.
+- A valid request creates exactly one `Pending` account with only the `User` role, a UTC registration timestamp, no JWT, and no server session. The button and handler both guard duplicate submission.
+- Existing-email and concurrent duplicate requests receive the same neutral HTTP 202 response without changing the existing account. Invalid form input still returns field-level validation. Registration has its own IP-partitioned fixed-window rate limit.
+- Added an administrator-only, bounded pending-registration endpoint and Danish review page. Ordinary users do not see its home-page navigation; anonymous requests receive 401 and authenticated ordinary users receive 403 from the server.
+- Pending registrations can transition atomically only to `Approved` or `Rejected`. A repeated or concurrent stale decision returns HTTP 409 and cannot overwrite the winner. The decision stores UTC time and deciding administrator ID while preserving the `User` role.
+- The UI covers loading, empty, success, forbidden/unavailable errors, retry, disabled in-flight actions, local-time display, and explicit confirmation before rejection. Authenticated users without the required role receive a dedicated no-access view for client-side protected navigation.
+- Added `20260907185305_AddRegistrationApprovalMetadata`, with nullable `RegisteredAt`, `DecidedAt`, and `DecidedByUserId` fields plus a pending-list index. Existing users retain null metadata.
+- Added structured events 1100-1101 for registration and 1200-1202 for decisions. Logs use internal IDs/trace IDs and omit passwords, tokens, request bodies, email addresses, and display names.
+- Added `.github/workflows/pr-verification.yml` for pull requests to `main`: tool/package restore, serial build, and tests with read-only repository permissions, no production secrets, and no deployment.
 
-## Figma access evidence
+## Design evidence
 
-The required single design-context attempt for Make file key `dFJcR42XWiqVhBtA1bfyOS`, node `0:1`, again returned only a source/resource listing (including `LoginScreen.tsx`) and no readable source contents or rendered screenshot. No repeat request was made and Figma was not modified. The functional interim UI reuses the existing charcoal/mint styles. Detailed visual matching remains unverified and requires working source/visual access or user-provided screenshots/exports.
+- The required direct design-context attempt for Make file `dFJcR42XWiqVhBtA1bfyOS`, node `0:1`, returned only a resource-listing instruction and no readable source or screenshot. It was not retried, and the Figma file was not modified.
+- The current published prototype at `https://trance-vine-53032594.figma.site/` was inspected in the browser at desktop and phone widths. Verified login tokens include `#0f0f13` background, `#252533` fields, `#4db89e` accent, off-white/muted text, Inter/system typography, 52 px pill controls, 382 px desktop form width, 24 px phone margins, and no phone overflow in the prototype.
+- The exact pulse-mark SVG was read from the published page and reused in the Blazor login, registration, and protected-home UI. The temporary letter placeholder was removed.
+- The published prototype has no registration, confirmation, or administrator-review screens. Those screens implement the requested real states as a consistent visual extension; they have been functionally inspected but cannot be described as pixel-perfect matches to absent Figma frames.
 
-## Verification
+## Verification results
 
-- `dotnet tool restore`: succeeded; restored `dotnet-ef` 10.0.3.
-- Serial `dotnet restore FitnessApp.slnx`: succeeded for all seven projects. Its automatic vulnerability metadata request temporarily failed DNS resolution and emitted NU1900 for Client, Infrastructure, and Server; package restore itself succeeded.
-- Final serial `dotnet build FitnessApp.slnx --no-restore`: succeeded in 4.04 seconds with 0 errors. Its three warnings were the cached NU1900 metadata failures only; no compiler or source warning remained.
-- Final `dotnet test FitnessApp.slnx --no-build --no-restore`: passed 23 of 23 tests, 0 failed, 0 skipped, in 2 seconds.
-- Explicit `dotnet list FitnessApp.slnx package --vulnerable --include-transitive --no-restore`: completed successfully against `https://api.nuget.org/v3/index.json` and reported no known vulnerable direct or transitive packages in all seven projects.
-- The initial migration was applied successfully to a fresh isolated SQLite database.
-- First administrator bootstrap created exactly one user named `Testadministrator` with approval value `Approved` and role `Admin`. A second run used a different generated test password and display name, reported that bootstrap was already complete, and left both the password hash and display name unchanged. Existing-account elevation refusal also passed in the integration suite.
-- HTTPS browser verification succeeded at `https://localhost:7192` with an isolated SQLite database and generated one-time credentials: the Danish login form loaded, live `oninput` fields submitted successfully, `/` showed the protected greeting, and normal logout returned to `/login`. After a second login, stopping only the verification server forced the network-failure path; logout still cleared local state, navigated to `/login?logout=unconfirmed`, showed `Du er logget ud lokalt. Serverlogout kunne ikke bekræftes.`, and left no browser warning/error. The temporary database and credential file were removed afterward.
-- The local HTTPS server was stopped after verification and browser test tabs were finalized.
+- `dotnet tool restore`: passed (`dotnet-ef` 10.0.3).
+- Clean serial `dotnet restore FitnessApp.slnx`: passed for all seven projects.
+- Final serial `dotnet build FitnessApp.slnx --no-restore`: passed with 0 errors. Three NU1900 warnings remained because advisory metadata DNS lookup for `api.nuget.org` failed in Client, Infrastructure, and Server.
+- `dotnet test FitnessApp.slnx --no-build --no-restore`: **37 passed, 0 failed, 0 skipped**.
+- The 12 new registration/administration tests passed, including concurrent duplicate registration, public privilege-input rejection, rate limiting, 401/403 authorization, bounded pending selection, approval/rejection, audit metadata, repeated decisions, and simultaneous opposing decisions.
+- Two isolated migration tests passed: latest migration on an empty SQLite database, and upgrade from `20260907121032_InitialIdentity` while preserving an existing account, password hash, approval status, and role assignment with new metadata left null.
+- `dotnet-ef migrations has-pending-model-changes --no-build` passed outside the sandbox and confirmed that the EF model matches the tracked migration snapshot.
+- A separate fresh-database bootstrap run applied both migrations and created exactly one Approved administrator with one Admin role. A second run made no changes and preserved its password hash and display name. The temporary database was removed.
+- `dotnet list FitnessApp.slnx package --vulnerable --include-transitive` exited 0 and listed no vulnerable packages in all seven projects from its available data. Because the same command emitted NU1900 advisory-fetch errors for three projects, a complete current vulnerability audit remains unverified rather than claimed as passed.
+- HTTPS browser verification at `https://localhost:7192` used an isolated SQLite database and synthetic test accounts. Verified: registration confirmation; Pending login denial; administrator login/navigation/list; approval; administrator logout; approved user login with no administrator navigation; rejection confirmation and rejection; Rejected login denial; empty list; and a stopped-server network error followed by successful retry after restart.
+- Desktop login was visually inspected against the published prototype and exposed one focus-ring mismatch on the programmatically focused heading; `[tabindex="-1"]` focus styling was corrected while interactive focus indicators remain visible. A real narrow local-app viewport could not be selected through the available browser control, so local phone rendering remains a design-review gap; responsive CSS and the prototype phone layout were inspected, but that is not equivalent to a local phone browser pass.
+- The local HTTPS verification server was stopped, its browser tabs were closed, and the database containing only synthetic test data was removed.
 
-## Environment-specific issues
+## Environment-specific findings
 
-- Sandboxed builds stalled while launching the external `ComputeWasmBuildAssets` MSBuild task host. The same clean, serial build completed normally outside that process restriction without a source workaround. `DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1`, `MSBUILDDISABLENODEREUSE=1`, `-m:1`, and `-p:BuildInParallel=false` kept final verification isolated from an unrelated Rider MSBuild process.
-- Restore/build intermittently could not resolve `api.nuget.org` for automatic NuGet audit metadata and therefore retained NU1900 warnings. The immediately subsequent explicit direct/transitive audit did reach the same configured source and completed successfully; this is an environment/network inconsistency, not a product-code failure.
+- Sandboxed WebAssembly builds can stall in the external `ComputeWasmBuildAssets` MSBuild task host. Serial builds outside that process restriction succeed without source changes using `DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1`, `MSBUILDDISABLENODEREUSE=1`, `-m:1`, and `-p:BuildInParallel=false`.
+- EF migration generation inside the same sandbox showed the related task-host stall. Running the repository-local EF tool outside that restriction generated the migration normally. Two malformed untracked `bin\Debug` output directories created during the interrupted attempt were inspected and removed.
+- NuGet advisory DNS resolution is intermittent in this environment, as described above. Package restore and compilation are otherwise successful.
 
-## Deliberate limitations and next slice
+## Deliberate limitations and merge gate
 
-- The access token is held only in browser memory. Reload, tab closure, or token expiry requires login again. Refresh tokens and remember-me behavior are not implemented.
-- Registration, approval endpoints/UI, password reset, deployment, CI/CD, vaults, and log aggregation are not implemented.
-- The next slice is registration plus administrator approval. Password-reset delivery still requires a decision before implementation.
+- Approval does not verify email ownership, and the application sends no email. Password reset is not implemented.
+- Access tokens remain memory-only; reload, tab closure, or expiry requires login. Refresh tokens and remember-me are not implemented.
+- No deployment, runtime secret vault, log shipping, Raspberry Pi/Docker setup, or fitness module was added.
+- The feature can be committed and opened as a pull request. It must remain unmerged while required PR checks are pending and while the missing registration/administrator Figma frames and local phone-width browser pass remain unresolved design-verification gaps.

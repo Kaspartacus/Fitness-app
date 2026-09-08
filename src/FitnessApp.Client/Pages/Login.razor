@@ -4,40 +4,46 @@
 
 <PageTitle>Log ind</PageTitle>
 
-<main class="foundation" aria-labelledby="login-title">
-    <p class="eyebrow">FitnessApp</p>
-    <h1 id="login-title">Log ind</h1>
-    <p class="intro">Brug din godkendte konto for at fortsætte.</p>
+<main class="auth-page" aria-labelledby="login-title">
+    <section class="auth-panel">
+        <BrandMark />
+        <header class="auth-heading">
+            <h1 id="login-title">Velkommen tilbage</h1>
+            <p>Log ind for at fortsætte</p>
+        </header>
 
-    @if (Logout is "unconfirmed")
-    {
-        <p class="form-notice" role="status">Du er logget ud lokalt. Serverlogout kunne ikke bekræftes.</p>
-    }
-
-    <EditForm Model="model" OnValidSubmit="LoginAsync" FormName="login" class="auth-form">
-        <DataAnnotationsValidator />
-
-        <div class="form-field">
-            <label for="email">E-mail</label>
-            <input id="email" @bind="model.Email" @bind:event="oninput" autocomplete="email" inputmode="email" />
-            <ValidationMessage For="@(() => model.Email)" />
-        </div>
-
-        <div class="form-field">
-            <label for="password">Adgangskode</label>
-            <input id="password" type="password" @bind="model.Password" @bind:event="oninput" autocomplete="current-password" />
-            <ValidationMessage For="@(() => model.Password)" />
-        </div>
-
-        @if (errorMessage is not null)
+        @if (Logout is "unconfirmed")
         {
-            <p class="form-error" role="alert">@errorMessage</p>
+            <p class="notice notice-warning" role="status">Du er logget ud lokalt. Serverlogout kunne ikke bekræftes.</p>
         }
 
-        <button class="button" type="submit" disabled="@isSubmitting">
-            @(isSubmitting ? "Logger ind…" : "Log ind")
-        </button>
-    </EditForm>
+        <EditForm Model="model" OnValidSubmit="LoginAsync" FormName="login" class="auth-form">
+            <DataAnnotationsValidator />
+
+            <div class="form-field">
+                <label for="email">E-mail</label>
+                <input id="email" @bind="model.Email" @bind:event="oninput" autocomplete="email" inputmode="email" placeholder="navn@eksempel.dk" />
+                <ValidationMessage For="@(() => model.Email)" />
+            </div>
+
+            <div class="form-field">
+                <label for="password">Adgangskode</label>
+                <input id="password" type="password" @bind="model.Password" @bind:event="oninput" autocomplete="current-password" placeholder="Din adgangskode" />
+                <ValidationMessage For="@(() => model.Password)" />
+            </div>
+
+            @if (errorMessage is not null)
+            {
+                <p class="notice notice-error" role="alert">@errorMessage</p>
+            }
+
+            <button class="button button-primary" type="submit" disabled="@isSubmitting">
+                @(isSubmitting ? "Logger ind…" : "Log ind")
+            </button>
+        </EditForm>
+
+        <p class="auth-alternative">Ny i FitnessApp? <a href="/registrer">Opret bruger</a></p>
+    </section>
 </main>
 
 @code {
@@ -50,6 +56,11 @@
 
     private async Task LoginAsync()
     {
+        if (isSubmitting)
+        {
+            return;
+        }
+
         isSubmitting = true;
         errorMessage = null;
 
@@ -61,7 +72,7 @@
                 Navigation.NavigateTo("/");
             }
         }
-        catch (HttpRequestException)
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
             errorMessage = "Der kunne ikke oprettes forbindelse. Prøv igen.";
         }

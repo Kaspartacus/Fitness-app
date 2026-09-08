@@ -9,5 +9,11 @@ public sealed class ApplicationUser : IdentityUser
 
     public AccountApprovalStatus ApprovalStatus { get; set; } = AccountApprovalStatus.Pending;
 
+    public DateTime? RegisteredAt { get; set; }
+
+    public DateTime? DecidedAt { get; set; }
+
+    public string? DecidedByUserId { get; set; }
+
     public ICollection<UserSession> Sessions { get; } = [];
 }
