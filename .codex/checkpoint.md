@@ -11,6 +11,7 @@ Introduce a small repository-native Codex development workflow without changing 
 - Branch: `chore/codex-development-workflow`
 - Base: `feature/registration-admin-approval`
 - Last completed base commit: `9c6a5fd2a046f70aa7db14cc591ef26759b9ae4c`
+- Last completed tooling commit: `b1a62658bbc0378dfead06e467e80d05dc5862a1`
 
 ## Completed
 
@@ -21,7 +22,7 @@ Introduce a small repository-native Codex development workflow without changing 
 
 ## Uncommitted work
 
-- Repository workflow files remain to be committed, pushed, and opened as a stacked draft pull request.
+- This checkpoint update is the only uncommitted change. The branch remains to be pushed and opened as a stacked draft pull request.
 
 ## Verification
 
@@ -34,6 +35,6 @@ Introduce a small repository-native Codex development workflow without changing 
 
 ## Exact next action
 
-Review the final diff, commit and push the tooling branch, open a draft pull request based on `feature/registration-admin-approval`, and verify its current checks without merging.
+Commit this checkpoint update, push the tooling branch, open a draft pull request based on `feature/registration-admin-approval`, and verify its current checks without merging.
 
 On resume, verify Git and filesystem state before relying on this file. Do not store credentials, tokens, personal data, or session transcripts here.
