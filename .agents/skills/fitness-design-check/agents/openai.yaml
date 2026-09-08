@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fitness Design Check"
+  short_description: "Verify FitnessApp UI against current design evidence"
+  default_prompt: "Use $fitness-design-check to inspect and verify this UI change."
