@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fitness Review"
+  short_description: "Review FitnessApp changes for concrete risks"
+  default_prompt: "Use $fitness-review to review this FitnessApp diff."

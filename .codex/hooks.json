@@ -1,0 +1,19 @@
+{
+  "description": "Report safe repository context when a FitnessApp Codex session starts or resumes.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/env bash \"$(git rev-parse --show-toplevel)/.codex/hooks/session-context.sh\"",
+            "timeout": 3,
+            "statusMessage": "Reading FitnessApp resume context",
+            "additionalContextLimit": 1000
+          }
+        ]
+      }
+    ]
+  }
+}
