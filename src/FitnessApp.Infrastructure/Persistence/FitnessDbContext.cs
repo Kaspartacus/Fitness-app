@@ -17,6 +17,8 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
         {
             entity.Property(user => user.DisplayName).HasMaxLength(100).IsRequired();
             entity.Property(user => user.ApprovalStatus).HasConversion<int>().IsRequired();
+            entity.Property(user => user.DecidedByUserId).HasMaxLength(450);
+            entity.HasIndex(user => new { user.ApprovalStatus, user.RegisteredAt });
         });
 
         builder.Entity<UserSession>(entity =>

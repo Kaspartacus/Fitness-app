@@ -34,6 +34,8 @@ public static class DependencyInjection
 
         services.AddScoped<IAuthenticationService, AuthenticationService>();
         services.AddScoped<IAdminBootstrapper, AdminBootstrapper>();
+        services.AddScoped<IRegistrationService, RegistrationService>();
+        services.AddScoped<IUserAdministrationService, UserAdministrationService>();
 
         return services;
     }

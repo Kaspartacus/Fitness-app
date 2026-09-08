@@ -1,0 +1,183 @@
+@page "/administration/registreringer"
+@attribute [Authorize(Roles = "Admin")]
+@inject UserAdministrationClient Administration
+
+@using System.Globalization
+
+<PageTitle>Brugeranmodninger</PageTitle>
+
+<main class="admin-page" aria-labelledby="admin-title">
+    <header class="admin-header">
+        <div>
+            <a class="back-link" href="/">← Hjem</a>
+            <p class="overline">Administration</p>
+            <h1 id="admin-title">Brugeranmodninger</h1>
+            <p>Godkend eller afvis nye brugere.</p>
+        </div>
+        <button class="button button-quiet" type="button" @onclick="LoadAsync" disabled="@isLoading">
+            @(isLoading ? "Opdaterer…" : "Opdater")
+        </button>
+    </header>
+
+    @if (statusMessage is not null)
+    {
+        <p class="notice notice-success" role="status">@statusMessage</p>
+    }
+
+    @if (isLoading && registrations.Count == 0)
+    {
+        <section class="state-panel compact-state">
+            <h2>Indlæser…</h2>
+            <p role="status">Henter ventende registreringer.</p>
+        </section>
+    }
+    else if (errorMessage is not null)
+    {
+        <section class="state-panel compact-state">
+            <h2>Kunne ikke hente listen</h2>
+            <p class="notice notice-error" role="alert">@errorMessage</p>
+            <button class="button button-secondary" type="button" @onclick="LoadAsync" disabled="@isLoading">Prøv igen</button>
+        </section>
+    }
+    else if (registrations.Count == 0)
+    {
+        <section class="state-panel compact-state empty-state">
+            <div class="brand-mark brand-mark-muted" aria-hidden="true">✓</div>
+            <h2>Ingen venter</h2>
+            <p>Der er ingen nye registreringer at behandle.</p>
+        </section>
+    }
+    else
+    {
+        <section class="request-list" aria-label="Ventende registreringer">
+            @foreach (var registration in registrations)
+            {
+                <article class="request-card">
+                    <div class="request-details">
+                        <h2>@registration.DisplayName</h2>
+                        <p>@registration.Email</p>
+                        <p class="request-time">Registreret @FormatLocal(registration.RegisteredAt)</p>
+                    </div>
+
+                    @if (rejectionToConfirm == registration.Id)
+                    {
+                        <div class="rejection-confirmation" role="group" aria-label="Bekræft afvisning">
+                            <p>Er du sikker på, at du vil afvise denne registrering?</p>
+                            <div class="decision-actions">
+                                <button class="button button-danger" type="button" @onclick="() => DecideAsync(registration.Id, false)" disabled="@IsDeciding(registration.Id)">
+                                    @(IsDeciding(registration.Id) ? "Afviser…" : "Ja, afvis")
+                                </button>
+                                <button class="button button-quiet" type="button" @onclick="CancelRejection" disabled="@IsDeciding(registration.Id)">Annuller</button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="decision-actions">
+                            <button class="button button-primary" type="button" @onclick="() => DecideAsync(registration.Id, true)" disabled="@IsDeciding(registration.Id)">
+                                @(IsDeciding(registration.Id) ? "Behandler…" : "Godkend")
+                            </button>
+                            <button class="button button-danger-outline" type="button" @onclick="() => ConfirmRejection(registration.Id)" disabled="@IsDeciding(registration.Id)">Afvis</button>
+                        </div>
+                    }
+                </article>
+            }
+        </section>
+    }
+</main>
+
+@code {
+    private readonly HashSet<string> decisionsInProgress = [];
+    private IReadOnlyCollection<FitnessApp.Contracts.Authentication.PendingRegistrationResponse> registrations = [];
+    private bool isLoading = true;
+    private bool isRequestInProgress;
+    private string? rejectionToConfirm;
+    private string? errorMessage;
+    private string? statusMessage;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (isRequestInProgress)
+        {
+            return;
+        }
+
+        isRequestInProgress = true;
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var result = await Administration.GetPendingAsync();
+            if (result.Status is PendingRegistrationLoadStatus.Succeeded)
+            {
+                registrations = result.Registrations;
+            }
+            else if (result.Status is PendingRegistrationLoadStatus.Forbidden)
+            {
+                registrations = [];
+                errorMessage = "Du har ikke adgang til administration.";
+            }
+            else
+            {
+                errorMessage = "Listen kunne ikke hentes. Kontrollér forbindelsen, og prøv igen.";
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            isRequestInProgress = false;
+        }
+    }
+
+    private async Task DecideAsync(string registrationId, bool approve)
+    {
+        if (!decisionsInProgress.Add(registrationId))
+        {
+            return;
+        }
+
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            var result = await Administration.DecideAsync(registrationId, approve);
+            if (result is RegistrationDecisionClientResult.Completed)
+            {
+                statusMessage = approve ? "Brugeren er godkendt." : "Registreringen er afvist.";
+            }
+            else if (result is RegistrationDecisionClientResult.AlreadyProcessed)
+            {
+                statusMessage = "Registreringen var allerede behandlet. Listen er opdateret.";
+            }
+            else if (result is RegistrationDecisionClientResult.Forbidden)
+            {
+                errorMessage = "Du har ikke længere adgang til administration.";
+            }
+            else
+            {
+                errorMessage = "Beslutningen kunne ikke gemmes. Prøv igen.";
+                return;
+            }
+
+            rejectionToConfirm = null;
+            registrations = registrations.Where(item => item.Id != registrationId).ToArray();
+        }
+        finally
+        {
+            decisionsInProgress.Remove(registrationId);
+        }
+    }
+
+    private bool IsDeciding(string registrationId) => decisionsInProgress.Contains(registrationId);
+
+    private void ConfirmRejection(string registrationId) => rejectionToConfirm = registrationId;
+
+    private void CancelRejection() => rejectionToConfirm = null;
+
+    private static string FormatLocal(DateTimeOffset timestamp) =>
+        timestamp.ToLocalTime().ToString("d. MMM yyyy 'kl.' HH:mm", CultureInfo.GetCultureInfo("da-DK"));
+}

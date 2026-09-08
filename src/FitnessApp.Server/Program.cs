@@ -37,8 +37,10 @@ builder.Services.AddAuthorization(options =>
         AuthenticationConstants.AdminPolicy,
         policy => policy.RequireRole(AuthenticationConstants.AdminRole)));
 
-var permitLimit = builder.Configuration.GetValue("Authentication:LoginRateLimit:PermitLimit", 10);
-var windowSeconds = builder.Configuration.GetValue("Authentication:LoginRateLimit:WindowSeconds", 60);
+var loginPermitLimit = builder.Configuration.GetValue("Authentication:LoginRateLimit:PermitLimit", 10);
+var loginWindowSeconds = builder.Configuration.GetValue("Authentication:LoginRateLimit:WindowSeconds", 60);
+var registrationPermitLimit = builder.Configuration.GetValue("Authentication:RegistrationRateLimit:PermitLimit", 5);
+var registrationWindowSeconds = builder.Configuration.GetValue("Authentication:RegistrationRateLimit:WindowSeconds", 300);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -46,7 +48,7 @@ builder.Services.AddRateLimiter(options =>
     {
         AuthenticationHttpResponses.SetNoStore(context.HttpContext.Response);
         await context.HttpContext.Response.WriteAsJsonAsync(
-            new { title = "For mange loginforsøg. Prøv igen senere." },
+            new { title = "For mange forsøg. Prøv igen senere." },
             cancellationToken);
     };
     options.AddPolicy("login", httpContext =>
@@ -54,8 +56,18 @@ builder.Services.AddRateLimiter(options =>
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = permitLimit,
-                Window = TimeSpan.FromSeconds(windowSeconds),
+                PermitLimit = loginPermitLimit,
+                Window = TimeSpan.FromSeconds(loginWindowSeconds),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+    options.AddPolicy("registration", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = registrationPermitLimit,
+                Window = TimeSpan.FromSeconds(registrationWindowSeconds),
                 QueueLimit = 0,
                 AutoReplenishment = true
             }));
@@ -104,7 +116,9 @@ app.UseAuthorization();
 
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments("/api/auth"))
+    if (context.Request.Path.StartsWithSegments("/api/auth") ||
+        context.Request.Path.StartsWithSegments("/api/registrations") ||
+        context.Request.Path.StartsWithSegments("/api/admin"))
     {
         AuthenticationHttpResponses.SetNoStore(context.Response);
     }
@@ -113,6 +127,8 @@ app.Use(async (context, next) =>
 });
 
 app.MapAuthenticationEndpoints();
+app.MapRegistrationEndpoints();
+app.MapUserAdministrationEndpoints();
 
 if (app.Environment.IsEnvironment("Testing") &&
     app.Configuration.GetValue<bool>("Testing:EnableTestEndpoints"))

@@ -1,31 +1,58 @@
-﻿@page "/"
+@page "/"
 @attribute [Authorize]
 @inject AuthenticationClient Authentication
 
 <PageTitle>Hjem</PageTitle>
 
-<main class="foundation" aria-labelledby="home-title">
-    <p class="eyebrow">FitnessApp</p>
+<main class="dashboard-page" aria-labelledby="home-title">
     @if (isLoading)
     {
-        <h1 id="home-title">Indlæser…</h1>
-        <p role="status">Kontrollerer din session.</p>
+        <section class="state-panel">
+            <BrandMark />
+            <h1 id="home-title">Indlæser…</h1>
+            <p role="status">Kontrollerer din session.</p>
+        </section>
     }
     else if (user is not null)
     {
-        <h1 id="home-title">Hej, @user.DisplayName</h1>
-        <p>Du er logget sikkert ind.</p>
-        <button class="button button-secondary" type="button" @onclick="LogoutAsync" disabled="@isLoggingOut">
-            @(isLoggingOut ? "Logger ud…" : "Log ud")
-        </button>
+        <header class="dashboard-header">
+            <div>
+                <p class="overline">FitnessApp</p>
+                <h1 id="home-title">Hej, @user.DisplayName</h1>
+                <p>Velkommen tilbage.</p>
+            </div>
+            <button class="button button-quiet" type="button" @onclick="LogoutAsync" disabled="@isLoggingOut">
+                @(isLoggingOut ? "Logger ud…" : "Log ud")
+            </button>
+        </header>
+
+        <section class="dashboard-grid" aria-label="Din konto">
+            <article class="dashboard-card">
+                <p class="overline">Konto</p>
+                <h2>Du er logget ind</h2>
+                <p>@user.Email</p>
+            </article>
+
+            @if (user.Roles.Contains("Admin", StringComparer.Ordinal))
+            {
+                <article class="dashboard-card dashboard-card-accent">
+                    <p class="overline">Administration</p>
+                    <h2>Brugeranmodninger</h2>
+                    <p>Gennemgå nye registreringer, og godkend eller afvis adgang.</p>
+                    <a class="button button-primary button-link" href="/administration/registreringer">Åbn administration</a>
+                </article>
+            }
+        </section>
     }
     else if (errorMessage is not null)
     {
-        <h1 id="home-title">Kunne ikke indlæse</h1>
-        <p class="form-error" role="alert">@errorMessage</p>
-        <button class="button button-secondary" type="button" @onclick="LoadAsync" disabled="@isRequestInProgress">
-            @(isRequestInProgress ? "Prøver igen…" : "Prøv igen")
-        </button>
+        <section class="state-panel">
+            <h1 id="home-title">Kunne ikke indlæse</h1>
+            <p class="notice notice-error" role="alert">@errorMessage</p>
+            <button class="button button-secondary" type="button" @onclick="LoadAsync" disabled="@isRequestInProgress">
+                @(isRequestInProgress ? "Prøver igen…" : "Prøv igen")
+            </button>
+        </section>
     }
 </main>
 
@@ -71,6 +98,11 @@
 
     private async Task LogoutAsync()
     {
+        if (isLoggingOut)
+        {
+            return;
+        }
+
         isLoggingOut = true;
         try
         {
