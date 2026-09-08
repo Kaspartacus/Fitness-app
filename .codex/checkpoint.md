@@ -20,9 +20,9 @@ Introduce a small repository-native Codex development workflow without changing 
 - Codex detected `$fitness-review` and successfully ran both project custom agents as bounded no-history, read-only reviews. Their stale-audit-assets and incomplete-whitespace-check findings were fixed.
 - The shared verify mode, 37 tests, audit classifier self-test, direct hook test, and format checks passed. A live advisory retrieval reported no findings; later standalone audit retries correctly exited 3 on incomplete NuGet DNS retrieval.
 
-## Uncommitted work
+## Worktree expectation
 
-- This checkpoint update is the only uncommitted change. The branch remains to be pushed and opened as a stacked draft pull request.
+- No uncommitted work is expected after this checkpoint is committed; verify with `git status`. The branch remains to be pushed and opened as a stacked draft pull request.
 
 ## Verification
 
@@ -35,6 +35,6 @@ Introduce a small repository-native Codex development workflow without changing 
 
 ## Exact next action
 
-Commit this checkpoint update, push the tooling branch, open a draft pull request based on `feature/registration-admin-approval`, and verify its current checks without merging.
+Push the tooling branch, open a draft pull request based on `feature/registration-admin-approval`, and verify its current checks without merging.
 
 On resume, verify Git and filesystem state before relying on this file. Do not store credentials, tokens, personal data, or session transcripts here.
