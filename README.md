@@ -4,6 +4,8 @@ FitnessApp is a private, mobile-first fitness application in an intentionally pu
 
 Product scope and the distinction between implemented and deferred work are documented in [docs/project.md](docs/project.md). Verification evidence and blockers are tracked in [docs/progress.md](docs/progress.md).
 
+The implemented authentication surfaces follow the current Figma Make direction: charcoal/gray surfaces, navy primary actions, and light-blue focus and accent states. Registration, confirmation, and administrator review extend that system because the current Make source contains a login screen but no equivalent frames for those flows.
+
 ## Prerequisites
 
 - .NET SDK 10.0.103 or a later compatible .NET 10 feature-band SDK, as controlled by `global.json`
@@ -120,7 +122,7 @@ dotnet list FitnessApp.slnx package --vulnerable --include-transitive --no-resto
 git diff --check
 ```
 
-The integration suite uses isolated real SQLite databases, not EF InMemory. The latest verification passed 37 of 37 tests. The explicit direct/transitive NuGet command reported no vulnerable packages from its available data, but NuGet advisory retrieval also emitted NU1900 for three projects because `api.nuget.org` DNS resolution was unavailable; the audit is therefore not treated as fully verified. See [docs/progress.md](docs/progress.md) for exact build, browser, migration, bootstrap, design, and environment results.
+The integration suite uses isolated real SQLite databases, not EF InMemory. The latest verification passed 37 of 37 tests. A fresh direct/transitive NuGet advisory retrieval completed against `https://api.nuget.org/v3/index.json` and reported no known vulnerable packages in all seven projects. See [docs/progress.md](docs/progress.md) for exact build, browser, migration, bootstrap, design, and environment results.
 
 ## Future operations
 

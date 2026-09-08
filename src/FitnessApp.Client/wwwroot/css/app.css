@@ -1,8 +1,22 @@
 :root {
     color-scheme: dark;
+    --color-bg: #101317;
+    --color-surface: #191d23;
+    --color-surface-raised: #20262e;
+    --color-border: #343c47;
+    --color-border-strong: #4a5665;
+    --color-text: #f1f3f5;
+    --color-text-muted: #9aa5b1;
+    --color-text-subtle: #84919f;
+    --color-accent: #244f78;
+    --color-accent-hover: #2d638f;
+    --color-accent-muted: #172f46;
+    --color-accent-text: #9bc8ef;
+    --color-accent-border: #355f84;
+    --color-focus: #79b7e6;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #0f0f13;
-    color: #ececf0;
+    background: var(--color-bg);
+    color: var(--color-text);
     font-synthesis: none;
 }
 
@@ -23,7 +37,7 @@ body,
 
 body {
     min-width: 20rem;
-    background: #0f0f13;
+    background: var(--color-bg);
 }
 
 button,
@@ -32,7 +46,7 @@ input {
 }
 
 a {
-    color: #4db89e;
+    color: var(--color-accent-text);
     text-underline-offset: 0.2em;
 }
 
@@ -65,11 +79,11 @@ a {
     place-items: center;
     align-self: center;
     border-radius: 1.1rem;
-    background: #4db89e;
-    color: #0b1a16;
+    background: var(--color-accent);
+    color: var(--color-text);
     font-size: 1.25rem;
     font-weight: 800;
-    box-shadow: 0 0.9rem 2.5rem rgb(77 184 158 / 18%);
+    box-shadow: 0 0.9rem 2.5rem rgb(20 45 68 / 32%);
 }
 
 .brand-mark-success {
@@ -77,8 +91,8 @@ a {
 }
 
 .brand-mark-muted {
-    background: #252533;
-    color: #4db89e;
+    background: var(--color-accent-muted);
+    color: var(--color-accent-text);
     box-shadow: none;
 }
 
@@ -92,7 +106,7 @@ a {
 .dashboard-header h1,
 .admin-header h1 {
     margin: 0;
-    color: #ececf0;
+    color: var(--color-text);
     font-size: clamp(1.875rem, 7vw, 2.25rem);
     font-weight: 650;
     line-height: 1.18;
@@ -106,7 +120,7 @@ a {
 .dashboard-card p,
 .request-card p,
 .confirmation-copy {
-    color: #92909e;
+    color: var(--color-text-muted);
     line-height: 1.5;
 }
 
@@ -127,7 +141,7 @@ a {
 
 .form-field label,
 .overline {
-    color: #a3a1af;
+    color: var(--color-text-muted);
     font-size: 0.75rem;
     font-weight: 650;
     letter-spacing: 0.08em;
@@ -137,25 +151,25 @@ a {
 .form-field input {
     width: 100%;
     min-height: 3.25rem;
-    border: 1px solid #3a394b;
+    border: 1px solid var(--color-border);
     border-radius: 1.375rem;
     padding: 0 1rem;
-    background: #252533;
-    color: #ececf0;
-    caret-color: #4db89e;
+    background: var(--color-surface-raised);
+    color: var(--color-text);
+    caret-color: var(--color-accent-text);
 }
 
 .form-field input::placeholder {
-    color: #777583;
+    color: var(--color-text-subtle);
 }
 
 .form-field input:hover {
-    border-color: #504e62;
+    border-color: var(--color-border-strong);
 }
 
 .field-hint {
     margin: -0.15rem 0 0;
-    color: #777583;
+    color: var(--color-text-subtle);
     font-size: 0.78rem;
     line-height: 1.45;
 }
@@ -186,9 +200,9 @@ a {
 }
 
 .notice-success {
-    border-color: rgb(117 200 178 / 35%);
-    background: rgb(77 184 158 / 12%);
-    color: #a8e5d4;
+    border-color: rgb(83 132 174 / 42%);
+    background: rgb(23 47 70 / 72%);
+    color: var(--color-accent-text);
 }
 
 .button {
@@ -210,19 +224,19 @@ a {
 }
 
 .button-primary {
-    background: #4db89e;
-    color: #0b1a16;
+    background: var(--color-accent);
+    color: #fff;
 }
 
 .button-primary:hover:not(:disabled) {
-    background: #85d5bf;
+    background: var(--color-accent-hover);
 }
 
 .button-secondary,
 .button-quiet {
-    border-color: #464458;
-    background: #252533;
-    color: #ececf0;
+    border-color: var(--color-border-strong);
+    background: var(--color-surface-raised);
+    color: var(--color-text);
 }
 
 .button-quiet {
@@ -256,7 +270,7 @@ a {
 
 .auth-alternative {
     margin: 4.5rem 0 0;
-    color: #686672;
+    color: var(--color-text-subtle);
     font-size: 0.8rem;
     text-align: center;
 }
@@ -268,13 +282,13 @@ a {
 .back-link {
     width: fit-content;
     margin-bottom: 1.25rem;
-    color: #a3a1af;
+    color: var(--color-text-muted);
     font-size: 0.875rem;
     text-decoration: none;
 }
 
 .back-link:hover {
-    color: #ececf0;
+    color: var(--color-text);
 }
 
 .confirmation-panel {
@@ -315,7 +329,7 @@ a {
 .admin-header .overline,
 .dashboard-card .overline {
     margin: 0 0 0.6rem;
-    color: #4db89e;
+    color: var(--color-accent-text);
 }
 
 .dashboard-grid {
@@ -328,9 +342,9 @@ a {
 .dashboard-card,
 .request-card,
 .state-panel {
-    border: 1px solid #2f2e3c;
+    border: 1px solid var(--color-border);
     border-radius: 1.5rem;
-    background: #19191f;
+    background: var(--color-surface);
     box-shadow: 0 1.4rem 3.5rem rgb(0 0 0 / 18%);
 }
 
@@ -340,15 +354,15 @@ a {
 }
 
 .dashboard-card-accent {
-    border-color: rgb(117 200 178 / 35%);
-    background: linear-gradient(145deg, rgb(77 184 158 / 13%), #19191f 55%);
+    border-color: var(--color-accent-border);
+    background: linear-gradient(145deg, rgb(23 47 70 / 82%), var(--color-surface) 58%);
 }
 
 .dashboard-card h2,
 .request-card h2,
 .state-panel h2 {
     margin: 0;
-    color: #ececf0;
+    color: var(--color-text);
     font-size: 1.25rem;
 }
 
@@ -400,12 +414,22 @@ a {
     padding: 1.25rem 1.4rem;
 }
 
+.request-details {
+    min-width: 0;
+}
+
+.request-details h2,
+.request-details p,
+.dashboard-card p {
+    overflow-wrap: anywhere;
+}
+
 .request-details p {
     margin: 0.35rem 0 0;
 }
 
 .request-time {
-    color: #777583 !important;
+    color: var(--color-text-subtle) !important;
     font-size: 0.82rem;
 }
 
@@ -429,7 +453,7 @@ a {
 }
 
 .status-message {
-    color: #92909e;
+    color: var(--color-text-muted);
 }
 
 a:focus-visible,
@@ -437,7 +461,7 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-    outline: 0.2rem solid #4db89e;
+    outline: 0.2rem solid var(--color-focus);
     outline-offset: 0.2rem;
 }
 
@@ -452,14 +476,14 @@ textarea:focus-visible {
 
 .loading-progress circle {
     fill: none;
-    stroke: #30303e;
+    stroke: var(--color-border);
     stroke-width: 0.6rem;
     transform-origin: 50% 50%;
     transform: rotate(-90deg);
 }
 
 .loading-progress circle:last-child {
-    stroke: #4db89e;
+    stroke: var(--color-accent-text);
     stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
     transition: stroke-dasharray 0.05s ease-in-out;
 }
@@ -467,7 +491,7 @@ textarea:focus-visible {
 .loading-progress-text {
     position: absolute;
     inset: calc(20vh + 3.25rem) 0 auto 0.2rem;
-    color: #ececf0;
+    color: var(--color-text);
     font-weight: 700;
     text-align: center;
 }
@@ -541,7 +565,7 @@ textarea:focus-visible {
     }
 
     .decision-actions .button {
-        flex: 1 1 8rem;
+        flex: 1 1 auto;
     }
 }
 

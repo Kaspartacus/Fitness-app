@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-09-07
+Last updated: 2026-09-08
 
 ## Completed authentication foundation
 
@@ -26,36 +26,40 @@ Last updated: 2026-09-07
 
 ## Design evidence
 
-- The required direct design-context attempt for Make file `dFJcR42XWiqVhBtA1bfyOS`, node `0:1`, returned only a resource-listing instruction and no readable source or screenshot. It was not retried, and the Figma file was not modified.
-- The current published prototype at `https://trance-vine-53032594.figma.site/` was inspected in the browser at desktop and phone widths. Verified login tokens include `#0f0f13` background, `#252533` fields, `#4db89e` accent, off-white/muted text, Inter/system typography, 52 px pill controls, 382 px desktop form width, 24 px phone margins, and no phone overflow in the prototype.
-- The exact pulse-mark SVG was read from the published page and reused in the Blazor login, registration, and protected-home UI. The temporary letter placeholder was removed.
-- The published prototype has no registration, confirmation, or administrator-review screens. Those screens implement the requested real states as a consistent visual extension; they have been functionally inspected but cannot be described as pixel-perfect matches to absent Figma frames.
+- The current Make file `dFJcR42XWiqVhBtA1bfyOS`, node `0:1`, was inspected through the Figma design-context integration and browser. It reported version 41 and returned the real source inventory, including `App.tsx`, `index.css`, `LoginScreen.tsx`, shared components, refinement notes, and screen files. The Figma file was not modified.
+- Visible version-41 source notes establish the current direction: filled navy primary actions, navy/light-blue active states, readable gray-blue inactive states, and removal of the former purple hard-coded surfaces and tints. The Blazor stylesheet now centralizes a charcoal/gray/navy/light-blue token set and uses it across login, registration, confirmation, protected home, and administrator review.
+- The exact pulse-mark SVG remains reused in the Blazor login, registration, and protected-home UI.
+- The source inventory contains a login screen but no registration, confirmation, or administrator-review screens. Those screens implement the requested real states as a consistent extension and are not described as pixel-perfect matches to absent frames.
+- The current Make live preview displayed `Couldn't load Make` during this run. This prevents a same-frame pixel comparison, but not inspection of the current source inventory or visible version-41 design notes.
 
 ## Verification results
 
 - `dotnet tool restore`: passed (`dotnet-ef` 10.0.3).
 - Clean serial `dotnet restore FitnessApp.slnx`: passed for all seven projects.
-- Final serial `dotnet build FitnessApp.slnx --no-restore`: passed with 0 errors. Three NU1900 warnings remained because advisory metadata DNS lookup for `api.nuget.org` failed in Client, Infrastructure, and Server.
+- Final serial `dotnet build FitnessApp.slnx --no-restore`: passed with 0 errors and three NU1900 advisory-DNS warnings inherited from restore. A fresh dedicated advisory command completed successfully as described below.
 - `dotnet test FitnessApp.slnx --no-build --no-restore`: **37 passed, 0 failed, 0 skipped**.
 - Pull request #1's `build-and-test` GitHub Actions job passed in 58 seconds on the initial feature commit.
 - The 12 new registration/administration tests passed, including concurrent duplicate registration, public privilege-input rejection, rate limiting, 401/403 authorization, bounded pending selection, approval/rejection, audit metadata, repeated decisions, and simultaneous opposing decisions.
 - Two isolated migration tests passed: latest migration on an empty SQLite database, and upgrade from `20260907121032_InitialIdentity` while preserving an existing account, password hash, approval status, and role assignment with new metadata left null.
 - `dotnet-ef migrations has-pending-model-changes --no-build` passed outside the sandbox and confirmed that the EF model matches the tracked migration snapshot.
 - A separate fresh-database bootstrap run applied both migrations and created exactly one Approved administrator with one Admin role. A second run made no changes and preserved its password hash and display name. The temporary database was removed.
-- `dotnet list FitnessApp.slnx package --vulnerable --include-transitive` exited 0 and listed no vulnerable packages in all seven projects from its available data. Because the same command emitted NU1900 advisory-fetch errors for three projects, a complete current vulnerability audit remains unverified rather than claimed as passed.
+- A fresh `dotnet list FitnessApp.slnx package --vulnerable --include-transitive --no-restore` retrieval used `https://api.nuget.org/v3/index.json`, exited 0 without NU1900, and reported no known vulnerable direct or transitive packages in all seven projects.
 - HTTPS browser verification at `https://localhost:7192` used an isolated SQLite database and synthetic test accounts. Verified: registration confirmation; Pending login denial; administrator login/navigation/list; approval; administrator logout; approved user login with no administrator navigation; rejection confirmation and rejection; Rejected login denial; empty list; and a stopped-server network error followed by successful retry after restart.
-- Desktop login was visually inspected against the published prototype and exposed one focus-ring mismatch on the programmatically focused heading; `[tabindex="-1"]` focus styling was corrected while interactive focus indicators remain visible. A real narrow local-app viewport could not be selected through the available browser control, so local phone rendering remains a design-review gap; responsive CSS and the prototype phone layout were inspected, but that is not equivalent to a local phone browser pass.
+- The current local app was visually and interactively inspected over HTTPS at desktop, 390 px, and 360 px widths. The desktop login retains the 382 px composition; the 360 px registration controls are 328 px wide and 52 px high; all checked documents matched their viewport width with no horizontal overflow. Long display names and email addresses wrap within home and administrator cards.
+- The 360 px administrator check exposed oversized stacked action buttons caused by an `8rem` flex basis becoming vertical at the narrow breakpoint. The basis was corrected to content sizing. Reverification measured 44 px-high full-width stacked actions at 360 px and 44 px-high side-by-side actions at 390 px.
+- Current HTTPS browser flow verified registration confirmation, Pending login denial, administrator login and protected navigation, approval, administrator logout, approved ordinary-user login without administrator navigation, and ordinary-user logout. Interactive focus remains visibly outlined. The application tab produced no browser-console warnings or errors during the flow.
 - The local HTTPS verification server was stopped, its browser tabs were closed, and the database containing only synthetic test data was removed.
 
 ## Environment-specific findings
 
 - Sandboxed WebAssembly builds can stall in the external `ComputeWasmBuildAssets` MSBuild task host. Serial builds outside that process restriction succeed without source changes using `DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1`, `MSBUILDDISABLENODEREUSE=1`, `-m:1`, and `-p:BuildInParallel=false`.
 - EF migration generation inside the same sandbox showed the related task-host stall. Running the repository-local EF tool outside that restriction generated the migration normally. Two malformed untracked `bin\Debug` output directories created during the interrupted attempt were inspected and removed.
-- NuGet advisory DNS resolution is intermittent in this environment, as described above. Package restore and compilation are otherwise successful.
+- NuGet advisory DNS resolution is intermittent in this environment: the final restore/build surfaced three NU1900 warnings, while the fresh dedicated audit completed normally moments earlier and retrieved current advisory data for every project.
+- Figma Make's current live preview failed to load in the browser even though the design-context integration returned the source inventory and the page exposed version-41 refinement notes. This is a Figma preview/service issue, not an application runtime failure.
 
-## Deliberate limitations and merge gate
+## Deliberate limitations and review status
 
 - Approval does not verify email ownership, and the application sends no email. Password reset is not implemented.
 - Access tokens remain memory-only; reload, tab closure, or expiry requires login. Refresh tokens and remember-me are not implemented.
 - No deployment, runtime secret vault, log shipping, Raspberry Pi/Docker setup, or fitness module was added.
-- Pull request #1 is open. Its code revision passed the required PR workflow, but it must remain unmerged while the missing registration/administrator Figma frames and local phone-width browser pass remain unresolved design-verification gaps.
+- Pull request #1 remains open for user review. Registration and administrator frames are still absent from the current Figma source and the Make live preview was unavailable, so exact pixel parity for those absent screens cannot be claimed. The formerly missing local 360/390 px browser checks, console check, and complete current dependency audit are now resolved; the implementation is ready for review once the final branch checks pass.
