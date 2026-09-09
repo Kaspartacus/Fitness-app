@@ -12,6 +12,7 @@ public sealed class RegistrationMigrationTests
     private const string InitialMigration = "20260907121032_InitialIdentity";
     private const string RegistrationMigration = "20260907185305_AddRegistrationApprovalMetadata";
     private const string PasswordResetMigration = "20260909044755_AddPasswordResetCooldown";
+    private const string StrengthProgramsMigration = "20260909170745_AddStrengthPrograms";
 
     [Fact]
     public async Task LatestMigrationAppliesToEmptyDatabase()
@@ -24,7 +25,7 @@ public sealed class RegistrationMigrationTests
             await dbContext.Database.MigrateAsync();
 
             Assert.Equal(
-                [InitialMigration, RegistrationMigration, PasswordResetMigration],
+                [InitialMigration, RegistrationMigration, PasswordResetMigration, StrengthProgramsMigration],
                 await dbContext.Database.GetAppliedMigrationsAsync());
             var columns = await ReadUserColumnsAsync(databasePath);
             Assert.Contains("RegisteredAt", columns);
@@ -32,6 +33,8 @@ public sealed class RegistrationMigrationTests
             Assert.Contains("DecidedByUserId", columns);
             Assert.Contains("LastPasswordResetEmailQueuedAt", columns);
             Assert.Contains("SecurityStamp", await ReadColumnsAsync(databasePath, "UserSessions"));
+            Assert.Contains("Name", await ReadColumnsAsync(databasePath, "StrengthPrograms"));
+            Assert.Contains("Position", await ReadColumnsAsync(databasePath, "ProgramExercises"));
         }
         finally
         {

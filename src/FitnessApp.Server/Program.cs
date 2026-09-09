@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using FitnessApp.Server.Strength;
 using FitnessApp.Application.Authentication;
 using FitnessApp.Infrastructure;
 using FitnessApp.Infrastructure.Persistence;
@@ -177,7 +178,8 @@ app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api/auth") ||
         context.Request.Path.StartsWithSegments("/api/registrations") ||
-        context.Request.Path.StartsWithSegments("/api/admin"))
+        context.Request.Path.StartsWithSegments("/api/admin") ||
+        context.Request.Path.StartsWithSegments("/api/strength"))
     {
         AuthenticationHttpResponses.SetNoStore(context.Response);
     }
@@ -197,6 +199,7 @@ app.MapAuthenticationEndpoints();
 app.MapPasswordResetEndpoints();
 app.MapRegistrationEndpoints();
 app.MapUserAdministrationEndpoints();
+app.MapStrengthProgramEndpoints();
 
 if (app.Environment.IsEnvironment("Testing") &&
     app.Configuration.GetValue<bool>("Testing:EnableTestEndpoints"))

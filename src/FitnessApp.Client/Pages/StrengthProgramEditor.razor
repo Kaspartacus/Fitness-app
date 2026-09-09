@@ -1,0 +1,127 @@
+@page "/styrke/opret"
+@page "/styrke/{Id:guid}/rediger"
+@attribute [Authorize]
+@using FitnessApp.Contracts.Strength
+@using FitnessApp.Client.Strength
+@using Microsoft.AspNetCore.Components.Routing
+@inject StrengthProgramClient Programs
+@inject NavigationManager Navigation
+
+<PageTitle>@Title</PageTitle>
+<NavigationLock ConfirmExternalNavigation="@dirty" OnBeforeInternalNavigation="BeforeNavigation" />
+<main class="strength-page" aria-labelledby="editor-title">
+    <a class="back-link" href="@BackUrl">Tilbage til program</a>
+    <header class="strength-header"><h1 id="editor-title">@Title</h1></header>
+    @if (pendingNavigation is not null || confirmReload)
+    {
+        <section class="notice notice-warning" role="alert" aria-labelledby="discard-title">
+            <h2 id="discard-title">Kassér ændringer?</h2><p>Du har ændringer, der ikke er gemt.</p>
+            <div class="decision-actions"><button class="button button-secondary" @onclick="Stay">Bliv her</button><button class="button button-danger" @onclick="DiscardAsync">Kassér ændringer</button></div>
+        </section>
+    }
+    @if (loading) { <p role="status">Indlæser program…</p> }
+    @if (error is not null)
+    {
+        <p class="notice notice-error" role="alert">@error</p>
+        @if (!ready && !missing) { <button class="button button-secondary" disabled="@loading" @onclick="LoadAsync">Prøv igen</button> }
+        @if (conflict) { <button class="button button-secondary" disabled="@busy" @onclick="() => confirmReload = true">Genindlæs program</button> }
+    }
+    @if (ready)
+    {
+        <form class="program-form" @onsubmit="SaveAsync" @onsubmit:preventDefault @oninput="MarkDirty" @onchange="MarkDirty">
+            <fieldset disabled="@busy" class="program-fields">
+                <div class="program-card program-copy form-field"><label for="program-name">Navn på program</label><input id="program-name" name="program-name" maxlength="100" required @bind="draft.Name" @bind:event="oninput" /></div>
+                <h2>Øvelser <span class="status-message">(@draft.Exercises!.Count/50)</span></h2>
+                <p class="field-hint">Angiv 1–10 sæt og 1–30 gentagelser pr. øvelse.</p>
+                @for (var index = 0; index < draft.Exercises.Count; index++)
+                {
+                    var exercise = draft.Exercises[index];
+                    var position = index;
+                    var fieldId = RowId(exercise);
+                    <section class="program-card exercise-editor" @key="exercise" aria-label="@($"Øvelse {index + 1}")">
+                        <div class="form-field"><label for="@(fieldId + "-name")">Øvelse @(index + 1)</label><input id="@(fieldId + "-name")" maxlength="100" required @bind="exercise.Name" @bind:event="oninput" /></div>
+                        <div class="exercise-numbers">
+                            <div class="form-field"><label for="@(fieldId + "-sets")">Sæt</label><input id="@(fieldId + "-sets")" type="number" min="1" max="10" step="1" required @bind="exercise.Sets" /></div>
+                            <div class="form-field"><label for="@(fieldId + "-reps")">Gentagelser</label><input id="@(fieldId + "-reps")" type="number" min="1" max="30" step="1" required @bind="exercise.Repetitions" /></div>
+                        </div>
+                        <label class="warmup-control" for="@(fieldId + "-warmup")"><input id="@(fieldId + "-warmup")" type="checkbox" @bind="exercise.IsWarmUp" /> Opvarmning</label>
+                        <div class="decision-actions">
+                            <button class="button button-quiet" type="button" disabled="@(index == 0)" aria-label="@($"Flyt øvelse {index + 1} op")" @onclick="() => Move(position, -1)">Flyt op</button>
+                            <button class="button button-quiet" type="button" disabled="@(index == draft.Exercises.Count - 1)" aria-label="@($"Flyt øvelse {index + 1} ned")" @onclick="() => Move(position, 1)">Flyt ned</button>
+                            <button class="button button-danger-outline" type="button" aria-label="@($"Fjern øvelse {index + 1}")" @onclick="() => Remove(exercise)">Fjern</button>
+                        </div>
+                    </section>
+                }
+                <button class="button button-secondary" type="button" disabled="@(draft.Exercises.Count >= 50)" @onclick="Add">Tilføj øvelse</button>
+                <div class="decision-actions strength-actions"><button class="button button-primary" type="submit">@(busy ? "Gemmer…" : "Gem program")</button><a class="button button-quiet button-link" href="@BackUrl">Annuller</a></div>
+            </fieldset>
+        </form>
+    }
+</main>
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    private SaveProgramRequest draft = new() { Exercises = [new()] };
+    private readonly Dictionary<ExerciseRequest, string> rowIds = [];
+    private bool loading, busy, dirty, ready, conflict, missing, confirmReload;
+    private string? error, pendingNavigation;
+    private string Title => Id is null ? "Opret program" : "Rediger program";
+    private string BackUrl => Id is null ? "/styrke" : $"/styrke/{Id}";
+    protected override Task OnParametersSetAsync() => LoadAsync();
+    private string RowId(ExerciseRequest exercise)
+    {
+        if (!rowIds.TryGetValue(exercise, out var id)) rowIds[exercise] = id = $"exercise-{Guid.NewGuid():N}";
+        return id;
+    }
+    private async Task LoadAsync()
+    {
+        if (loading || busy) return;
+        error = null; conflict = false; missing = false;
+        if (Id is null)
+        {
+            draft = new SaveProgramRequest { Exercises = [new ExerciseRequest()] };
+            rowIds.Clear();
+            dirty = false;
+            ready = true;
+            return;
+        }
+        loading = true;
+        var result = await Programs.GetAsync(Id.Value);
+        loading = false;
+        error = result.Error; missing = result.NotFound;
+        if (result.Value is { } program)
+        {
+            draft = new() { Name = program.Name, Version = program.Version, Exercises = program.Exercises.Select(e => new ExerciseRequest { Id = e.Id, Name = e.Name, Sets = e.Sets, Repetitions = e.Repetitions, IsWarmUp = e.IsWarmUp }).ToList() };
+            dirty = false; ready = true;
+        }
+    }
+    private void MarkDirty() => dirty = true;
+    private void Add() { if (draft.Exercises!.Count < 50) { draft.Exercises.Add(new()); dirty = true; } }
+    private void Remove(ExerciseRequest exercise) { draft.Exercises!.Remove(exercise); dirty = true; }
+    private void Move(int index, int offset)
+    {
+        var exercise = draft.Exercises![index];
+        draft.Exercises.RemoveAt(index); draft.Exercises.Insert(index + offset, exercise); dirty = true;
+    }
+    private async Task SaveAsync()
+    {
+        if (busy) return;
+        if (draft.Name?.Trim().Length is not (>= 1 and <= 100) || draft.Exercises is not { Count: >= 1 and <= 50 } ||
+            draft.Exercises.Any(e => e.Name?.Trim().Length is not (>= 1 and <= 100) || e.Sets is < 1 or > 10 || e.Repetitions is < 1 or > 30))
+        { error = "Angiv et navn og 1–50 øvelser med gyldige navne, sæt og gentagelser."; return; }
+        busy = true;
+        var result = await Programs.SaveAsync(Id, draft);
+        busy = false;
+        error = result.Error; conflict = result.Conflict;
+        if (result.Value is { } program) { dirty = false; Navigation.NavigateTo($"/styrke/{program.Id}"); }
+    }
+    private void BeforeNavigation(LocationChangingContext context)
+    {
+        if (busy || dirty) { context.PreventNavigation(); if (!busy) pendingNavigation = context.TargetLocation; }
+    }
+    private void Stay() { pendingNavigation = null; confirmReload = false; }
+    private async Task DiscardAsync()
+    {
+        if (confirmReload) { confirmReload = false; await LoadAsync(); }
+        else if (pendingNavigation is { } target) { dirty = false; pendingNavigation = null; Navigation.NavigateTo(target); }
+    }
+}

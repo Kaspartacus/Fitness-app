@@ -1,6 +1,6 @@
 # FitnessApp
 
-FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, a one-time local administrator bootstrap, public registration with administrator approval, signed JWT login, live session validation, password reset by email, a protected Danish home page, and logout.
+FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, account administration and authentication, password reset by email, and private strength-program management through the Danish UI.
 
 Product scope and the distinction between implemented and deferred work are documented in [docs/project.md](docs/project.md). Verification evidence and blockers are tracked in [docs/progress.md](docs/progress.md).
 
@@ -24,8 +24,8 @@ src/
   FitnessApp.Client          Blazor WebAssembly user interface
   FitnessApp.Server          ASP.NET Core host, API, and composition root
   FitnessApp.Contracts       Shared HTTP request and response contracts
-  FitnessApp.Application     Authentication application contracts
-  FitnessApp.Domain          Business rules and account approval state
+  FitnessApp.Application     Application service contracts
+  FitnessApp.Domain          Business rules and domain entities
   FitnessApp.Infrastructure  Identity and EF Core SQLite persistence
 tests/
   FitnessApp.IntegrationTests
@@ -107,6 +107,12 @@ After signing in, an administrator opens **Brugeranmodninger** from the protecte
 
 Approval permits a later login but does **not** prove ownership of the submitted email address. Registration and approval do not send email; the password-reset flow below sends email only for Approved accounts. Ordinary users do not see administrator navigation, and every administrator endpoint independently requires the live `Admin` role.
 
+## Strength programs
+
+An Approved user opens **Styrketræning** from the protected home page to create, view, edit, reorder, and delete personal workout programs. Each program requires a name and 1–50 manually named exercises. Each exercise stores 1–10 planned sets, 1–30 planned repetitions, its order, and an optional **Opvarmning** marker. Changes use explicit save, and the editor warns before discarding an unsaved draft.
+
+The server derives ownership from the validated session. Lists, reads, updates, and deletes are scoped to that user, including for administrators. Program and exercise changes commit atomically. A version token rejects stale updates or deletions made from another tab and lets the user retain the local draft before choosing whether to reload.
+
 ## Password reset and email delivery
 
 The public Danish flow starts at **Glemt adgangskode?** on the login page. Every valid request receives the same response, whether the account is unknown, Pending, Rejected, or Approved. Only Approved accounts are eligible for delivery and eligibility is checked again when a password is changed. Requests have an IP rate limit and an atomic five-minute per-account cooldown. Email work is placed on a bounded in-memory queue so SMTP latency does not disclose whether an account exists.
@@ -115,7 +121,7 @@ Reset links use ASP.NET Core Identity's dedicated password-reset token provider 
 
 The queue holds at most 32 messages. Delivery is tried twice with a two-second delay. Failures remain neutral to the visitor and produce structured events containing an internal message ID and error type, never the recipient, content, credentials, token, or URL. A full queue drops the message and releases its cooldown reservation so a later request can retry. Because the queue is intentionally in memory, pending mail is lost if the process stops; this slice does not add a broker or durable outbox.
 
-Production SMTP uses MailKit, Brevo's relay on port 587, required STARTTLS, normal platform certificate validation, cancellable async calls, and a 15-second timeout. By default all TLS certificate checks, including revocation, remain enabled. There is no SMTP protocol log or fallback transport. The explicitly authorized local Development exception below only skips revocation checking. SMTP mode fails startup if its configuration is incomplete. The currently verified sender is the temporary address `Kaspersj1998@hotmail.com`, with `Kasperjoergensen.dk` only as its display name. That does not authenticate the domain and real delivery has not been verified. `Smtp:FromEmail` and `Smtp:FromName` are configurable so an authenticated domain sender can replace them later without code changes.
+Production SMTP uses MailKit, Brevo's relay on port 587, required STARTTLS, normal platform certificate validation, cancellable async calls, and a 15-second timeout. There is no certificate bypass, SMTP protocol log, or fallback transport. SMTP mode fails startup if its configuration is incomplete. `Smtp:FromEmail` and `Smtp:FromName` are configurable so an authenticated domain sender can replace them later without code changes. The owner confirmed successful local Brevo delivery before the strength-program work; automated verification does not send real email.
 
 All previously shared Brevo keys must be revoked. Generate a fresh SMTP key and enter it locally without pasting it into chat. Development defaults to a private pickup directory and needs no SMTP credential. To opt into a separate real-email smoke test, this `zsh` snippet reads the fresh key without echo, keeps it out of command arguments and temporary files, and sends JSON through standard input:
 
@@ -196,7 +202,7 @@ Real delivery is deliberately separate from automated verification. After rotati
 3. Open the link, set a new policy-compliant password, and verify the old password and all prior sessions fail while the new password works.
 4. Record the result without copying credentials, tokens, complete reset URLs, or personal email content.
 
-Until that check is performed, Brevo delivery remains unverified.
+The owner completed this delivery check successfully before the strength-program work. This repository records that as owner-confirmed operational evidence rather than an independently repeated automated test.
 
 ## Authentication behavior
 

@@ -20,5 +20,6 @@ builder.Services.AddScoped<AuthenticationClient>();
 builder.Services.AddScoped<RegistrationClient>();
 builder.Services.AddScoped<PasswordResetClient>();
 builder.Services.AddScoped<UserAdministrationClient>();
+builder.Services.AddScoped<FitnessApp.Client.Strength.StrengthProgramClient>();
 
 await builder.Build().RunAsync();
