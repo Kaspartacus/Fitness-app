@@ -12,5 +12,7 @@ public sealed class UserSession
 
     public DateTimeOffset? RevokedAt { get; set; }
 
+    public string? SecurityStamp { get; set; }
+
     public ApplicationUser User { get; set; } = null!;
 }

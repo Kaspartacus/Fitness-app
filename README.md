@@ -1,6 +1,6 @@
 # FitnessApp
 
-FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, a one-time local administrator bootstrap, public registration with administrator approval, signed JWT login, live session validation, a protected Danish home page, and logout.
+FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, a one-time local administrator bootstrap, public registration with administrator approval, signed JWT login, live session validation, password reset by email, a protected Danish home page, and logout.
 
 Product scope and the distinction between implemented and deferred work are documented in [docs/project.md](docs/project.md). Verification evidence and blockers are tracked in [docs/progress.md](docs/progress.md).
 
@@ -105,9 +105,81 @@ Visitors can choose **Opret bruger** on the login page. A valid submission creat
 
 After signing in, an administrator opens **Brugeranmodninger** from the protected home page. The bounded list contains only eligible pending registrations and supports `Pending → Approved` or `Pending → Rejected`. Rejection requires explicit confirmation. Decisions are atomic, so an already processed or concurrently decided request cannot be overwritten. Registration time, decision time, and deciding administrator ID are stored in UTC; the browser shows the registration time in the user's local timezone.
 
-Approval permits a later login but does **not** prove ownership of the submitted email address. The application sends no email in this slice. Ordinary users do not see administrator navigation, and every administrator endpoint independently requires the live `Admin` role.
+Approval permits a later login but does **not** prove ownership of the submitted email address. Registration and approval do not send email; the password-reset flow below sends email only for Approved accounts. Ordinary users do not see administrator navigation, and every administrator endpoint independently requires the live `Admin` role.
 
-## Authentication behavior and current limitation
+## Password reset and email delivery
+
+The public Danish flow starts at **Glemt adgangskode?** on the login page. Every valid request receives the same response, whether the account is unknown, Pending, Rejected, or Approved. Only Approved accounts are eligible for delivery and eligibility is checked again when a password is changed. Requests have an IP rate limit and an atomic five-minute per-account cooldown. Email work is placed on a bounded in-memory queue so SMTP latency does not disclose whether an account exists.
+
+Reset links use ASP.NET Core Identity's dedicated password-reset token provider with a one-hour lifetime. The origin comes only from the validated `PublicApp:BaseUrl`; it is never derived from a request Host header. Tokens are Base64url-encoded. Reset pages and APIs use `no-store`, and the reset document applies `Referrer-Policy: no-referrer`; the client has no external assets or analytics. A successful reset changes the password and revokes all existing application sessions in one SQLite transaction, preserves approval and roles, and does not sign the user in.
+
+The queue holds at most 32 messages. Delivery is tried twice with a two-second delay. Failures remain neutral to the visitor and produce structured events containing an internal message ID and error type, never the recipient, content, credentials, token, or URL. A full queue drops the message and releases its cooldown reservation so a later request can retry. Because the queue is intentionally in memory, pending mail is lost if the process stops; this slice does not add a broker or durable outbox.
+
+Production SMTP uses MailKit, Brevo's relay on port 587, required STARTTLS, normal platform certificate validation, cancellable async calls, and a 15-second timeout. There is no certificate bypass, SMTP protocol log, or fallback transport. SMTP mode fails startup if its configuration is incomplete. The currently verified sender is the temporary address `Kaspersj1998@hotmail.com`, with `Kasperjoergensen.dk` only as its display name. That does not authenticate the domain and real delivery has not been verified. `Smtp:FromEmail` and `Smtp:FromName` are configurable so an authenticated domain sender can replace them later without code changes.
+
+All previously shared Brevo keys must be revoked. Generate a fresh SMTP key and enter it locally without pasting it into chat. Development defaults to a private pickup directory and needs no SMTP credential. To opt into a separate real-email smoke test, this `zsh` snippet reads the fresh key without echo, keeps it out of command arguments and temporary files, and sends JSON through standard input:
+
+```zsh
+read -r -s "FITNESSAPP_SMTP_PASSWORD?Fresh Brevo SMTP key: "
+printf '\n'
+export FITNESSAPP_SMTP_PASSWORD
+
+python3 -c 'import json, os, sys; json.dump({
+    "Email:Transport": "Smtp",
+    "Smtp:Password": os.environ["FITNESSAPP_SMTP_PASSWORD"]
+}, sys.stdout)' | dotnet user-secrets set --project src/FitnessApp.Server
+
+unset FITNESSAPP_SMTP_PASSWORD
+```
+
+User Secrets live outside the repository, but they are not encrypted and are only a development convenience. After the test, remove the transport override to return to pickup mode:
+
+```bash
+dotnet user-secrets remove "Email:Transport" --project src/FitnessApp.Server
+dotnet user-secrets remove "Smtp:Password" --project src/FitnessApp.Server
+```
+
+Do not put SMTP passwords, JWT signing keys, or future credential-bearing connection strings in Git, client configuration, logs, screenshots, or documentation. Deployment must supply runtime secrets through its environment or restricted secret files. GitHub Actions Secrets are workflow inputs and do not automatically become application runtime configuration.
+
+The equivalent environment-variable names use double underscores:
+
+```text
+Smtp__Host
+Smtp__Port
+Smtp__Username
+Smtp__Password
+Smtp__FromEmail
+Smtp__FromName
+PublicApp__BaseUrl
+ConnectionStrings__DefaultConnection
+DataProtection__KeyRingPath
+Email__Transport
+```
+
+`PublicApp:BaseUrl` has no production default and must be set to the application's real public HTTPS origin. Development uses the actual launch-profile origin, `https://localhost:7192`. Only a loopback HTTP URL is permitted in Development; other environments require HTTPS.
+
+Development and automated tests use the explicit `Pickup` transport. It writes private `.eml` files under `src/FitnessApp.Server/App_Data/email-pickup`, outside `wwwroot`, with a mode-0700 directory and mode-0600 files on Unix. The directory is ignored by Git and has no HTTP endpoint. These files contain live local reset links: inspect them only for local verification, do not attach or commit them, and delete them when finished.
+
+## Persistent security storage
+
+The non-secret development connection string remains `ConnectionStrings:DefaultConnection=Data Source=App_Data/fitnessapp.db`. The resolved SQLite file is under the server content root, outside `wwwroot`; database files, journals, and backups are ignored. Restrict the directory to the application account and protect backups. Any future connection string containing credentials must be supplied as a secret.
+
+Identity reset tokens depend on ASP.NET Core Data Protection. The application sets the explicit identity `FitnessApp` and persists its key ring at `DataProtection:KeyRingPath`, defaulting locally to `src/FitnessApp.Server/App_Data/data-protection-keys`. The directory is outside `wwwroot`, ignored by Git, and set to mode 0700 on Unix. Normal restarts retain valid links as long as the same application identity and key ring are used.
+
+For a future runtime, configure an absolute persistent path readable and writable only by the application account. Back it up with the database, do not place it in a publicly served or repository directory, and protect the filesystem or volume with encryption at rest. Explicit filesystem persistence disables Data Protection's automatic at-rest key encryption; this implementation relies on restricted filesystem access and the host's encrypted storage rather than inventing a deployment-specific certificate or vault.
+
+## Manual email smoke test
+
+Real delivery is deliberately separate from automated verification. After rotating the exposed keys and using the masked setup above:
+
+1. Confirm `PublicApp:BaseUrl` is the exact HTTPS origin being tested.
+2. Start the app, request a reset for an Approved test account, and confirm one message arrives from the configured verified sender.
+3. Open the link, set a new policy-compliant password, and verify the old password and all prior sessions fail while the new password works.
+4. Record the result without copying credentials, tokens, complete reset URLs, or personal email content.
+
+Until that check is performed, Brevo delivery remains unverified.
+
+## Authentication behavior
 
 The server issues signed HS256 JWT access tokens with a 15-minute lifetime and explicit 30-second clock skew. JwtBearer validates the signature, algorithm, issuer, audience, and expiry. Every protected request also checks the persisted session and current account approval state. Logout revokes that session immediately. Login uses Identity password validation, lockout, and an IP-partitioned rate limit; failures deliberately return the same Danish message.
 
@@ -124,7 +196,7 @@ Repository-native Codex skills, read-only reviewer agents, the resume checkpoint
 ./scripts/verify.sh audit
 ```
 
-The integration suite uses isolated real SQLite databases, not EF InMemory. The latest verification passed 37 of 37 tests. A fresh direct/transitive NuGet advisory retrieval completed against `https://api.nuget.org/v3/index.json` and reported no known vulnerable packages in all seven projects. See [docs/progress.md](docs/progress.md) for exact build, browser, migration, bootstrap, design, and environment results.
+The integration suite uses isolated real SQLite databases, not EF InMemory. See [docs/progress.md](docs/progress.md) for the current exact build, test, audit, migration, browser, design, and review evidence.
 
 ## Future operations
 

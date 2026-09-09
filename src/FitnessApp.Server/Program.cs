@@ -3,7 +3,9 @@ using FitnessApp.Application.Authentication;
 using FitnessApp.Infrastructure;
 using FitnessApp.Infrastructure.Persistence;
 using FitnessApp.Server.Authentication;
+using FitnessApp.Server.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -14,6 +16,42 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddJsonConsole(options => options.IncludeScopes = true);
 
+builder.Services.AddSingleton<IValidateOptions<PasswordResetOptions>, PasswordResetOptionsValidator>();
+builder.Services.AddOptions<PasswordResetOptions>()
+    .Bind(builder.Configuration.GetSection(PasswordResetOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<PublicAppOptions>, PublicAppOptionsValidator>();
+builder.Services.AddOptions<PublicAppOptions>()
+    .Bind(builder.Configuration.GetSection(PublicAppOptions.SectionName))
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<IValidateOptions<FitnessApp.Infrastructure.Email.EmailDeliveryOptions>, EmailDeliveryOptionsValidator>();
+builder.Services.AddOptions<FitnessApp.Infrastructure.Email.EmailDeliveryOptions>()
+    .Bind(builder.Configuration.GetSection(FitnessApp.Infrastructure.Email.EmailDeliveryOptions.SectionName))
+    .PostConfigure(options =>
+    {
+        if (!string.IsNullOrWhiteSpace(options.PickupDirectory))
+        {
+            options.PickupDirectory = Path.GetFullPath(Path.IsPathRooted(options.PickupDirectory)
+                ? options.PickupDirectory
+                : Path.Combine(builder.Environment.ContentRootPath, options.PickupDirectory));
+        }
+    })
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<FitnessApp.Infrastructure.Email.SmtpOptions>, SmtpOptionsValidator>();
+builder.Services.AddOptions<FitnessApp.Infrastructure.Email.SmtpOptions>()
+    .Bind(builder.Configuration.GetSection(FitnessApp.Infrastructure.Email.SmtpOptions.SectionName))
+    .ValidateOnStart();
+
+var dataProtectionKeyRingPath = PrivateDirectory.ResolveAndCreate(
+    builder.Configuration["DataProtection:KeyRingPath"],
+    builder.Environment.ContentRootPath,
+    builder.Environment.WebRootPath ?? Path.Combine(builder.Environment.ContentRootPath, "wwwroot"),
+    "DataProtection:KeyRingPath");
+builder.Services.AddDataProtection()
+    .SetApplicationName("FitnessApp")
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyRingPath));
+
 var configuredConnectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
 var connectionString = SqliteConnectionString.Resolve(
@@ -21,7 +59,16 @@ var connectionString = SqliteConnectionString.Resolve(
     builder.Environment.ContentRootPath);
 
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddInfrastructure(connectionString);
+var passwordResetTokenLifetimeMinutes = builder.Configuration.GetValue(
+    "Authentication:PasswordReset:TokenLifetimeMinutes",
+    60);
+var passwordResetTokenLifetime = builder.Environment.IsEnvironment("Testing") &&
+    builder.Configuration.GetValue<int?>("Testing:PasswordResetTokenLifetimeMilliseconds") is { } testLifetimeMilliseconds
+        ? TimeSpan.FromMilliseconds(testLifetimeMilliseconds)
+        : TimeSpan.FromMinutes(passwordResetTokenLifetimeMinutes);
+builder.Services.AddInfrastructure(connectionString, passwordResetTokenLifetime);
+var emailTransport = builder.Configuration.GetValue("Email:Transport", "Smtp");
+builder.Services.AddEmailDelivery(usePickupDirectory: emailTransport is "Pickup");
 builder.Services.AddScoped<IAccessTokenIssuer, JwtAccessTokenIssuer>();
 
 builder.Services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
@@ -41,6 +88,8 @@ var loginPermitLimit = builder.Configuration.GetValue("Authentication:LoginRateL
 var loginWindowSeconds = builder.Configuration.GetValue("Authentication:LoginRateLimit:WindowSeconds", 60);
 var registrationPermitLimit = builder.Configuration.GetValue("Authentication:RegistrationRateLimit:PermitLimit", 5);
 var registrationWindowSeconds = builder.Configuration.GetValue("Authentication:RegistrationRateLimit:WindowSeconds", 300);
+var passwordResetPermitLimit = builder.Configuration.GetValue("Authentication:PasswordResetRateLimit:PermitLimit", 5);
+var passwordResetWindowSeconds = builder.Configuration.GetValue("Authentication:PasswordResetRateLimit:WindowSeconds", 300);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -68,6 +117,16 @@ builder.Services.AddRateLimiter(options =>
             {
                 PermitLimit = registrationPermitLimit,
                 Window = TimeSpan.FromSeconds(registrationWindowSeconds),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+    options.AddPolicy("password-reset", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = passwordResetPermitLimit,
+                Window = TimeSpan.FromSeconds(passwordResetWindowSeconds),
                 QueueLimit = 0,
                 AutoReplenishment = true
             }));
@@ -123,10 +182,19 @@ app.Use(async (context, next) =>
         AuthenticationHttpResponses.SetNoStore(context.Response);
     }
 
+    if (context.Request.Path.StartsWithSegments("/glemt-adgangskode") ||
+        context.Request.Path.StartsWithSegments("/nulstil-adgangskode"))
+    {
+        AuthenticationHttpResponses.SetNoStore(context.Response);
+        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+        context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    }
+
     await next(context);
 });
 
 app.MapAuthenticationEndpoints();
+app.MapPasswordResetEndpoints();
 app.MapRegistrationEndpoints();
 app.MapUserAdministrationEndpoints();
 

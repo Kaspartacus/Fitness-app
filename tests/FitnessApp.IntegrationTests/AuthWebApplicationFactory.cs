@@ -2,7 +2,9 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using FitnessApp.Application.Authentication;
+using FitnessApp.Application.Email;
 using FitnessApp.Domain.Users;
+using FitnessApp.Infrastructure.Authentication;
 using FitnessApp.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -10,18 +12,49 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 
 namespace FitnessApp.IntegrationTests;
 
-internal sealed class AuthWebApplicationFactory(
-    int loginPermitLimit = 10,
-    int registrationPermitLimit = 5)
-    : WebApplicationFactory<Program>
+internal sealed class AuthWebApplicationFactory : WebApplicationFactory<Program>
 {
-    private readonly string databasePath = Path.Combine(
-        Path.GetTempPath(),
-        $"fitnessapp-tests-{Guid.NewGuid():N}.db");
+    private readonly int loginPermitLimit;
+    private readonly int registrationPermitLimit;
+    private readonly int passwordResetPermitLimit;
+    private readonly int passwordResetCooldownSeconds;
+    private readonly int? passwordResetTokenLifetimeMilliseconds;
+    private readonly TestAppStorage storage;
+    private readonly bool ownsStorage;
+    private readonly IReadOnlyDictionary<string, string?> configurationOverrides;
+
+    public AuthWebApplicationFactory(
+        int loginPermitLimit = 10,
+        int registrationPermitLimit = 5,
+        int passwordResetPermitLimit = 20,
+        int passwordResetCooldownSeconds = 300,
+        int? passwordResetTokenLifetimeMilliseconds = null,
+        TestAppStorage? storage = null,
+        RecordingEmailSender? emailSender = null,
+        IReadOnlyDictionary<string, string?>? configurationOverrides = null)
+    {
+        this.loginPermitLimit = loginPermitLimit;
+        this.registrationPermitLimit = registrationPermitLimit;
+        this.passwordResetPermitLimit = passwordResetPermitLimit;
+        this.passwordResetCooldownSeconds = passwordResetCooldownSeconds;
+        this.passwordResetTokenLifetimeMilliseconds = passwordResetTokenLifetimeMilliseconds;
+        this.storage = storage ?? new TestAppStorage();
+        ownsStorage = storage is null;
+        EmailSender = emailSender ?? new RecordingEmailSender();
+        this.configurationOverrides = configurationOverrides ?? new Dictionary<string, string?>();
+    }
+
+    public RecordingEmailSender EmailSender { get; }
+
+    public TestLogSink LogSink { get; } = new();
+
+    public TestAppStorage Storage => storage;
 
     public string SigningKey { get; } = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
 
@@ -34,11 +67,12 @@ internal sealed class AuthWebApplicationFactory(
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.ConfigureLogging(logging => logging.AddProvider(LogSink));
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
-            configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            var settings = new Dictionary<string, string?>
             {
-                ["ConnectionStrings:DefaultConnection"] = $"Data Source={databasePath}",
+                ["ConnectionStrings:DefaultConnection"] = $"Data Source={storage.DatabasePath}",
                 ["Authentication:Jwt:Issuer"] = Issuer,
                 ["Authentication:Jwt:Audience"] = Audience,
                 ["Authentication:Jwt:SigningKey"] = SigningKey,
@@ -48,13 +82,48 @@ internal sealed class AuthWebApplicationFactory(
                 ["Authentication:LoginRateLimit:WindowSeconds"] = "60",
                 ["Authentication:RegistrationRateLimit:PermitLimit"] = registrationPermitLimit.ToString(),
                 ["Authentication:RegistrationRateLimit:WindowSeconds"] = "60",
+                ["Authentication:PasswordReset:TokenLifetimeMinutes"] = "60",
+                ["Authentication:PasswordReset:CooldownSeconds"] = passwordResetCooldownSeconds.ToString(),
+                ["Authentication:PasswordReset:MinimumResponseMilliseconds"] = "0",
+                ["Authentication:PasswordResetRateLimit:PermitLimit"] = passwordResetPermitLimit.ToString(),
+                ["Authentication:PasswordResetRateLimit:WindowSeconds"] = "60",
+                ["PublicApp:BaseUrl"] = "https://fitnessapp.example.test",
+                ["Email:Transport"] = "Pickup",
+                ["Email:PickupDirectory"] = storage.PickupDirectory,
+                ["Email:QueueCapacity"] = "32",
+                ["Email:MaxAttempts"] = "2",
+                ["Email:RetryDelaySeconds"] = "0",
+                ["DataProtection:KeyRingPath"] = storage.KeyRingPath,
                 ["Logging:LogLevel:Default"] = "Warning",
                 ["Testing:EnableTestEndpoints"] = "true"
-            });
+            };
+            if (passwordResetTokenLifetimeMilliseconds is not null)
+            {
+                settings["Testing:PasswordResetTokenLifetimeMilliseconds"] =
+                    passwordResetTokenLifetimeMilliseconds.Value.ToString();
+            }
+
+            foreach (var (key, value) in configurationOverrides)
+            {
+                settings[key] = value;
+            }
+
+            configuration.AddInMemoryCollection(settings);
         });
         builder.ConfigureServices(services =>
+        {
+            if (passwordResetTokenLifetimeMilliseconds is not null)
+            {
+                services.PostConfigure<PasswordResetTokenProviderOptions>(options =>
+                    options.TokenLifespan = TimeSpan.FromMilliseconds(
+                        passwordResetTokenLifetimeMilliseconds.Value));
+            }
+
+            services.RemoveAll<IEmailSender>();
+            services.AddSingleton<IEmailSender>(EmailSender);
             services.AddDbContext<FitnessDbContext>(options =>
-                options.UseSqlite($"Data Source={databasePath}")));
+                options.UseSqlite($"Data Source={storage.DatabasePath}"));
+        });
     }
 
     public HttpClient CreateHttpsClient() => CreateClient(new WebApplicationFactoryClientOptions
@@ -141,7 +210,8 @@ internal sealed class AuthWebApplicationFactory(
             Id = sessionId,
             UserId = user.Id,
             CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
-            ExpiresAt = expiresAt
+            ExpiresAt = expiresAt,
+            SecurityStamp = user.SecurityStamp
         });
         await dbContext.SaveChangesAsync();
         return sessionId;
@@ -175,13 +245,9 @@ internal sealed class AuthWebApplicationFactory(
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-
-        foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
+        if (ownsStorage)
         {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
+            storage.Dispose();
         }
     }
 }

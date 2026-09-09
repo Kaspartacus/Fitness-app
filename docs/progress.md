@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 
 ## Completed authentication foundation
 
@@ -22,6 +22,31 @@ Last updated: 2026-09-08
 - The UI covers loading, empty, success, forbidden/unavailable errors, retry, disabled in-flight actions, local-time display, and explicit confirmation before rejection. Authenticated users without the required role receive a dedicated no-access view for client-side protected navigation.
 - Added `20260907185305_AddRegistrationApprovalMetadata`, with nullable `RegisteredAt`, `DecidedAt`, and `DecidedByUserId` fields plus a pending-list index. Existing users retain null metadata.
 - Added structured events 1100-1101 for registration and 1200-1202 for decisions. Logs use internal IDs/trace IDs and omit passwords, tokens, request bodies, email addresses, and display names.
+
+## Password-reset and email slice
+
+- Added public Danish forgot-password, neutral confirmation, new-password, success, and invalid/expired-link states, plus the login-page entry point. Forms include bounded validation, password confirmation and visible requirements, autocomplete metadata, in-flight duplicate prevention, accessible status/errors, and retryable network failures.
+- Valid forgot-password requests always return the same accepted message. Only Approved accounts queue mail. A fixed-window IP rate limit, an atomic persisted five-minute account cooldown, and a minimum response duration reduce abuse and account-disclosure signals.
+- Reset links use Identity's dedicated Data Protection token provider with an explicit one-hour lifetime and Base64url encoding. Their origin comes only from validated `PublicApp:BaseUrl`; production has no default and requires HTTPS. Reset routes and APIs use no-store behavior and the document uses a no-referrer policy.
+- Reset eligibility is rechecked immediately before the password change. Password update and revocation of every existing database session commit in one transaction. Reset changes Identity's security stamp, and sessions record that stamp so a login racing the reset cannot leave an old-stamp JWT valid. Approval and role assignments are untouched, and no automatic login occurs.
+- Added a small application email boundary, a bounded in-memory queue, and structured delivery events without recipients or content. The worker makes at most two cancellable attempts, respects shutdown, and loses pending messages on process restart by design. A full queue releases its cooldown reservation for a later request.
+- Added MailKit 4.17.0 SMTP delivery with required STARTTLS on port 587, normal certificate validation, a bounded timeout, and no protocol logging. SMTP mode validates its full configuration and cannot silently fall back.
+- Development and Testing use an explicit pickup transport that writes mode-0600 `.eml` files into a mode-0700 ignored directory outside `wwwroot`. It has no public endpoint and ordinary logs contain neither reset URLs nor message content.
+- Data Protection now has the stable application identity `FitnessApp` and an explicit persistent key-ring path outside Git and `wwwroot`. The local directory is restricted to the current Unix user; future hosts must also supply encrypted persistent storage or another explicit at-rest protection appropriate to that environment.
+- Added `20260909044755_AddPasswordResetCooldown`, which adds nullable cooldown metadata and nullable per-session security-stamp metadata. Existing accounts, password hashes, roles, approval metadata, and sessions remain representable during upgrade.
+- README configuration now covers credential rotation, masked User Secrets setup, environment-variable names, trusted base URL, SQLite and key-ring protection, test transport, retry/loss semantics, and the separate real-delivery smoke check. Previously shared Brevo keys remain prohibited; actual Brevo delivery is unverified.
+
+## Current password-reset verification
+
+- Individual Client, Infrastructure, Server, and integration-test project builds passed with zero warnings and errors after one header API correction.
+- The first sandboxed EF invocation reproduced the documented external task-host stall. Only its confirmed tool session was stopped; its two malformed untracked output directories were removed. Migration generation then succeeded with the documented out-of-sandbox workaround.
+- **25 focused tests passed, 0 failed, 0 skipped**: 21 password-reset endpoint/transport/configuration cases, two client response-mapping cases, and two empty/upgrade migration cases. Coverage includes neutral responses, Approved-only delivery, eligibility changes, cooldown, IP rate limiting, queue saturation, retry bounds, SMTP failure neutrality, trusted origin, URL-safe tokens, success, old/new passwords, replay, malformed/tampered/expired tokens, concurrent use, password policy, all-session and racing-session rejection, approval/role preservation, GET non-mutation, log redaction, invalid configuration, and same-key-ring restart behavior.
+- Final `./scripts/verify.sh verify`: **60 passed, 0 failed, 0 skipped**, build **0 warnings, 0 errors**, and tracked/untracked/committed whitespace checks passed. `./scripts/verify.sh audit` retrieved current advisory data and found no known vulnerable direct or transitive packages across all seven projects. EF `has-pending-model-changes --no-build` confirmed the model matches the migration.
+- HTTPS browser verification at `https://localhost:7192` used an isolated synthetic SQLite database and explicit private pickup transport. Verified login entry point, Approved-account request with one captured message (content not exposed), neutral confirmation, disabled in-flight submit, malformed-email invalid-link recovery, reset form and required-field validation, and stopped-server network failure followed by successful retry after restart.
+- Inspected desktop, 390 px, and 360 px layouts using the existing design tokens as consistent extensions, not new Figma matches. Checked documents had no horizontal overflow; 360 px reset inputs measured 328 × 52 px. No console warnings/errors appeared during normal flow; the intentional stopped-server request produced the expected network failure.
+- The browser tool requires human handoff before entering/submitting a new password, so the captured-link → password submission → new-password login browser sequence remains a manual check. The corresponding server sequence, old-password rejection, session revocation, replay, and restart behavior passed integration tests. Real Brevo delivery remains unverified.
+- Separate read-only correctness and security reviews identified malformed query fields silently blocking client validation and a redaction test that suppressed successful Information events. Both were fixed and re-reviewed with no remaining concrete defects. The UI now validates link fields before rendering and resets terminal state for changed links; redaction coverage requires all successful-flow events and requests the reset URL.
+- The EF command regenerated the known malformed `bin\Debug` build directories even with `--no-build`; those generated artifacts were removed from this feature worktree before the final file review. The original checkout remains untouched.
 - Added `.github/workflows/pr-verification.yml` for pull requests to `main`: tool/package restore, serial build, and tests with read-only repository permissions, no production secrets, and no deployment.
 
 ## Design evidence
@@ -59,7 +84,7 @@ Last updated: 2026-09-08
 
 ## Deliberate limitations and review status
 
-- Approval does not verify email ownership, and the application sends no email. Password reset is not implemented.
+- Approval still does not verify email ownership. Password reset now sends only to Approved accounts, but real Brevo delivery remains unverified until the owner rotates exposed keys and performs the documented smoke check.
 - Access tokens remain memory-only; reload, tab closure, or expiry requires login. Refresh tokens and remember-me are not implemented.
 - No deployment, runtime secret vault, log shipping, Raspberry Pi/Docker setup, or fitness module was added.
 - Pull request #1 was merged into `main` as `5771df9df5f9f93716482899e0232f3f7ceb70b4`. Registration and administrator frames were absent from the inspected Figma source, so exact pixel parity for those absent screens was never claimed.

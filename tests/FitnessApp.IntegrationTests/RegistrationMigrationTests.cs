@@ -10,6 +10,8 @@ namespace FitnessApp.IntegrationTests;
 public sealed class RegistrationMigrationTests
 {
     private const string InitialMigration = "20260907121032_InitialIdentity";
+    private const string RegistrationMigration = "20260907185305_AddRegistrationApprovalMetadata";
+    private const string PasswordResetMigration = "20260909044755_AddPasswordResetCooldown";
 
     [Fact]
     public async Task LatestMigrationAppliesToEmptyDatabase()
@@ -22,12 +24,14 @@ public sealed class RegistrationMigrationTests
             await dbContext.Database.MigrateAsync();
 
             Assert.Equal(
-                [InitialMigration, "20260907185305_AddRegistrationApprovalMetadata"],
+                [InitialMigration, RegistrationMigration, PasswordResetMigration],
                 await dbContext.Database.GetAppliedMigrationsAsync());
             var columns = await ReadUserColumnsAsync(databasePath);
             Assert.Contains("RegisteredAt", columns);
             Assert.Contains("DecidedAt", columns);
             Assert.Contains("DecidedByUserId", columns);
+            Assert.Contains("LastPasswordResetEmailQueuedAt", columns);
+            Assert.Contains("SecurityStamp", await ReadColumnsAsync(databasePath, "UserSessions"));
         }
         finally
         {
@@ -67,6 +71,8 @@ public sealed class RegistrationMigrationTests
                         'existing@example.test', 'EXISTING@EXAMPLE.TEST', 1, $passwordHash,
                         'security-stamp', 'user-stamp', NULL, 0, 0, NULL, 1, 0);
                     INSERT INTO AspNetUserRoles (UserId, RoleId) VALUES ($userId, $roleId);
+                    INSERT INTO UserSessions (Id, UserId, CreatedAt, ExpiresAt, RevokedAt)
+                    VALUES ('existing-session', $userId, '2026-09-08T00:00:00+00:00', '2026-09-08T01:00:00+00:00', NULL);
                     """;
                 command.Parameters.AddWithValue("$roleId", roleId);
                 command.Parameters.AddWithValue("$userId", userId);
@@ -85,7 +91,11 @@ public sealed class RegistrationMigrationTests
                 Assert.Null(user.RegisteredAt);
                 Assert.Null(user.DecidedAt);
                 Assert.Null(user.DecidedByUserId);
+                Assert.Null(user.LastPasswordResetEmailQueuedAt);
                 Assert.Equal(1, await upgradedContext.UserRoles.CountAsync());
+                var session = await upgradedContext.UserSessions.AsNoTracking().SingleAsync();
+                Assert.Equal("existing-session", session.Id);
+                Assert.Null(session.SecurityStamp);
             }
         }
         finally
@@ -100,11 +110,14 @@ public sealed class RegistrationMigrationTests
             .Options);
 
     private static async Task<HashSet<string>> ReadUserColumnsAsync(string databasePath)
+        => await ReadColumnsAsync(databasePath, "AspNetUsers");
+
+    private static async Task<HashSet<string>> ReadColumnsAsync(string databasePath, string tableName)
     {
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
         var command = connection.CreateCommand();
-        command.CommandText = "PRAGMA table_info('AspNetUsers');";
+        command.CommandText = $"PRAGMA table_info('{tableName}');";
         var columns = new HashSet<string>(StringComparer.Ordinal);
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())

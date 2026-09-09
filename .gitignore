@@ -21,6 +21,13 @@ secrets.json
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+*.db-journal
+*.sqlite-journal
+*.db.bak
+*.sqlite.bak
+*.db.backup
+*.sqlite.backup
+**/App_Data/
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs

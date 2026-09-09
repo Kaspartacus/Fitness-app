@@ -32,6 +32,9 @@ For the registration slice, Figma Make version 41 replaced the former mint/purpl
 - Structured JSON console logging for login, lockout, logout, registration, administrator decisions, and unexpected errors without credential, token, request-body, email, or display-name payloads.
 - A lightweight pull-request workflow for restore, build, and tests with read-only permissions and no deployment or production secrets.
 - Real SQLite integration coverage for authentication, bootstrap, registration, administration, concurrency, and empty/upgrade migration cases.
+- A neutral Danish password-reset flow for Approved accounts using Identity's dedicated one-hour reset tokens, a trusted configured HTTPS origin, persisted cooldown, IP rate limiting, bounded asynchronous email delivery, and atomic all-session revocation.
+- Configurable Brevo SMTP delivery through MailKit with required STARTTLS and a Development/Test-only private pickup transport. SMTP secrets remain server-side and real delivery is a separate manual check.
+- An explicit `FitnessApp` Data Protection application identity with a persistent, private key-ring path so normal restarts preserve reset-token validity.
 
 ## Architecture
 
@@ -65,7 +68,7 @@ Persistence entities are never shared with the client.
 
 ## Deferred decisions and scope
 
-SQLite, Identity, JWT access tokens, registration, and administrator approval are implemented. Email ownership verification and password-reset delivery still require product and operational decisions. Refresh tokens, remember-me behavior, production signing-key rotation, Docker/Raspberry Pi deployment, remote-access design, Garmin integration, deployment automation, vault selection, log shipping, and all fitness product modules remain deferred.
+SQLite, Identity, JWT access tokens, registration, administrator approval, and password reset are implemented. Email ownership verification and verified production delivery remain operationally incomplete. Refresh tokens, remember-me behavior, production signing-key rotation, Docker/Raspberry Pi deployment, remote-access design, Garmin integration, deployment automation, vault selection, log shipping, and all fitness product modules remain deferred.
 
 Paid infrastructure and paid SaaS dependencies are out of scope. Future choices must remain compatible with Linux/ARM64 unless a documented decision changes that constraint.
 

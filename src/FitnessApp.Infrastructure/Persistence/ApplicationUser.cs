@@ -15,5 +15,7 @@ public sealed class ApplicationUser : IdentityUser
 
     public string? DecidedByUserId { get; set; }
 
+    public DateTime? LastPasswordResetEmailQueuedAt { get; set; }
+
     public ICollection<UserSession> Sessions { get; } = [];
 }

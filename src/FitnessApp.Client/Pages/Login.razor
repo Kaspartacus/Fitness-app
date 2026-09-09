@@ -30,6 +30,7 @@
                 <label for="password">Adgangskode</label>
                 <input id="password" type="password" @bind="model.Password" @bind:event="oninput" autocomplete="current-password" placeholder="Din adgangskode" />
                 <ValidationMessage For="@(() => model.Password)" />
+                <a class="field-action" href="/glemt-adgangskode">Glemt adgangskode?</a>
             </div>
 
             @if (errorMessage is not null)
