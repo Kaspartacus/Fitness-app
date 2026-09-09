@@ -115,7 +115,7 @@ Reset links use ASP.NET Core Identity's dedicated password-reset token provider 
 
 The queue holds at most 32 messages. Delivery is tried twice with a two-second delay. Failures remain neutral to the visitor and produce structured events containing an internal message ID and error type, never the recipient, content, credentials, token, or URL. A full queue drops the message and releases its cooldown reservation so a later request can retry. Because the queue is intentionally in memory, pending mail is lost if the process stops; this slice does not add a broker or durable outbox.
 
-Production SMTP uses MailKit, Brevo's relay on port 587, required STARTTLS, normal platform certificate validation, cancellable async calls, and a 15-second timeout. There is no certificate bypass, SMTP protocol log, or fallback transport. SMTP mode fails startup if its configuration is incomplete. The currently verified sender is the temporary address `Kaspersj1998@hotmail.com`, with `Kasperjoergensen.dk` only as its display name. That does not authenticate the domain and real delivery has not been verified. `Smtp:FromEmail` and `Smtp:FromName` are configurable so an authenticated domain sender can replace them later without code changes.
+Production SMTP uses MailKit, Brevo's relay on port 587, required STARTTLS, normal platform certificate validation, cancellable async calls, and a 15-second timeout. By default all TLS certificate checks, including revocation, remain enabled. There is no SMTP protocol log or fallback transport. The explicitly authorized local Development exception below only skips revocation checking. SMTP mode fails startup if its configuration is incomplete. The currently verified sender is the temporary address `Kaspersj1998@hotmail.com`, with `Kasperjoergensen.dk` only as its display name. That does not authenticate the domain and real delivery has not been verified. `Smtp:FromEmail` and `Smtp:FromName` are configurable so an authenticated domain sender can replace them later without code changes.
 
 All previously shared Brevo keys must be revoked. Generate a fresh SMTP key and enter it locally without pasting it into chat. Development defaults to a private pickup directory and needs no SMTP credential. To opt into a separate real-email smoke test, this `zsh` snippet reads the fresh key without echo, keeps it out of command arguments and temporary files, and sends JSON through standard input:
 
@@ -159,6 +159,25 @@ Email__Transport
 `PublicApp:BaseUrl` has no production default and must be set to the application's real public HTTPS origin. Development uses the actual launch-profile origin, `https://localhost:7192`. Only a loopback HTTP URL is permitted in Development; other environments require HTTPS.
 
 Development and automated tests use the explicit `Pickup` transport. It writes private `.eml` files under `src/FitnessApp.Server/App_Data/email-pickup`, outside `wwwroot`, with a mode-0700 directory and mode-0600 files on Unix. The directory is ignored by Git and has no HTTP endpoint. These files contain live local reset links: inspect them only for local verification, do not attach or commit them, and delete them when finished.
+
+## Local Development SMTP certificate revocation exception
+
+Some macOS/.NET connections to Brevo fail with `SslHandshakeException` and `RevocationStatusUnknown` even when the certificate chain and hostname are otherwise valid. An explicit local-only opt-in is available:
+
+```bash
+dotnet user-secrets set "Smtp:AllowLocalDevelopmentRevocationBypass" "true" --project src/FitnessApp.Server
+dotnet run --project src/FitnessApp.Server --launch-profile https
+```
+
+Stop the existing server before restarting it. This flag does not select SMTP or change credentials; configure `Email:Transport=Smtp` and a fresh SMTP key as described above. It defaults to false and is never enabled in tracked settings. The environment-variable equivalent is `Smtp__AllowLocalDevelopmentRevocationBypass`.
+
+Startup rejects the opt-in unless the environment is `Development` and `PublicApp:BaseUrl` is loopback. At delivery time, the sender also requires a nonempty set of exclusively loopback server listener addresses. Production, Staging, Testing, public origins, wildcard/network listeners, and unknown listener addresses cannot use the exception. Do not expose this local instance through a reverse proxy or tunnel; loopback checks cannot detect those.
+
+The exception only disables certificate revocation checking. Required STARTTLS, certificate expiry, hostname, and trust-chain validation remain enabled, but a subsequently revoked otherwise valid certificate could be accepted. Event 1312 explicitly reports each use without any credentials or email content. Remove the opt-in and restart to restore revocation checking:
+
+```bash
+dotnet user-secrets remove "Smtp:AllowLocalDevelopmentRevocationBypass" --project src/FitnessApp.Server
+```
 
 ## Persistent security storage
 

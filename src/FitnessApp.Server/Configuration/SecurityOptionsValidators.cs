@@ -109,11 +109,23 @@ internal sealed class EmailDeliveryOptionsValidator(IWebHostEnvironment environm
     }
 }
 
-internal sealed class SmtpOptionsValidator(IOptions<EmailDeliveryOptions> emailOptions)
+internal sealed class SmtpOptionsValidator(
+    IOptions<EmailDeliveryOptions> emailOptions,
+    IHostEnvironment environment,
+    IOptions<PublicAppOptions> publicAppOptions)
     : IValidateOptions<SmtpOptions>
 {
     public ValidateOptionsResult Validate(string? name, SmtpOptions options)
     {
+        if (options.AllowLocalDevelopmentRevocationBypass &&
+            (!environment.IsDevelopment() ||
+             !Uri.TryCreate(publicAppOptions.Value.BaseUrl, UriKind.Absolute, out var origin) ||
+             !origin.IsLoopback))
+        {
+            return ValidateOptionsResult.Fail(
+                "Smtp:AllowLocalDevelopmentRevocationBypass requires Development and a loopback PublicApp:BaseUrl.");
+        }
+
         if (emailOptions.Value.Transport is not "Smtp")
         {
             return ValidateOptionsResult.Success;

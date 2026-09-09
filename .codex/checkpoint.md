@@ -2,35 +2,33 @@
 
 Updated: 2026-09-09
 
-## Objective
+## Objective and authorization
 
-Complete the first password-reset slice with secure Brevo SMTP support, Danish UI, tests, documentation, and a normal PR targeting `main`. Do not merge or deploy.
+Implement and activate the explicitly authorized SMTP certificate revocation exception for local Development only. The owner merged password-reset PR #4 into main. No new commit/push/PR/merge/deployment authorization for this follow-up.
 
 ## Repository state
 
-- Branch: `feature/password-reset-email`
-- Base and current HEAD: `e70e614` (`origin/main`, fetched this session)
-- Isolated worktree: `/Users/kaspartacuzz/Desktop/Fitness app/password-reset-email`
-- All feature changes are currently uncommitted; unrelated original-checkout artifacts preserved.
+- Branch: `fix/local-development-smtp`
+- Base/HEAD: `af0d6a2` (merged password-reset PR #4)
+- Checkout: `/Users/kaspartacuzz/Desktop/Fitness app/Fitness-app`
+- Original unrelated malformed build directories preserved unchanged.
 
 ## Completed
 
-- Implemented Identity one-hour reset tokens, trusted origin, Approved-only neutral requests, cooldown/rate limiting, bounded email delivery, Brevo required STARTTLS, private test transport, atomic password/session updates, and Danish UI.
-- Added migration and meaningful reset/client/configuration/concurrency/restart/log-redaction coverage.
-- Updated README, project facts, and progress evidence with safe masked User Secrets setup, credential rotation, persistent key-ring storage, and manual checks.
-- Required correctness/security reviews completed; both findings fixed and rechecked with no remaining concrete defects.
-- Full verification: 60 passed, 0 failed/skipped; build 0 warnings/errors; whitespace checks passed.
-- Current dependency audit: no known vulnerabilities in all seven projects.
-- EF model/snapshot check passed; generated malformed build artifacts removed.
-- HTTPS browser checks passed for request/pickup, neutral confirmation, invalid-link recovery, validation, loading, network failure/retry, and desktop/390/360 layouts. See progress for precise evidence.
+- Added default-off local SMTP revocation bypass with Development, public-loopback, and actual-loopback-listener guards. All other TLS validation and required STARTTLS remain intact.
+- Added 12 configuration/hosting/TLS tests and updated README/project/progress documentation.
+- Full verify passed: 72 tests, no failures/skips, build 0 warnings/errors, diff checks passed.
+- Independent security/correctness review completed with no actionable findings.
+- Credential-free Brevo TLS probe succeeded with the authorized revocation exception; no authentication or email was attempted.
+- Enabled only the non-secret bypass flag through User Secrets, without inspecting credentials.
 
-## Remaining limitations
+## Remaining
 
-- Browser credential entry/submission requires human handoff under the browser tool policy. Full reset/new-login sequence is verified through integration tests; browser submission remains manual.
-- Owner must revoke exposed Brevo keys, enter fresh credentials locally, and verify real delivery. No real SMTP credentials were used.
+- Temporary HTTPS startup/browser smoke check passed at localhost port 7193; Blazor login loaded without console warnings/errors. Test server stopped and temporary resources removed.
+- Owner restarts their existing server and requests a reset for an Approved account after cooldown. SMTP authentication and real delivery remain unverified.
 
 ## Exact next action
 
-Finish the final file/diff checks, commit the scoped feature, push without force, create a normal PR targeting main, and wait for checks on the final commit. Update this checkpoint with the handoff outcome.
+Owner restarts the existing local server with the HTTPS launch profile and tests a fresh Approved-account reset. All code/documentation changes remain uncommitted for review.
 
-Do not store credentials, tokens, personal data, reset URLs, or conversation transcripts here.
+Never store credentials, tokens, reset URLs, or personal data here.
