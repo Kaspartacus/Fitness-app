@@ -2,6 +2,15 @@
 
 Last updated: 2026-09-09
 
+## Local Development SMTP follow-up
+
+- The owner authorized a local Development-only exception after reproducing `SslHandshakeException` / `RevocationStatusUnknown` on macOS 26.5 with .NET 10.0.3 and MailKit 4.17.0. Credential-free diagnostics confirmed that STARTTLS works when only revocation checking is disabled; hostname/trust validation remained enabled. No actual delivery is claimed from this probe.
+- Added `Smtp:AllowLocalDevelopmentRevocationBypass`, default false, with startup checks for Development and a loopback public origin. The sender additionally checks actual listener addresses before connecting and refuses nonlocal, wildcard, mixed, missing, or unknown listeners. Event 1312 records explicit use without credentials or content. Reverse proxies/tunnels must not expose this local instance.
+- Activated this non-secret flag in the owner's local User Secrets without reading or changing SMTP credentials. The existing server must be restarted to load the change.
+- Added 12 tests for environment/origin/listener guards, startup rejection, and actual STARTTLS rejection of an untrusted certificate with the exception both enabled and disabled. Full shared verification passed: **72 tests, 0 failed/skipped**, build **0 warnings/errors**, and whitespace checks passed. Pre-existing malformed build-output directories were temporarily set aside during the scan and restored unchanged.
+- Updated server started successfully on separate local HTTPS port 7193 with pickup transport; Blazor login loaded with no browser warnings/errors. Temporary server and resources were cleaned up. The owner's existing server was left running.
+- Independent read-only correctness/security review found no actionable defects. No packages or UI changed. Changes remain local on `fix/local-development-smtp`; no new commit, push, PR, merge, or deployment was requested.
+
 ## Completed authentication foundation
 
 - The .NET 10 hosted Blazor WebAssembly solution uses separate Client, Server, Contracts, Application, Domain, and Infrastructure projects.

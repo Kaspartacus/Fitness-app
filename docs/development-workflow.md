@@ -2,6 +2,10 @@
 
 This repository keeps product implementation, review, verification, and pull-request preparation as separate responsibilities. `AGENTS.md` holds durable rules, `docs/project.md` holds product and architecture facts, `docs/progress.md` holds current implementation evidence and next work, and `.codex/checkpoint.md` is the concise resume record. Do not copy the same status narrative into every file.
 
+## Feature cleanup
+
+Cleanup belongs to the feature that makes an old path unnecessary. Before handoff, inspect the changed scope for replaced implementation, unused dependencies and imports, stale tests, obsolete configuration, unreachable UI, generated output, and temporary tooling. Remove what has no current purpose. Keep an item only when its near-term purpose is concrete and documented; do not retain speculative scaffolding.
+
 ## Project skills
 
 Codex discovers project skills from `.agents/skills/<skill-name>/SKILL.md`:
@@ -50,3 +54,5 @@ At milestones, update `.codex/checkpoint.md` with the objective, branch and last
 ## Pull requests and authority
 
 Work on a focused branch and keep each pull request reviewable. Run shared verification and a separate review for substantial work. Commit, push, merge, deployment, and Figma modification always depend on the user's current authorization; no skill, agent, hook, or earlier permission broadens that authority.
+
+After a pull request has merged, inspect all worktrees before cleanup. Preserve any worktree with active or unmerged work. For the completed branch, remove its worktree, delete its local and remote branch, and run `git worktree prune` to clear stale registrations. Do not delete branches with uncommitted changes or an open pull request.
