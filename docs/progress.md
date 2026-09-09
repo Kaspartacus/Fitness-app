@@ -71,6 +71,12 @@ Last updated: 2026-09-09
 
 ## Design evidence
 
+## Strength-program architecture confirmation
+
+- The strength-program vertical slice remains inside the sole `FitnessApp.slnx` solution and the existing Client, Server, Application, Domain, Infrastructure, and Contracts projects.
+- `FitnessApp.Server` remains the sole hosted startup project. `dotnet run --project src/FitnessApp.Server` starts the combined Blazor WebAssembly client and ASP.NET Core API.
+- No separate strength-training solution, application, executable, web host, or startup process was created. The feature is organized in existing-project `Strength` folders, with its EF migration retained in Infrastructure persistence.
+
 - The current Make file `dFJcR42XWiqVhBtA1bfyOS`, node `0:1`, was inspected through the Figma design-context integration and browser. It reported version 41 and returned the real source inventory, including `App.tsx`, `index.css`, `LoginScreen.tsx`, shared components, refinement notes, and screen files. The Figma file was not modified.
 - Visible version-41 source notes establish the current direction: filled navy primary actions, navy/light-blue active states, readable gray-blue inactive states, and removal of the former purple hard-coded surfaces and tints. The Blazor stylesheet now centralizes a charcoal/gray/navy/light-blue token set and uses it across login, registration, confirmation, protected home, and administrator review.
 - The exact pulse-mark SVG remains reused in the Blazor login, registration, and protected-home UI.

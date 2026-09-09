@@ -1,6 +1,7 @@
 # Strength programs checkpoint
 
 Updated: 2026-09-09
+- Architecture correction confirmed: strength programs are implemented only within the existing `FitnessApp.slnx` layered modular monolith. `FitnessApp.Server` remains the only hosted startup project, running the combined client and API via `dotnet run --project src/FitnessApp.Server`. No separate solution, application, executable, host, or startup process exists.
 - Objective: implement private persistent strength programs, verify, commit, push and open PR to main. No merge/deployment.
 - Worktree: `/Users/kaspartacuzz/Desktop/Fitness app/strength-programs`
 - Branch: `feature/strength-programs`; base `af0d6a2` from freshly fetched origin/main.
