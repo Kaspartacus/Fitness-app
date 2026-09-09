@@ -24,7 +24,8 @@ Deliver one reviewable vertical slice without prebuilding future architecture.
 7. Add non-tautological tests for success, denial, invalid data, duplicate/race behavior, and history preservation as relevant.
 8. Verify with `./scripts/verify.sh verify` when available. Run `./scripts/verify.sh audit` when dependencies change or before a release-quality handoff.
 9. Exercise changed UI in the actual HTTPS app at mobile and desktop sizes when browser tooling is available.
-10. Update durable product facts in `docs/project.md`, current evidence and next work in `docs/progress.md`, and the resumable state in `.codex/checkpoint.md`.
+10. Remove superseded code paths, unused imports or dependencies, stale tests, obsolete configuration, dead UI, generated output, and temporary tooling in the changed scope. Retain an item only when it has a concrete documented purpose.
+11. Update durable product facts in `docs/project.md`, current evidence and next work in `docs/progress.md`, and the resumable state in `.codex/checkpoint.md`.
 
 ## Guardrails
 

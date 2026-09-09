@@ -6,6 +6,7 @@
 - Work in small, reviewable vertical slices. Preserve unrelated changes and do not push, merge, deploy, or discard user work unless explicitly requested.
 - Keep code, identifiers, technical documentation, and concise comments in English. Keep all application UI in Danish.
 - Prefer explicit code and shared styling. Introduce reusable components only for a concrete reuse case, and remove superseded code in the active scope.
+- Treat cleanup as part of each completed change: remove replaced code paths, unused imports and dependencies, stale tests, obsolete configuration, dead UI, and temporary artifacts when they are no longer needed. Before handoff, inspect the changed area for leftovers; preserve only code with a current purpose or documented near-term use.
 - Do not introduce speculative abstractions, generic repositories, MediatR, CQRS frameworks, message buses, microservices, giant services, or unnecessary interfaces.
 - Suggest UX scope expansions before implementing them.
 
@@ -35,6 +36,7 @@
 ## Branches, review, and resume
 
 - Use focused branches and pull requests for reviewable work. Commit, push, merge, deployment, and Figma changes require the user's current authorization; prior workflow permission is not permanent authority.
+- At the end of a completed branch, inspect every worktree and branch. Preserve branches with open work, then remove the completed branch's worktree and delete its local and remote branch after its pull request is merged. Prune stale worktree registrations. Never delete a branch with uncommitted work or an unmerged pull request.
 - Run a separate correctness review for substantial changes. Also run a security review when authentication, roles, authorization, ownership, secrets, logging, dependencies, configuration, or deployment changes. AI review supplements rather than replaces human approval.
 - Keep `.codex/checkpoint.md` current at meaningful milestones with the objective, branch and last commit, completed and uncommitted work, verification, blockers, and exact next action. On resume, verify Git and filesystem state rather than trusting the checkpoint alone.
 - Keep `AGENTS.md` for durable rules, `docs/project.md` for product and architecture, and `docs/progress.md` for current implementation evidence and next work. See [docs/development-workflow.md](docs/development-workflow.md) for tools and activation details.

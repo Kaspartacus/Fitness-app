@@ -166,6 +166,25 @@ Email__Transport
 
 Development and automated tests use the explicit `Pickup` transport. It writes private `.eml` files under `src/FitnessApp.Server/App_Data/email-pickup`, outside `wwwroot`, with a mode-0700 directory and mode-0600 files on Unix. The directory is ignored by Git and has no HTTP endpoint. These files contain live local reset links: inspect them only for local verification, do not attach or commit them, and delete them when finished.
 
+## Local Development SMTP certificate revocation exception
+
+Some macOS/.NET connections to Brevo fail with `SslHandshakeException` and `RevocationStatusUnknown` even when the certificate chain and hostname are otherwise valid. An explicit local-only opt-in is available:
+
+```bash
+dotnet user-secrets set "Smtp:AllowLocalDevelopmentRevocationBypass" "true" --project src/FitnessApp.Server
+dotnet run --project src/FitnessApp.Server --launch-profile https
+```
+
+Stop the existing server before restarting it. This flag does not select SMTP or change credentials; configure `Email:Transport=Smtp` and a fresh SMTP key as described above. It defaults to false and is never enabled in tracked settings. The environment-variable equivalent is `Smtp__AllowLocalDevelopmentRevocationBypass`.
+
+Startup rejects the opt-in unless the environment is `Development` and `PublicApp:BaseUrl` is loopback. At delivery time, the sender also requires a nonempty set of exclusively loopback server listener addresses. Production, Staging, Testing, public origins, wildcard/network listeners, and unknown listener addresses cannot use the exception. Do not expose this local instance through a reverse proxy or tunnel; loopback checks cannot detect those.
+
+The exception only disables certificate revocation checking. Required STARTTLS, certificate expiry, hostname, and trust-chain validation remain enabled, but a subsequently revoked otherwise valid certificate could be accepted. Event 1312 explicitly reports each use without any credentials or email content. Remove the opt-in and restart to restore revocation checking:
+
+```bash
+dotnet user-secrets remove "Smtp:AllowLocalDevelopmentRevocationBypass" --project src/FitnessApp.Server
+```
+
 ## Persistent security storage
 
 The non-secret development connection string remains `ConnectionStrings:DefaultConnection=Data Source=App_Data/fitnessapp.db`. The resolved SQLite file is under the server content root, outside `wwwroot`; database files, journals, and backups are ignored. Restrict the directory to the application account and protect backups. Any future connection string containing credentials must be supplied as a secret.

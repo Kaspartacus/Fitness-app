@@ -23,6 +23,7 @@ Prepare an honest review handoff without expanding the user's authorization.
 6. Create or update the PR with the correct base, scope, verification evidence, design evidence, limitations, and dependency relationship for stacked work.
 7. Read the latest check run rather than relying on an older successful run. Report pending or failed checks accurately.
 8. Merge or deploy only under explicit current authorization and only after stated requirements are satisfied.
+9. After an authorized merge, inspect every worktree. Delete the merged branch's worktree and local/remote branch, then prune stale worktree registrations. Preserve unmerged or active worktrees and never delete work containing uncommitted changes.
 
 ## Guardrails
 

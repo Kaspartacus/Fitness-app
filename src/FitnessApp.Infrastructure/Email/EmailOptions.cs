@@ -32,4 +32,6 @@ public sealed class SmtpOptions
     public string FromName { get; set; } = string.Empty;
 
     public int TimeoutSeconds { get; set; } = 15;
+
+    public bool AllowLocalDevelopmentRevocationBypass { get; set; }
 }

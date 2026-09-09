@@ -33,7 +33,7 @@ For the registration slice, Figma Make version 41 replaced the former mint/purpl
 - A lightweight pull-request workflow for restore, build, and tests with read-only permissions and no deployment or production secrets.
 - Real SQLite integration coverage for authentication, bootstrap, registration, administration, concurrency, and empty/upgrade migration cases.
 - A neutral Danish password-reset flow for Approved accounts using Identity's dedicated one-hour reset tokens, a trusted configured HTTPS origin, persisted cooldown, IP rate limiting, bounded asynchronous email delivery, and atomic all-session revocation.
-- Configurable Brevo SMTP delivery through MailKit with required STARTTLS and a Development/Test-only private pickup transport. SMTP secrets remain server-side and real delivery is a separate manual check.
+- Configurable Brevo SMTP delivery through MailKit with required STARTTLS and a Development/Test-only private pickup transport. An explicit local Development opt-in can skip revocation checking for macOS compatibility; startup and actual listener checks prevent using it on nonlocal or non-Development instances, and all other certificate checks remain enabled. SMTP secrets remain server-side and real delivery is a separate manual check.
 - An explicit `FitnessApp` Data Protection application identity with a persistent, private key-ring path so normal restarts preserve reset-token validity.
 - Private strength programs for Approved users, with ordered manual exercises, planned sets and repetitions, an optional warm-up marker, explicit atomic saves, ownership isolation, and optimistic concurrency for edits and deletion.
 
