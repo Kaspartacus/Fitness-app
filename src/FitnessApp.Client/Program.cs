@@ -18,6 +18,7 @@ builder.Services.AddHttpClient(AuthenticationClient.ClientName, client =>
     .AddHttpMessageHandler<ApiAuthorizationHandler>();
 builder.Services.AddScoped<AuthenticationClient>();
 builder.Services.AddScoped<RegistrationClient>();
+builder.Services.AddScoped<PasswordResetClient>();
 builder.Services.AddScoped<UserAdministrationClient>();
 
 await builder.Build().RunAsync();

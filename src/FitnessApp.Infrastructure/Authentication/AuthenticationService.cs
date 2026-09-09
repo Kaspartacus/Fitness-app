@@ -59,7 +59,8 @@ internal sealed class AuthenticationService(
             Id = sessionId,
             UserId = user.Id,
             CreatedAt = now,
-            ExpiresAt = accessToken.ExpiresAt
+            ExpiresAt = accessToken.ExpiresAt,
+            SecurityStamp = user.SecurityStamp
         };
 
         dbContext.UserSessions.Add(session);
@@ -84,6 +85,8 @@ internal sealed class AuthenticationService(
         if (session is null ||
             session.RevokedAt is not null ||
             session.ExpiresAt <= now ||
+            (session.SecurityStamp is not null &&
+             session.SecurityStamp != session.User.SecurityStamp) ||
             session.User.ApprovalStatus is not AccountApprovalStatus.Approved)
         {
             return null;

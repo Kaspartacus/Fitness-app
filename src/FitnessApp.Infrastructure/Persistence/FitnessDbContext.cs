@@ -25,6 +25,7 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
         {
             entity.HasKey(session => session.Id);
             entity.Property(session => session.Id).HasMaxLength(32);
+            entity.Property(session => session.SecurityStamp).HasMaxLength(450);
             entity.HasIndex(session => new { session.UserId, session.RevokedAt });
             entity.HasOne(session => session.User)
                 .WithMany(user => user.Sessions)
