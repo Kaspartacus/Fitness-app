@@ -1,36 +1,16 @@
-# Current checkpoint
+# Strength programs checkpoint
 
 Updated: 2026-09-09
-
-## Objective
-
-Complete the first password-reset slice with secure Brevo SMTP support, Danish UI, tests, documentation, and a normal PR targeting `main`. Do not merge or deploy.
-
-## Repository state
-
-- Branch: `feature/password-reset-email`
-- Base and current HEAD: `e70e614` (`origin/main`, fetched this session)
-- Isolated worktree: `/Users/kaspartacuzz/Desktop/Fitness app/password-reset-email`
-- All feature changes are currently uncommitted; unrelated original-checkout artifacts preserved.
-
-## Completed
-
-- Implemented Identity one-hour reset tokens, trusted origin, Approved-only neutral requests, cooldown/rate limiting, bounded email delivery, Brevo required STARTTLS, private test transport, atomic password/session updates, and Danish UI.
-- Added migration and meaningful reset/client/configuration/concurrency/restart/log-redaction coverage.
-- Updated README, project facts, and progress evidence with safe masked User Secrets setup, credential rotation, persistent key-ring storage, and manual checks.
-- Required correctness/security reviews completed; both findings fixed and rechecked with no remaining concrete defects.
-- Full verification: 60 passed, 0 failed/skipped; build 0 warnings/errors; whitespace checks passed.
-- Current dependency audit: no known vulnerabilities in all seven projects.
-- EF model/snapshot check passed; generated malformed build artifacts removed.
-- HTTPS browser checks passed for request/pickup, neutral confirmation, invalid-link recovery, validation, loading, network failure/retry, and desktop/390/360 layouts. See progress for precise evidence.
-
-## Remaining limitations
-
-- Browser credential entry/submission requires human handoff under the browser tool policy. Full reset/new-login sequence is verified through integration tests; browser submission remains manual.
-- Owner must revoke exposed Brevo keys, enter fresh credentials locally, and verify real delivery. No real SMTP credentials were used.
-
-## Exact next action
-
-Finish the final file/diff checks, commit the scoped feature, push without force, create a normal PR targeting main, and wait for checks on the final commit. Update this checkpoint with the handoff outcome.
-
-Do not store credentials, tokens, personal data, reset URLs, or conversation transcripts here.
+- Objective: implement private persistent strength programs, verify, commit, push and open PR to main. No merge/deployment.
+- Worktree: `/Users/kaspartacuzz/Desktop/Fitness app/strength-programs`
+- Branch: `feature/strength-programs`; base `af0d6a2` from freshly fetched origin/main.
+- Original Fitness-app checkout and its uncommitted local SMTP changes preserved.
+- Read repository instructions, feature/design/PR workflows and existing auth/persistence/client patterns.
+- Figma context returned current source inventory; resource read failed. Published prototype accessible; inspecting strength flow.
+- Owner confirms successful Brevo delivery; not independently retested.
+- Implemented Domain/Application/Contracts/Infrastructure/Server/Client strength-program flow and migration `20260909170745_AddStrengthPrograms`.
+- Published prototype inspected directly. Warm-up is a documented checkbox extension; prototype-only Start/Planlæg actions omitted.
+- Isolated SQLite and final shared verification passed: 82 tests, 0 failures/skips; build 0 warnings/errors; current dependency audit clean; EF model matches the migration.
+- HTTPS browser journey passed using synthetic data: create/details/edit/reorder/persistence/delete/empty state, recoverable stopped-server retry, 390/360 px no-overflow and console checks.
+- Correctness review found an editor create-route draft leakage and it was fixed. Security review found no concrete findings.
+- Next: final shared verify after review fix, diff cleanup, commit, push, PR, and final CI check.

@@ -2,6 +2,18 @@
 
 Last updated: 2026-09-09
 
+## Strength-program vertical slice
+
+- Added private, persistent strength programs for Approved users. The Danish UI lists stable user-owned programs; covers loading, empty, retry, details, explicit create/edit/save, exercise add/remove/reorder, unsaved-navigation confirmation, named deletion confirmation, stale-conflict reload, and graceful already-deleted handling.
+- Programs require a trimmed 1–100 character name and 1–50 ordered exercises. Exercise names are trimmed to 1–100 characters; sets are 1–10 and repetitions are 1–30. Each exercise stores an **Opvarmning** boolean. The client guides these limits and the server independently enforces them.
+- Added owned API operations under `/api/strength/programs`. Ownership always comes from the validated JWT subject; administrator status grants no access to another user's program. Nested exercise IDs must belong to the owned program. Update and deletion use a SQLite-safe version token to reject stale writes, and aggregate changes commit in one transaction.
+- Added migration `20260909170745_AddStrengthPrograms` with cascading account → program → exercise deletion and indexes for stable owned listing and exercise order. Fresh migration and upgrade-preservation coverage includes existing Identity accounts, roles, sessions, approval state, password hash/security stamp, and password-reset cooldown metadata.
+- The published Figma prototype was directly inspected for the strength overview, details, staged program creation, and exercise editor. Its charcoal surfaces, blue actions, manual entry, and numeric ranges guided the implementation. The agreed slice stores exercises directly in a program rather than the prototype's additional workout grouping. Because no warm-up control appeared, the checkbox is a documented extension. Inactive **Start** and **Planlæg** actions were omitted.
+- Owner-confirmed Brevo delivery predates this slice and was not independently or automatically retested. Automated verification continues to use the private pickup/test transport.
+- Integration coverage exercises creation/retrieval, persistence across contexts, stable user-specific lists, edit/add/remove/reorder, atomic invalid rejection, all server bounds, cascading deletion, anonymous/live approval/session denial, cross-user and administrator ownership denial, cross-program exercise IDs, and stale updates/deletes. Final shared verification: **82 passed, 0 failed, 0 skipped**; build had **0 warnings, 0 errors** and the current dependency audit found no known vulnerable direct or transitive package.
+- HTTPS browser verification used an isolated SQLite database and synthetic Approved account at `https://localhost:7194`: authenticated navigation, empty state, long program name, multiple exercises, warm-up marker, unsaved-navigation warning, edit/reorder, reload plus reauthentication persistence, cancel and confirm deletion, and empty state all passed. The stopped-server save produced the Danish recoverable error while retaining the draft; restart and retry saved it. The 390 px and 360 px checks showed no horizontal overflow; 360 px actions were full-width 44 px controls. No browser-console warnings/errors were observed. Browser reload deliberately requires sign-in because access tokens are memory-only.
+- Independent correctness review caught draft state leaking when reusing the editor from an edit route to create route; it was reset before handoff. The security review found no concrete findings.
+
 ## Completed authentication foundation
 
 - The .NET 10 hosted Blazor WebAssembly solution uses separate Client, Server, Contracts, Application, Domain, and Infrastructure projects.

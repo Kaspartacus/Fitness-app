@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.Configure<PasswordResetTokenProviderOptions>(options =>
             options.TokenLifespan = passwordResetTokenLifetime);
 
+        services.AddScoped<FitnessApp.Application.Strength.IStrengthProgramService, FitnessApp.Infrastructure.Strength.StrengthProgramService>();
         services.AddScoped<IAuthenticationService, AuthenticationService>();
         services.AddScoped<IAdminBootstrapper, AdminBootstrapper>();
         services.AddScoped<IRegistrationService, RegistrationService>();
