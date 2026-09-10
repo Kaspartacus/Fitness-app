@@ -150,12 +150,12 @@ public sealed class StrengthProgramService(FitnessDbContext db) : IStrengthProgr
         return affected == 1 ? ProgramStatus.Saved : ProgramStatus.Conflict;
     }
 
-    public async Task<IReadOnlyList<ScheduleEntryData>?> GetScheduleAsync(string userId, Guid programId,
+    public async Task<ScheduleData?> GetScheduleAsync(string userId, Guid programId,
         CancellationToken cancellationToken)
     {
         var program = await QueryPrograms().SingleOrDefaultAsync(
             candidate => candidate.Id == programId && candidate.UserId == userId, cancellationToken);
-        return program is null ? null : ToWeek(program.Schedule);
+        return program is null ? null : new ScheduleData(program.Version, ToWeek(program.Schedule));
     }
 
     public async Task<ProgramStatus> SaveScheduleAsync(string userId, Guid programId, Guid version,
@@ -215,7 +215,7 @@ public sealed class StrengthProgramService(FitnessDbContext db) : IStrengthProgr
         var previous = await (from exercise in db.CompletedWorkoutExercises.AsNoTracking()
                               join completed in db.CompletedWorkouts.AsNoTracking() on exercise.CompletedWorkoutId equals completed.Id
                               where completed.UserId == userId && completed.ProgramId == programId && completed.WorkoutId == workoutId &&
-                                    exercise.ProgramExerciseId != null
+                                    exercise.ProgramExerciseId != null && exercise.IsCompleted
                               orderby completed.CompletedAt descending
                               select new { ProgramExerciseId = exercise.ProgramExerciseId!.Value, exercise.Weight, exercise.Sets, exercise.Repetitions })
             .ToListAsync(cancellationToken);
@@ -230,6 +230,17 @@ public sealed class StrengthProgramService(FitnessDbContext db) : IStrengthProgr
     public async Task<ProgramStatus> CompleteWorkoutAsync(string userId, Guid programId, Guid workoutId, CompletionInput input,
         CancellationToken cancellationToken)
     {
+        if (input.CompletionId == Guid.Empty)
+        {
+            return ProgramStatus.Invalid;
+        }
+
+        var existing = await FindCompletionAsync(userId, input.CompletionId, cancellationToken);
+        if (existing is not null)
+        {
+            return MatchesCompletion(existing, programId, workoutId, input) ? ProgramStatus.Saved : ProgramStatus.Conflict;
+        }
+
         var planned = await GetWorkoutAsync(userId, programId, workoutId, cancellationToken);
         if (planned is null)
         {
@@ -250,6 +261,7 @@ public sealed class StrengthProgramService(FitnessDbContext db) : IStrengthProgr
         {
             Id = Guid.NewGuid(),
             UserId = userId,
+            CompletionId = input.CompletionId,
             ProgramId = programId,
             WorkoutId = workoutId,
             WorkoutName = planned.WorkoutName,
@@ -267,8 +279,19 @@ public sealed class StrengthProgramService(FitnessDbContext db) : IStrengthProgr
             }).ToList()
         };
         db.CompletedWorkouts.Add(completed);
-        await db.SaveChangesAsync(cancellationToken);
-        return ProgramStatus.Saved;
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return ProgramStatus.Saved;
+        }
+        catch (DbUpdateException)
+        {
+            db.ChangeTracker.Clear();
+            existing = await FindCompletionAsync(userId, input.CompletionId, cancellationToken);
+            return existing is not null && MatchesCompletion(existing, programId, workoutId, input)
+                ? ProgramStatus.Saved
+                : ProgramStatus.Conflict;
+        }
     }
 
     private IQueryable<StrengthProgram> QueryPrograms() => db.StrengthPrograms.AsNoTracking()
@@ -325,4 +348,18 @@ public sealed class StrengthProgramService(FitnessDbContext db) : IStrengthProgr
     private static ActiveExerciseData MapActive(ProgramExercise exercise, decimal? previousWeight = null,
         int? previousSets = null, int? previousRepetitions = null) => new(exercise.Id, exercise.Name, exercise.Weight,
         exercise.Sets, exercise.Repetitions, exercise.Note, previousWeight, previousSets, previousRepetitions);
+
+    private Task<CompletedWorkout?> FindCompletionAsync(string userId, Guid completionId, CancellationToken cancellationToken) =>
+        db.CompletedWorkouts.AsNoTracking().Include(workout => workout.Exercises).SingleOrDefaultAsync(
+            workout => workout.UserId == userId && workout.CompletionId == completionId, cancellationToken);
+
+    private static bool MatchesCompletion(CompletedWorkout completed, Guid programId, Guid workoutId, CompletionInput input) =>
+        completed.ProgramId == programId && completed.WorkoutId == workoutId && input.Exercises is { } exercises &&
+        completed.Exercises.OrderBy(exercise => exercise.Position).Zip(exercises).All(pair =>
+            pair.First.ProgramExerciseId == pair.Second.ProgramExerciseId &&
+            pair.First.Weight == pair.Second.Weight &&
+            pair.First.Sets == pair.Second.Sets &&
+            pair.First.Repetitions == pair.Second.Repetitions &&
+            pair.First.IsCompleted == pair.Second.IsCompleted) &&
+        completed.Exercises.Count == exercises.Count;
 }

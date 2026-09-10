@@ -26,6 +26,9 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CompletedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("CompletionId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("ProgramId")
                         .HasColumnType("TEXT");
 
@@ -44,6 +47,9 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("UserId", "CompletedAt");
+
+                    b.HasIndex("UserId", "CompletionId")
+                        .IsUnique();
 
                     b.ToTable("CompletedWorkouts");
                 });

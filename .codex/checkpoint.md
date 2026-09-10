@@ -41,3 +41,10 @@ Refine the existing strength-training UI without changing its data model: shared
 - The owner requested no application run, browser verification, tests, audit, or shared verification script. The single permitted `dotnet build FitnessApp.slnx --no-restore` passed with no errors; the only output was the environment's known `NU1900` advisory-DNS warning.
 
 Never store credentials, tokens, personal data, reset URLs, or conversation transcripts here.
+
+## Current fix status
+
+- Branch: `fix/strength-data-integrity`; base commit: `750a35ca943c2ba7ec6b6bcd2f6edab40a7479ae` (`origin/main`).
+- Completed, uncommitted: completed-only previous performance; shared-modal internal navigation guard for active workouts; owner-scoped idempotent completion IDs and data-preserving migration; a single aggregate schedule/version read.
+- Per owner instruction, no application run, browser verification, tests, audit, or full verification script was run. The one allowed no-restore build compiled `FitnessApp.Domain`, then stalled in the known WebAssembly build-host condition after 30 seconds and was not retried. Its two malformed untracked output directories were removed.
+- `git diff --check` passed. Next: commit, push without force, and open a PR to `main`.

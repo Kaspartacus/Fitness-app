@@ -28,10 +28,9 @@ internal static class StrengthProgramEndpoints
             IStrengthProgramService service, CancellationToken ct) => Status(await service.DeleteAsync(Owner(user), id, version, ct)));
         group.MapGet("/programs/{id:guid}/schedule", async Task<Results<Ok<ScheduleResponse>, NotFound<object>>>
             (Guid id, ClaimsPrincipal user, IStrengthProgramService service, CancellationToken ct) =>
-            (await service.GetScheduleAsync(Owner(user), id, ct)) is { } schedule &&
-            (await service.GetAsync(Owner(user), id, ct)) is { } program
-                ? TypedResults.Ok(new ScheduleResponse(program.Version,
-                    schedule.Select(entry => new ScheduleEntryRequest(entry.DayOfWeek, entry.WorkoutId)).ToArray()))
+            (await service.GetScheduleAsync(Owner(user), id, ct)) is { } schedule
+                ? TypedResults.Ok(new ScheduleResponse(schedule.Version,
+                    schedule.Entries.Select(entry => new ScheduleEntryRequest(entry.DayOfWeek, entry.WorkoutId)).ToArray()))
                 : TypedResults.NotFound(Missing()));
         group.MapPut("/programs/{id:guid}/schedule", async (Guid id, ScheduleResponse request, ClaimsPrincipal user,
             IStrengthProgramService service, CancellationToken ct) => Status(await service.SaveScheduleAsync(Owner(user), id,
@@ -44,7 +43,7 @@ internal static class StrengthProgramEndpoints
         group.MapPost("/programs/{programId:guid}/workouts/{workoutId:guid}/complete", async (Guid programId, Guid workoutId,
             CompleteWorkoutRequest request, ClaimsPrincipal user, IStrengthProgramService service, CancellationToken ct) =>
             Status(await service.CompleteWorkoutAsync(Owner(user), programId, workoutId,
-                new CompletionInput(request.Exercises?.Select(exercise => exercise is null ? null! : new CompletedExerciseInput(
+                new CompletionInput(request.CompletionId, request.Exercises?.Select(exercise => exercise is null ? null! : new CompletedExerciseInput(
                     exercise.ProgramExerciseId, exercise.Name, exercise.Weight, exercise.Sets, exercise.Repetitions,
                     exercise.IsCompleted)).ToArray()), ct)));
     }

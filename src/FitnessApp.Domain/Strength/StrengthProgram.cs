@@ -44,6 +44,7 @@ public sealed class CompletedWorkout
 {
     public Guid Id { get; set; }
     public string UserId { get; set; } = "";
+    public Guid CompletionId { get; set; }
     public Guid ProgramId { get; set; }
     public Guid WorkoutId { get; set; }
     public string WorkoutName { get; set; } = "";

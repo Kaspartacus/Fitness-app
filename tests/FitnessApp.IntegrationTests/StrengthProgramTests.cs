@@ -114,6 +114,11 @@ public sealed class StrengthProgramTests
         completion.Exercises![0].Name = "Forkert navn fra klienten";
         var complete = await owner.PostAsJsonAsync($"{Programs}/{program.Id}/workouts/{legs.Id}/complete", completion);
         Assert.Equal(HttpStatusCode.NoContent, complete.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PostAsJsonAsync($"{Programs}/{program.Id}/workouts/{legs.Id}/complete", completion)).StatusCode);
+        var conflictingRetry = Completion(legs);
+        conflictingRetry.CompletionId = completion.CompletionId;
+        conflictingRetry.Exercises![0].Weight += 2.5m;
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync($"{Programs}/{program.Id}/workouts/{legs.Id}/complete", conflictingRetry)).StatusCode);
         using var scope = factory.Services.CreateScope();
         var history = await scope.ServiceProvider.GetRequiredService<FitnessDbContext>().CompletedWorkouts.Include(item => item.Exercises).SingleAsync();
         Assert.Equal(legs.Name, history.WorkoutName);
@@ -123,6 +128,13 @@ public sealed class StrengthProgramTests
         var active = (await owner.GetFromJsonAsync<PlannedWorkoutResponse>($"{Programs}/{program.Id}/workouts/{legs.Id}"))!;
         Assert.Equal(legs.Exercises[0].Weight, active.Exercises[0].PreviousWeight);
         Assert.Equal(legs.Exercises[0].Sets, active.Exercises[0].PreviousSets);
+
+        var skipped = Completion(legs);
+        skipped.Exercises![0].IsCompleted = false;
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PostAsJsonAsync($"{Programs}/{program.Id}/workouts/{legs.Id}/complete", skipped)).StatusCode);
+        var afterSkipped = (await owner.GetFromJsonAsync<PlannedWorkoutResponse>($"{Programs}/{program.Id}/workouts/{legs.Id}"))!;
+        Assert.Equal(legs.Exercises[0].Weight, afterSkipped.Exercises[0].PreviousWeight);
+        Assert.Equal(legs.Exercises[1].Weight, afterSkipped.Exercises[1].PreviousWeight);
     }
 
     [Theory]
@@ -224,5 +236,5 @@ public sealed class StrengthProgramTests
     private static SaveProgramRequest Draft(ProgramResponse program) => new() { Name = program.Name, Version = program.Version, Workouts = program.Workouts.Select(Copy).ToList() };
     private static WorkoutRequest Copy(WorkoutResponse source) => new() { Id = source.Id, Name = source.Name, Exercises = source.Exercises.Select(item => new ExerciseRequest { Id = item.Id, Name = item.Name, Weight = item.Weight, Sets = item.Sets, Repetitions = item.Repetitions, Note = item.Note }).ToList() };
     private static List<ScheduleEntryRequest> Week() => [new(DayOfWeek.Monday, null), new(DayOfWeek.Tuesday, null), new(DayOfWeek.Wednesday, null), new(DayOfWeek.Thursday, null), new(DayOfWeek.Friday, null), new(DayOfWeek.Saturday, null), new(DayOfWeek.Sunday, null)];
-    private static CompleteWorkoutRequest Completion(WorkoutResponse workout) => new() { Exercises = workout.Exercises.Select((exercise, index) => new CompletedExerciseRequest { ProgramExerciseId = exercise.Id, Name = exercise.Name, Weight = exercise.Weight, Sets = exercise.Sets, Repetitions = exercise.Repetitions, IsCompleted = index == 0 }).ToList() };
+    private static CompleteWorkoutRequest Completion(WorkoutResponse workout) => new() { CompletionId = Guid.NewGuid(), Exercises = workout.Exercises.Select((exercise, index) => new CompletedExerciseRequest { ProgramExerciseId = exercise.Id, Name = exercise.Name, Weight = exercise.Weight, Sets = exercise.Sets, Repetitions = exercise.Repetitions, IsCompleted = index == 0 }).ToList() };
 }
