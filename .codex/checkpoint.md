@@ -34,8 +34,10 @@ Refine the existing strength-training UI without changing its data model: shared
 - `dotnet run --project src/FitnessApp.Server --launch-profile https --no-build`: starts on `https://localhost:7192`. A fresh browser session loads the WebAssembly client and routes unauthenticated `/styrke` to the working login page; the current fingerprinted runtime asset returns HTTP 200.
 - Separate correctness and security rechecks found no remaining concrete issue after the validation and migration fixes.
 
-## Next action
+## Delivery status
 
-The owner requested no application run, browser verification, tests, audit, or shared verification script. The single permitted `dotnet build FitnessApp.slnx --no-restore` passed with no errors; the only output was the environment's known `NU1900` advisory-DNS warning. Review the final diff, commit and push the current feature branch without force, then create its pull request to `main`. Do not merge or deploy.
+- Feature commit `ff2f0fdbf17a424f2029edec512674a4199ea4fe` is pushed on `feature/strength-workouts`.
+- Pull request [#8](https://github.com/Kaspartacus/Fitness-app/pull/8) targets `main`; it has not been merged or deployed.
+- The owner requested no application run, browser verification, tests, audit, or shared verification script. The single permitted `dotnet build FitnessApp.slnx --no-restore` passed with no errors; the only output was the environment's known `NU1900` advisory-DNS warning.
 
 Never store credentials, tokens, personal data, reset URLs, or conversation transcripts here.
