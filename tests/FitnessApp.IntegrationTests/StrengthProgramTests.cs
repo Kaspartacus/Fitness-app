@@ -131,10 +131,13 @@ public sealed class StrengthProgramTests
 
         var skipped = Completion(legs);
         skipped.Exercises![0].IsCompleted = false;
+        skipped.Exercises[0].Weight += 2.5m;
+        skipped.Exercises[1].IsCompleted = true;
+        skipped.Exercises[1].Weight += 2.5m;
         Assert.Equal(HttpStatusCode.NoContent, (await owner.PostAsJsonAsync($"{Programs}/{program.Id}/workouts/{legs.Id}/complete", skipped)).StatusCode);
         var afterSkipped = (await owner.GetFromJsonAsync<PlannedWorkoutResponse>($"{Programs}/{program.Id}/workouts/{legs.Id}"))!;
         Assert.Equal(legs.Exercises[0].Weight, afterSkipped.Exercises[0].PreviousWeight);
-        Assert.Equal(legs.Exercises[1].Weight, afterSkipped.Exercises[1].PreviousWeight);
+        Assert.Equal(legs.Exercises[1].Weight + 2.5m, afterSkipped.Exercises[1].PreviousWeight);
     }
 
     [Theory]
