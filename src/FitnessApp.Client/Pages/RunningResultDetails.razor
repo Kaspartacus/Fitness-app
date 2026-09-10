@@ -1,0 +1,112 @@
+@page "/loeb/resultater/{ResultId:guid}"
+@attribute [Authorize]
+@using FitnessApp.Client.Running
+@using FitnessApp.Contracts.Running
+@inject RunningClient Running
+
+<PageTitle>Resultat</PageTitle>
+
+<main class="strength-app running-app strength-with-bottom-nav" aria-labelledby="result-title">
+    <header class="strength-back-header">
+        <a class="strength-icon-button" href="/loeb" aria-label="Tilbage til løb" title="Tilbage til løb">←</a>
+        <div><h1 id="result-title">Løberesultat</h1>@if (result is not null) { <p>@RunningPresentation.Date(result.Date)</p> }</div>
+        <span class="strength-header-spacer"></span>
+    </header>
+
+    @if (isLoading)
+    {
+        <p class="strength-feedback" role="status">Indlæser resultat…</p>
+    }
+    else if (error is not null)
+    {
+        <section class="strength-status-card" role="alert"><p>@error</p><button class="strength-secondary-button" type="button" @onclick="LoadAsync">Prøv igen</button></section>
+    }
+    else if (result is not null)
+    {
+        <div class="running-result-comparison">
+            @if (session is not null)
+            {
+                <section class="running-result-panel" aria-label="Planlagt løb">
+                    <p class="strength-overline">Planlagt</p>
+                    <h2>@KindName(session.Kind)</h2>
+                    <div class="running-result-values"><div><span>Distance</span><strong>@RunningPresentation.Distance(session.PlannedDistanceKm)</strong></div><div><span>Måltempo</span><strong>@RunningPresentation.PaceRange(session.PaceMinSecondsPerKm, session.PaceMaxSecondsPerKm)</strong></div></div>
+                </section>
+            }
+            <section class="running-result-panel is-actual" aria-label="Faktisk resultat">
+                <p class="strength-overline">Faktisk</p>
+                @if (result.DistanceKm is null || result.DurationSeconds is null)
+                {
+                    <h2>Gennemført uden målinger</h2>
+                    <p>Du kan tilføje distance, tid, puls eller en note ved at rette resultatet.</p>
+                }
+                else
+                {
+                    <div class="running-result-values"><div><span>Distance</span><strong>@RunningPresentation.Distance(result.DistanceKm)</strong></div><div><span>Tid</span><strong>@RunningPresentation.Duration(result.DurationSeconds)</strong></div><div><span>Tempo</span><strong>@RunningPresentation.Pace(result.PaceSecondsPerKm)</strong></div>@if (result.AverageHeartRate is { } heartRate) { <div><span>Gns. puls</span><strong>@heartRate bpm</strong></div> }</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(result.Note)) { <p class="running-result-note">@result.Note</p> }
+            </section>
+        </div>
+        <div class="running-page-actions"><a class="strength-primary-button running-full-action" href="@($"/loeb/resultater/{result.Id}/ret")">Ret resultat</a></div>
+    }
+
+    <StrengthBottomNavigation Active="running" />
+</main>
+
+@code {
+    [Parameter] public Guid ResultId { get; set; }
+    private Guid loadedResultId;
+    private RunningResultResponse? result;
+    private RunningSessionResponse? session;
+    private bool isLoading;
+    private string? error;
+    private int loadRequestVersion;
+
+    protected override Task OnParametersSetAsync()
+    {
+        if (loadedResultId == ResultId && (result is not null || error is not null || isLoading))
+        {
+            return Task.CompletedTask;
+        }
+
+        loadedResultId = ResultId;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var requestedResultId = ResultId;
+        var requestVersion = ++loadRequestVersion;
+        isLoading = true;
+        error = null;
+        session = null;
+        result = null;
+
+        var response = await Running.GetResultAsync(requestedResultId);
+        var loadedResult = response.Value;
+        var loadedError = response.Error ?? (loadedResult is null ? "Resultatet blev ikke fundet." : null);
+        RunningSessionResponse? loadedSession = null;
+        if (loadedResult?.SessionId is { } sessionId)
+        {
+            var sessionResponse = await Running.GetSessionAsync(sessionId);
+            loadedSession = sessionResponse.Value;
+        }
+
+        if (requestVersion != loadRequestVersion || requestedResultId != ResultId)
+        {
+            return;
+        }
+
+        result = loadedResult;
+        session = loadedSession;
+        error = loadedError;
+        isLoading = false;
+    }
+
+    private static string KindName(RunningSessionKind kind) => kind switch
+    {
+        RunningSessionKind.Easy => "Rolig tur",
+        RunningSessionKind.Tempo => "Tempotur",
+        RunningSessionKind.Intervals => "Intervaller",
+        _ => "Lang tur"
+    };
+}

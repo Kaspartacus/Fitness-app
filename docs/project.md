@@ -6,7 +6,7 @@ FitnessApp is a private, mobile-first fitness application, initially for two peo
 
 The application is intended to run eventually on a Raspberry Pi through Docker and be reachable securely at home and remotely. Local hosting does not imply offline editing or synchronization.
 
-Planned modules are Home, Nutrition, Strength Training, Running, Calendar, Weight Goals, Users, and Profile/Settings. They will be delivered as small vertical slices rather than pre-created empty modules.
+Planned modules are Home, Nutrition, Strength Training, Calendar, Weight Goals, Users, and Profile/Settings. They will be delivered as small vertical slices rather than pre-created empty modules. Running is now an implemented vertical slice within the same application, not a separate product or host.
 
 The visual reference is the [current FitnessApp Figma Make file](https://www.figma.com/make/dFJcR42XWiqVhBtA1bfyOS/Fitness-app?p=f&t=3UwAWBKvTu85DryU-0) and its [published prototype](https://trance-vine-53032594.figma.site/). It illustrates approximately 90% of the intended functionality; this is design coverage, not implementation progress. It is not a complete functional specification: some controls are nonfunctional, and some flows, states, and requirements are absent. React source returned by Figma is reference material only and must be translated into Blazor.
 
@@ -15,6 +15,8 @@ Before implementing a feature, inspect its relevant design and existing code. Id
 The concise reusable visual facts and evidence classifications live in [design-reference.md](design-reference.md). Repository development and review mechanics live in [development-workflow.md](development-workflow.md); they are not product requirements.
 
 For the registration slice, Figma Make version 41 replaced the former mint/purple direction with charcoal and gray surfaces, filled navy primary actions, light-blue accent/focus states, and readable gray-blue inactive states. The Blazor CSS now centralizes that translated palette and applies it consistently to login, registration, confirmation, protected home, and administrator review. The Make source inventory contains `LoginScreen.tsx` but no registration, confirmation, or administrator-review screens, so those states remain consistent extensions rather than pixel-verified matches. The current Make canvas preview failed to load during verification; exact pixel fidelity is therefore not claimed, but the current source inventory and visible version-41 design notes were successfully inspected.
+
+For the running slice, Figma Make version 47 and the published public preview were reviewed as visual and journey evidence. The reviewed journey covers the running overview, onboarding/setup choices, plan and session details, an active-run screen, manual logging, result detail, date selection, and the calendar connection. It does not settle all product behavior: centered shared dialogs, mobile-only bottom navigation, Danish validation/loading/empty/error/retry states, cancellation guards, and confirmations are intentional extensions using existing application patterns. The overview does not add a **Seneste løb** section because it is absent from the current reference; a separate **Resultathistorik** route is used to reopen manual and archived-plan results. Source and preview review support the translated information architecture and styling; they are not runtime or pixel-parity verification.
 
 ## Implemented now
 
@@ -36,6 +38,7 @@ For the registration slice, Figma Make version 41 replaced the former mint/purpl
 - Configurable Brevo SMTP delivery through MailKit with required STARTTLS and a Development/Test-only private pickup transport. An explicit local Development opt-in can skip revocation checking for macOS compatibility; startup and actual listener checks prevent using it on nonlocal or non-Development instances, and all other certificate checks remain enabled. SMTP secrets remain server-side and real delivery is a separate manual check.
 - An explicit `FitnessApp` Data Protection application identity with a persistent, private key-ring path so normal restarts preserve reset-token validity.
 - Private strength programs for Approved users, with ordered workouts and exercises, planned weight, sets, repetitions and optional notes; weekly scheduling; actual completed-workout history; ownership isolation; and optimistic concurrency for program changes. Warm-up is an ordinary exercise rather than a stored boolean.
+- Private running plans, dated scheduled sessions, and corrected actual results for Approved users. Setup captures current level, 30-minute ability, target distance/date, weekly frequency, and preferred weekdays; local deterministic generation uses `DateOnly` calendar dates derived from `TimeProvider` in `Europe/Copenhagen`, with a 10% weekly capability feasibility gate. Plans, sessions, and results remain owner-scoped, planned targets remain separate from actual measurements, completion is idempotent, and an explicit versioned replacement retains prior completed/manual history.
 
 ## Architecture
 
@@ -48,7 +51,7 @@ Server ------------------------------> Infrastructure --> Domain
 Server --static hosting/build only--> Client
 ```
 
-`FitnessApp.slnx` is the only application solution. `FitnessApp.Server` is the only hosted startup project, launched with `dotnet run --project src/FitnessApp.Server`; it hosts both the Blazor WebAssembly client and ASP.NET Core API. Strength-program management is implemented within these existing layers and projects, with no separate strength-training solution, application, executable, host, or startup process.
+`FitnessApp.slnx` is the only application solution. `FitnessApp.Server` is the only hosted startup project, launched with `dotnet run --project src/FitnessApp.Server`; it hosts both the Blazor WebAssembly client and ASP.NET Core API. Strength-program management and running are implemented within these existing layers and projects, with no separate fitness-feature solution, application, executable, host, or startup process.
 
 - `FitnessApp.Client` contains Blazor WebAssembly UI and does not reference server implementation projects.
 - `FitnessApp.Server` is the ASP.NET Core host, authentication API, and composition root. It references Application and Infrastructure. Its Client reference exists solely to include static WebAssembly assets.
@@ -65,13 +68,13 @@ Persistence entities are never shared with the client.
 - Personal data is isolated by server-derived identity; client-supplied user IDs never establish ownership.
 - Nutrition is day-based with six fixed meal sections, including three distinct snack slots. Food values are per 100 g and entries use grams. Historical entries retain their original nutrition values.
 - Strength templates, scheduling, and completed workouts are separate. Program exercises may contain a planned weight; the actual lifted weight belongs to performed workouts and remains separate from the plan. Active workouts allow direct editing and completion checkboxes and show previous performance; no rest timer or set-by-set wizard is planned.
-- Running accepts custom distances, a target date, and one to seven preferred weekdays. Plans cover the full target period. Completion is manual through “Registrer løbetur”; planned and actual values remain separate. Live GPS is not planned.
+- Running accepts a current level, a 0.5–15 km 30-minute ability distance, a 1–100 km target, a target date 7–365 Copenhagen-local days ahead, and one to seven distinct preferred weekdays. `DateOnly` scheduled dates are derived from `TimeProvider` in `Europe/Copenhagen`; deterministic generation schedules every selected weekday through the target period, tests the goal against the final selected session's capacity, and caps compounded weekly capacity growth at 10%. It rejects an infeasible target rather than promising an unsafe plan. An active plan can be replaced only with explicit confirmation and its matching version; retirement preserves its sessions and completed/manual history. Each plan permits one started, uncompleted session at a time. Manual registration and correction require an actual distance and duration and cannot be pre-registered for a future calendar date; planned completion and correction may have no measurements. Planned and actual values remain separate. An active timer derives elapsed time from its recorded server start source, never simulated live metrics. GPS, maps, background tracking, Garmin integration, and fabricated live pace/distance are not planned.
 - Calendar combines strength and running. Completed history and weigh-ins remain stable when plans or goals change.
 - Profile contains settings and logout. Profile subpages do not repeat logout.
 
 ## Deferred decisions and scope
 
-SQLite, Identity, JWT access tokens, registration, administrator approval, password reset, and strength-program management are implemented. Email ownership verification remains operationally incomplete. Refresh tokens, remember-me behavior, production signing-key rotation, Docker/Raspberry Pi deployment, remote-access design, Garmin integration, deployment automation, vault selection, log shipping, and the remaining fitness product modules remain deferred.
+SQLite, Identity, JWT access tokens, registration, administrator approval, password reset, strength-program management, and the running vertical slice are implemented within the existing projects. Running migration `20260910221108_AddRunningModule` is generated and reviewed but has not been applied to any database. Email ownership verification remains operationally incomplete. Refresh tokens, remember-me behavior, production signing-key rotation, Docker/Raspberry Pi deployment, remote-access design, Garmin integration, deployment automation, vault selection, log shipping, and the remaining fitness product modules remain deferred.
 
 Paid infrastructure and paid SaaS dependencies are out of scope. Future choices must remain compatible with Linux/ARM64 unless a documented decision changes that constraint.
 

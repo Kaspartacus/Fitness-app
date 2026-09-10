@@ -1,0 +1,75 @@
+@page "/loeb/resultater"
+@attribute [Authorize]
+@using FitnessApp.Client.Running
+@using FitnessApp.Contracts.Running
+@inject RunningClient Running
+
+<PageTitle>Resultathistorik</PageTitle>
+
+<main class="strength-app running-app strength-with-bottom-nav" aria-labelledby="results-title">
+    <header class="strength-back-header">
+        <a class="strength-icon-button" href="/loeb" aria-label="Tilbage til løb" title="Tilbage til løb">←</a>
+        <h1 id="results-title">Resultathistorik</h1>
+        <a class="strength-icon-button" href="/loeb/registrer" aria-label="Registrer løb" title="Registrer løb">＋</a>
+    </header>
+
+    @if (isLoading)
+    {
+        <p class="strength-feedback" role="status">Indlæser resultater…</p>
+    }
+    else if (error is not null)
+    {
+        <section class="strength-status-card" role="alert"><p>@error</p><button class="strength-secondary-button" type="button" @onclick="LoadAsync">Prøv igen</button></section>
+    }
+    else if (results.Count == 0)
+    {
+        <section class="strength-empty-state"><span class="strength-empty-icon">⌁</span><h2>Ingen registrerede løb</h2><p>Dine gennemførte planlagte og manuelt registrerede løb samles her.</p><a class="strength-primary-button running-empty-action" href="/loeb/registrer">Registrer løb</a></section>
+    }
+    else
+    {
+        <section class="strength-section" aria-label="Alle løberesultater">
+            <p class="strength-overline">Alle resultater</p>
+            <div class="running-result-list">
+                @foreach (var item in results)
+                {
+                    <a class="running-session-row" href="@($"/loeb/resultater/{item.Id}")">
+                        <span class="running-session-date">@ShortDay(item.Date)<br />@item.Date.Day</span>
+                        <span class="running-session-copy"><strong>@SourceLabel(item)</strong><span>@Summary(item)</span></span>
+                        <span class="running-session-chevron" aria-hidden="true">›</span>
+                    </a>
+                }
+            </div>
+        </section>
+    }
+
+    <StrengthBottomNavigation Active="running" />
+</main>
+
+@code {
+    private IReadOnlyList<RunningResultResponse> results = [];
+    private bool isLoading;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (isLoading)
+        {
+            return;
+        }
+
+        isLoading = true;
+        error = null;
+        var response = await Running.GetOverviewAsync();
+        results = response.Value?.Results ?? [];
+        error = response.Error;
+        isLoading = false;
+    }
+
+    private static string SourceLabel(RunningResultResponse item) => item.SessionId is null ? "Manuelt registreret løb" : "Planlagt løbetur";
+    private static string Summary(RunningResultResponse item) => item.DistanceKm is null || item.DurationSeconds is null
+        ? "Gennemført uden målinger"
+        : $"{RunningPresentation.Distance(item.DistanceKm)} · {RunningPresentation.Duration(item.DurationSeconds)} · {RunningPresentation.Pace(item.PaceSecondsPerKm)}";
+    private static string ShortDay(DateOnly date) => date.ToString("ddd", System.Globalization.CultureInfo.GetCultureInfo("da-DK"));
+}

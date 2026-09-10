@@ -1,0 +1,144 @@
+@page "/loeb"
+@attribute [Authorize]
+@using FitnessApp.Client.Running
+@using FitnessApp.Contracts.Running
+@inject RunningClient Running
+
+<PageTitle>Løb</PageTitle>
+
+<main class="strength-app running-app strength-with-bottom-nav" aria-labelledby="running-title">
+    <header class="strength-mobile-header">
+        <div><h1 id="running-title">Løb</h1></div>
+        <a class="strength-profile-button" href="/" aria-label="Tilbage til hjem" title="Tilbage til hjem">⌂</a>
+    </header>
+
+    @if (isLoading)
+    {
+        <p class="strength-feedback" role="status">Indlæser din løbeplan…</p>
+    }
+    else if (error is not null)
+    {
+        <section class="strength-status-card" role="alert">
+            <p>@error</p>
+            <button class="strength-secondary-button" type="button" @onclick="LoadAsync">Prøv igen</button>
+        </section>
+    }
+    else if (overview?.ActivePlan is not { } plan)
+    {
+        <section class="strength-empty-state">
+            <span class="strength-empty-icon">⌁</span>
+            <h2>Ingen aktiv løbeplan</h2>
+            <p>Fortæl om dit niveau og mål, så opretter vi en plan med datoer, der passer til din uge.</p>
+            <a class="strength-primary-button running-empty-action" href="/loeb/ny">Opret løbeplan</a>
+            <a class="strength-text-action" href="/loeb/registrer">Registrer et løb uden plan</a>
+            <a class="strength-text-action" href="/loeb/resultater">Se resultathistorik</a>
+        </section>
+    }
+    else
+    {
+        <section class="running-goal-card" aria-labelledby="running-goal-title">
+            <p class="strength-overline">Mit mål</p>
+            <h2 id="running-goal-title">@RunningPresentation.Distance(plan.TargetDistanceKm)</h2>
+            <div class="running-goal-meta"><span>Mål: @RunningPresentation.Date(plan.TargetDate)</span></div>
+            <div class="running-plan-progress" aria-label="Planfremskridt">
+                <div><span>@CompletedCount(plan) af @plan.Sessions.Count ture gennemført</span><strong>@CompletionPercent(plan) %</strong></div>
+                <div class="strength-progress-track"><span style="width: @CompletionPercent(plan)%"></span></div>
+            </div>
+            <div class="running-overview-actions">
+                <a class="strength-primary-button" href="/loeb/plan">Se løbeplan</a>
+                <a class="strength-outline-button" href="/loeb/ny">Ny plan</a>
+            </div>
+        </section>
+
+        <section class="strength-section" aria-labelledby="running-week-title">
+            <p class="strength-overline" id="running-week-title">Denne uge</p>
+            <div class="running-week-summary">
+                <div class="running-summary-stat"><strong>@WeekSessions(plan).Count(session => session.State == RunningSessionState.Completed) / @WeekSessions(plan).Count</strong><span>Løb</span></div>
+                <div class="running-summary-stat"><strong>@RunningPresentation.Distance(WeekSessions(plan).Sum(session => session.PlannedDistanceKm))</strong><span>Planlagt</span></div>
+                <div class="running-summary-stat"><strong>@RunningPresentation.Duration(WeekDuration(WeekSessions(plan)))</strong><span>Faktisk tid</span></div>
+            </div>
+        </section>
+
+        <section class="strength-section" aria-labelledby="running-upcoming-title">
+            <div class="strength-section-row strength-programs-heading">
+                <p class="strength-overline" id="running-upcoming-title">Kommende løb</p>
+                <a class="strength-text-action" href="/kalender">Kalender</a>
+            </div>
+            @if (overview.UpcomingSessions.Count == 0)
+            {
+                <article class="strength-empty-compact"><p>Der er ingen kommende ture i din aktive plan.</p><a href="/loeb/plan">Se hele planen</a></article>
+            }
+            else
+            {
+                <div class="running-session-list">
+                    @foreach (var session in overview.UpcomingSessions.Take(4))
+                    {
+                        <a class="running-session-row" href="@SessionUrl(session)">
+                            <span class="running-session-date">@ShortDay(session.Date)<br />@session.Date.Day</span>
+                            <span class="running-session-copy"><strong>@KindName(session.Kind)</strong><span>@RunningPresentation.ShortDate(session.Date) · @RunningPresentation.Distance(session.PlannedDistanceKm)</span>@if (session.State == RunningSessionState.Started) { <span class="running-session-status is-active">I gang</span> }</span>
+                            <span class="running-session-chevron" aria-hidden="true">›</span>
+                        </a>
+                    }
+                </div>
+            }
+            <a class="strength-outline-button strength-card-button" href="/loeb/registrer">Registrer løbetur</a>
+            <a class="strength-text-action" href="/loeb/resultater">Se resultathistorik</a>
+        </section>
+    }
+
+    <StrengthBottomNavigation Active="running" />
+</main>
+
+@code {
+    private RunningOverviewResponse? overview;
+    private bool isLoading;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (isLoading)
+        {
+            return;
+        }
+
+        isLoading = true;
+        error = null;
+        var result = await Running.GetOverviewAsync();
+        overview = result.Value;
+        error = result.Error;
+        isLoading = false;
+    }
+
+    private static string SessionUrl(RunningSessionResponse session) => $"/loeb/plan/{session.Id}";
+
+    private static int CompletedCount(RunningPlanResponse plan) => plan.Sessions.Count(session => session.State == RunningSessionState.Completed);
+
+    private static int CompletionPercent(RunningPlanResponse plan) => plan.Sessions.Count == 0 ? 0 :
+        (int)Math.Round(CompletedCount(plan) * 100m / plan.Sessions.Count, MidpointRounding.AwayFromZero);
+
+    private static string ShortDay(DateOnly date) => date.ToString("ddd", System.Globalization.CultureInfo.GetCultureInfo("da-DK"));
+
+    private static IReadOnlyList<RunningSessionResponse> WeekSessions(RunningPlanResponse plan)
+    {
+        var today = RunningPresentation.CopenhagenToday;
+        var monday = RunningPresentation.Monday(today);
+        return plan.Sessions.Where(session => session.Date >= monday && session.Date <= monday.AddDays(6)).ToArray();
+    }
+
+    private static int? WeekDuration(IEnumerable<RunningSessionResponse> sessions)
+    {
+        var durations = sessions.Where(session => session.Result?.DurationSeconds is not null)
+            .Select(session => session.Result!.DurationSeconds!.Value).ToArray();
+        return durations.Length == 0 ? null : durations.Sum();
+    }
+
+    private static string KindName(RunningSessionKind kind) => kind switch
+    {
+        RunningSessionKind.Easy => "Rolig tur",
+        RunningSessionKind.Tempo => "Tempotur",
+        RunningSessionKind.Intervals => "Intervaller",
+        _ => "Lang tur"
+    };
+}

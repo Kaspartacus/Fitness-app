@@ -1,8 +1,10 @@
 using FitnessApp.Application.Authentication;
 using FitnessApp.Application.Email;
+using FitnessApp.Application.Running;
 using FitnessApp.Infrastructure.Authentication;
 using FitnessApp.Infrastructure.Email;
 using FitnessApp.Infrastructure.Persistence;
+using FitnessApp.Infrastructure.Running;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,6 +44,7 @@ public static class DependencyInjection
             options.TokenLifespan = passwordResetTokenLifetime);
 
         services.AddScoped<FitnessApp.Application.Strength.IStrengthProgramService, FitnessApp.Infrastructure.Strength.StrengthProgramService>();
+        services.AddScoped<IRunningService, RunningService>();
         services.AddScoped<IAuthenticationService, AuthenticationService>();
         services.AddScoped<IAdminBootstrapper, AdminBootstrapper>();
         services.AddScoped<IRegistrationService, RegistrationService>();

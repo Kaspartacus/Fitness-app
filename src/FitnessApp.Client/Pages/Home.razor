@@ -40,6 +40,13 @@
                 <a class="button button-primary button-link" href="/styrke">Styrketræning</a>
             </article>
 
+            <article class="dashboard-card dashboard-card-accent">
+                <p class="overline">Træning</p>
+                <h2>Løb</h2>
+                <p>Opret en personlig løbeplan, følg dine planlagte ture, og registrér dine resultater.</p>
+                <a class="button button-primary button-link" href="/loeb">Åbn løb</a>
+            </article>
+
             @if (user.Roles.Contains("Admin", StringComparer.Ordinal))
             {
                 <article class="dashboard-card dashboard-card-accent">
