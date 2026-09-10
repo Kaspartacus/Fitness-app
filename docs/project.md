@@ -35,7 +35,7 @@ For the registration slice, Figma Make version 41 replaced the former mint/purpl
 - A neutral Danish password-reset flow for Approved accounts using Identity's dedicated one-hour reset tokens, a trusted configured HTTPS origin, persisted cooldown, IP rate limiting, bounded asynchronous email delivery, and atomic all-session revocation.
 - Configurable Brevo SMTP delivery through MailKit with required STARTTLS and a Development/Test-only private pickup transport. An explicit local Development opt-in can skip revocation checking for macOS compatibility; startup and actual listener checks prevent using it on nonlocal or non-Development instances, and all other certificate checks remain enabled. SMTP secrets remain server-side and real delivery is a separate manual check.
 - An explicit `FitnessApp` Data Protection application identity with a persistent, private key-ring path so normal restarts preserve reset-token validity.
-- Private strength programs for Approved users, with ordered manual exercises, planned sets and repetitions, an optional warm-up marker, explicit atomic saves, ownership isolation, and optimistic concurrency for edits and deletion.
+- Private strength programs for Approved users, with ordered workouts and exercises, planned weight, sets, repetitions and optional notes; weekly scheduling; actual completed-workout history; ownership isolation; and optimistic concurrency for program changes. Warm-up is an ordinary exercise rather than a stored boolean.
 
 ## Architecture
 
@@ -64,7 +64,7 @@ Persistence entities are never shared with the client.
 - Registration is allowed, but every new account awaits administrator approval. Pending or rejected users cannot access protected APIs or personal data. Registrants cannot choose an administrator role.
 - Personal data is isolated by server-derived identity; client-supplied user IDs never establish ownership.
 - Nutrition is day-based with six fixed meal sections, including three distinct snack slots. Food values are per 100 g and entries use grams. Historical entries retain their original nutrition values.
-- Strength templates, scheduling, and completed workouts are separate. Weight belongs to performed workouts. Active workouts allow direct editing and completion checkboxes and show previous performance; no rest timer or set-by-set wizard is planned.
+- Strength templates, scheduling, and completed workouts are separate. Program exercises may contain a planned weight; the actual lifted weight belongs to performed workouts and remains separate from the plan. Active workouts allow direct editing and completion checkboxes and show previous performance; no rest timer or set-by-set wizard is planned.
 - Running accepts custom distances, a target date, and one to seven preferred weekdays. Plans cover the full target period. Completion is manual through “Registrer løbetur”; planned and actual values remain separate. Live GPS is not planned.
 - Calendar combines strength and running. Completed history and weigh-ins remain stable when plans or goals change.
 - Profile contains settings and logout. Profile subpages do not repeat logout.

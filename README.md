@@ -117,7 +117,7 @@ Approval permits a later login but does **not** prove ownership of the submitted
 
 ## Strength programs
 
-An Approved user opens **Styrketræning** from the protected home page to create, view, edit, reorder, and delete personal workout programs. Each program requires a name and 1–50 manually named exercises. Each exercise stores 1–10 planned sets, 1–30 planned repetitions, its order, and an optional **Opvarmning** marker. Changes use explicit save, and the editor warns before discarding an unsaved draft.
+An Approved user opens **Styrketræning** from the protected home page to create, view, edit, reorder, and delete personal programs. A program holds up to 12 ordered workouts, and every workout holds 1–50 ordered exercises. The Figma-aligned mobile flow includes today’s workout, weekly planning, start training, editable actual weight/sets/repetitions, completion, and the latest saved performance for every exercise. Each exercise stores a name, 0–1000 kg planned weight, 1–10 planned sets, 1–30 planned repetitions, and an optional note of up to 250 characters. Warm-up is represented as an ordinary exercise when wanted; there is no separate warm-up flag.
 
 The server derives ownership from the validated session. Lists, reads, updates, and deletes are scoped to that user, including for administrators. Program and exercise changes commit atomically. A version token rejects stale updates or deletions made from another tab and lets the user retain the local draft before choosing whether to reload.
 

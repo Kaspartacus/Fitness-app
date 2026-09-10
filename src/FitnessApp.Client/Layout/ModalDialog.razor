@@ -1,0 +1,85 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JavaScript
+
+@if (IsOpen)
+{
+    <div class="app-modal-backdrop" @onclick="HandleBackdropAsync">
+        <section @ref="dialog" class="app-modal" role="@(Destructive ? "alertdialog" : "dialog")" aria-modal="true"
+                 aria-labelledby="@titleId" aria-describedby="@(string.IsNullOrWhiteSpace(Description) ? null : descriptionId)"
+                 tabindex="-1" @onclick:stopPropagation="true">
+            <header class="app-modal-header">
+                <h2 id="@titleId">@Title</h2>
+                @if (ShowCloseButton)
+                {
+                    <button class="app-modal-close" type="button" @onclick="DismissAsync" aria-label="Luk dialog" title="Luk dialog">×</button>
+                }
+            </header>
+            @if (!string.IsNullOrWhiteSpace(Description))
+            {
+                <p class="app-modal-description" id="@descriptionId">@Description</p>
+            }
+            <div class="app-modal-content">
+                @ChildContent
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public bool IsOpen { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = "Dialog";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string? InitialFocusSelector { get; set; }
+    [Parameter] public bool DismissOnBackdrop { get; set; } = true;
+    [Parameter] public bool DismissOnEscape { get; set; } = true;
+    [Parameter] public bool ShowCloseButton { get; set; } = true;
+    [Parameter] public bool Destructive { get; set; }
+    [Parameter] public EventCallback OnDismiss { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private readonly string titleId = $"dialog-title-{Guid.NewGuid():N}";
+    private readonly string descriptionId = $"dialog-description-{Guid.NewGuid():N}";
+    private readonly string modalKey = $"modal-{Guid.NewGuid():N}";
+    private ElementReference dialog;
+    private DotNetObjectReference<ModalDialog>? reference;
+    private bool activated;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (IsOpen && !activated)
+        {
+            reference ??= DotNetObjectReference.Create(this);
+            await JavaScript.InvokeVoidAsync("fitnessModal.activate", modalKey, dialog, reference, InitialFocusSelector);
+            activated = true;
+        }
+        else if (!IsOpen && activated)
+        {
+            await JavaScript.InvokeVoidAsync("fitnessModal.deactivate", modalKey);
+            activated = false;
+        }
+    }
+
+    [JSInvokable]
+    public Task RequestDismiss() => DismissOnEscape ? DismissAsync() : Task.CompletedTask;
+
+    private Task HandleBackdropAsync() => DismissOnBackdrop ? DismissAsync() : Task.CompletedTask;
+
+    private Task DismissAsync() => OnDismiss.HasDelegate ? OnDismiss.InvokeAsync() : Task.CompletedTask;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (activated)
+        {
+            try
+            {
+                await JavaScript.InvokeVoidAsync("fitnessModal.deactivate", modalKey);
+            }
+            catch (JSException)
+            {
+                // Navigation can dispose the component after the browser runtime has gone away.
+            }
+        }
+
+        reference?.Dispose();
+    }
+}

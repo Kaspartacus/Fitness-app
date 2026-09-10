@@ -5,49 +5,118 @@
 @inject StrengthProgramClient Programs
 
 <PageTitle>Styrketræning</PageTitle>
-<main class="strength-page" aria-labelledby="strength-title">
-    <a class="back-link" href="/">Tilbage til hjem</a>
-    <header class="strength-header"><h1 id="strength-title">Styrketræning</h1></header>
-    <div class="strength-toolbar"><h2 class="overline">Mine programmer</h2><a class="button button-primary button-link" href="/styrke/opret">Opret program</a></div>
+
+<main class="strength-app strength-with-bottom-nav" aria-labelledby="strength-title">
+    <header class="strength-mobile-header">
+        <div>
+            <h1 id="strength-title">Styrketræning</h1>
+        </div>
+        <a class="strength-profile-button" href="/" aria-label="Tilbage til hjem" title="Tilbage til hjem">⌂</a>
+    </header>
+
     @if (loading)
     {
-        <p role="status">Indlæser programmer…</p>
+        <p class="strength-feedback" role="status">Indlæser styrketræning…</p>
     }
     else if (error is not null)
     {
-        <p class="notice notice-error" role="alert">@error</p>
-        <button class="button button-secondary" @onclick="LoadAsync">Prøv igen</button>
+        <section class="strength-status-card" role="alert">
+            <p>@error</p>
+            <button class="strength-secondary-button" @onclick="LoadAsync">Prøv igen</button>
+        </section>
     }
-    else if (programs.Count == 0)
+    else if (overview is not null)
     {
-        <section class="state-panel compact-state empty-state"><h2>Dit første program</h2><p>Opret et program, og saml dine øvelser ét sted.</p></section>
-    }
-    else
-    {
-        <div class="program-list">
-            @foreach (var program in programs)
+        <section class="strength-section" aria-labelledby="today-heading">
+            <p class="strength-overline" id="today-heading">Dagens træning</p>
+            @if (overview.Today is { } today)
             {
-                <article class="program-card">
-                    <div class="program-copy"><h2>@program.Name</h2><p>@program.Exercises.Count øvelser · @Summary(program)</p></div>
-                    <a class="program-card-action" href="@($"/styrke/{program.Id}")" aria-label="@($"Se program: {program.Name}")">Se program</a>
+                <article class="strength-today-card">
+                    <div class="strength-card-heading">
+                        <div>
+                            <h2>@today.WorkoutName</h2>
+                            <p>@today.Exercises.Count øvelser</p>
+                        </div>
+                        <span class="strength-today-badge">I dag</span>
+                    </div>
+                    <a class="strength-primary-button strength-card-button" href="@ActiveUrl(today)">Start træning</a>
                 </article>
             }
-        </div>
+            else
+            {
+                <article class="strength-empty-compact">
+                    <p>Ingen træning planlagt i dag.</p>
+                    @if (overview.Programs.FirstOrDefault() is { } program)
+                    {
+                        <a href="@($"/styrke/{program.Id}/plan")">Planlæg din uge</a>
+                    }
+                </article>
+            }
+        </section>
+
+        <section class="strength-section" aria-labelledby="programs-heading">
+            <div class="strength-section-row strength-programs-heading">
+                <p class="strength-overline" id="programs-heading">Mine programmer</p>
+                <a class="strength-small-button" href="/styrke/opret">＋ Nyt program</a>
+            </div>
+
+            @if (overview.Programs.Count == 0)
+            {
+                <article class="strength-empty-state">
+                    <span class="strength-empty-icon">＋</span>
+                    <h2>Ingen programmer endnu</h2>
+                    <p>Opret et program, og byg det med dine træninger og øvelser.</p>
+                    <a class="strength-outline-button" href="/styrke/opret">Opret program</a>
+                </article>
+            }
+            else
+            {
+                <div class="strength-program-grid">
+                    @foreach (var program in overview.Programs)
+                    {
+                        <article class="strength-program-card">
+                            <div class="strength-program-copy">
+                                <h2>@program.Name</h2>
+                                <p>@program.Workouts.Count træninger · @WorkoutSummary(program)</p>
+                            </div>
+                            <div class="strength-split-actions">
+                                <a href="@($"/styrke/{program.Id}")">Se program</a>
+                                <a class="strength-primary-split" href="@($"/styrke/{program.Id}/plan")">Planlæg</a>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
     }
+
+    <StrengthBottomNavigation />
 </main>
+
 @code {
-    private List<ProgramResponse> programs = [];
+    private StrengthOverviewResponse? overview;
     private bool loading;
     private string? error;
+
     protected override Task OnInitializedAsync() => LoadAsync();
+
     private async Task LoadAsync()
     {
-        if (loading) return;
+        if (loading)
+        {
+            return;
+        }
+
         loading = true;
-        var result = await Programs.ListAsync();
+        var result = await Programs.GetOverviewAsync();
+        overview = result.Value;
         error = result.Error;
-        programs = result.Value ?? [];
         loading = false;
     }
-    private static string Summary(ProgramResponse program) => string.Join(" · ", program.Exercises.Take(3).Select(e => e.Name)) + (program.Exercises.Count > 3 ? " …" : "");
+
+    private static string WorkoutSummary(ProgramResponse program) =>
+        string.Join(" · ", program.Workouts.Take(4).Select(workout => workout.Name));
+
+    private static string ActiveUrl(PlannedWorkoutResponse workout) =>
+        $"/styrke/{workout.ProgramId}/træninger/{workout.WorkoutId}/aktiv";
 }

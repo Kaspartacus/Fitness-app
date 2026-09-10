@@ -170,12 +170,21 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
+app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.Use(async (context, next) =>
 {
+    if (!context.Request.Path.StartsWithSegments("/api") &&
+        !Path.HasExtension(context.Request.Path.Value))
+    {
+        // The HTML shell references fingerprinted WebAssembly assets. Revalidate it on
+        // navigation so a rebuilt client cannot be paired with assets from an older run.
+        context.Response.Headers.CacheControl = "no-cache";
+    }
+
     if (context.Request.Path.StartsWithSegments("/api/auth") ||
         context.Request.Path.StartsWithSegments("/api/registrations") ||
         context.Request.Path.StartsWithSegments("/api/admin") ||
@@ -200,6 +209,8 @@ app.MapPasswordResetEndpoints();
 app.MapRegistrationEndpoints();
 app.MapUserAdministrationEndpoints();
 app.MapStrengthProgramEndpoints();
+app.MapStaticAssets();
+app.UseEndpoints(_ => { });
 
 if (app.Environment.IsEnvironment("Testing") &&
     app.Configuration.GetValue<bool>("Testing:EnableTestEndpoints"))

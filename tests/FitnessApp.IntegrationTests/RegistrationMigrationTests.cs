@@ -13,6 +13,8 @@ public sealed class RegistrationMigrationTests
     private const string RegistrationMigration = "20260907185305_AddRegistrationApprovalMetadata";
     private const string PasswordResetMigration = "20260909044755_AddPasswordResetCooldown";
     private const string StrengthProgramsMigration = "20260909170745_AddStrengthPrograms";
+    private const string ExerciseDetailsMigration = "20260910180425_AddExerciseDetails";
+    private const string StrengthTrainingFlowMigration = "20260910191738_AddStrengthTrainingFlow";
 
     [Fact]
     public async Task LatestMigrationAppliesToEmptyDatabase()
@@ -25,7 +27,7 @@ public sealed class RegistrationMigrationTests
             await dbContext.Database.MigrateAsync();
 
             Assert.Equal(
-                [InitialMigration, RegistrationMigration, PasswordResetMigration, StrengthProgramsMigration],
+                [InitialMigration, RegistrationMigration, PasswordResetMigration, StrengthProgramsMigration, ExerciseDetailsMigration, StrengthTrainingFlowMigration],
                 await dbContext.Database.GetAppliedMigrationsAsync());
             var columns = await ReadUserColumnsAsync(databasePath);
             Assert.Contains("RegisteredAt", columns);
@@ -34,7 +36,15 @@ public sealed class RegistrationMigrationTests
             Assert.Contains("LastPasswordResetEmailQueuedAt", columns);
             Assert.Contains("SecurityStamp", await ReadColumnsAsync(databasePath, "UserSessions"));
             Assert.Contains("Name", await ReadColumnsAsync(databasePath, "StrengthPrograms"));
+            Assert.Contains("WorkoutId", await ReadColumnsAsync(databasePath, "ProgramExercises"));
+            Assert.DoesNotContain("ProgramId", await ReadColumnsAsync(databasePath, "ProgramExercises"));
+            Assert.Contains("Weight", await ReadColumnsAsync(databasePath, "ProgramExercises"));
+            Assert.Contains("Note", await ReadColumnsAsync(databasePath, "ProgramExercises"));
             Assert.Contains("Position", await ReadColumnsAsync(databasePath, "ProgramExercises"));
+            Assert.DoesNotContain("IsWarmUp", await ReadColumnsAsync(databasePath, "ProgramExercises"));
+            Assert.Contains("ProgramId", await ReadColumnsAsync(databasePath, "ProgramWorkouts"));
+            Assert.Contains("WorkoutId", await ReadColumnsAsync(databasePath, "ProgramScheduleEntries"));
+            Assert.Contains("IsCompleted", await ReadColumnsAsync(databasePath, "CompletedWorkoutExercises"));
         }
         finally
         {

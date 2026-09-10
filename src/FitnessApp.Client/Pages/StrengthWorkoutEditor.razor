@@ -1,0 +1,492 @@
+@page "/styrke/{ProgramId:guid}/træninger/opret"
+@page "/styrke/{ProgramId:guid}/træninger/{WorkoutId:guid}/rediger"
+@attribute [Authorize]
+@using FitnessApp.Contracts.Strength
+@using FitnessApp.Client.Strength
+@inject StrengthProgramClient Programs
+@inject NavigationManager Navigation
+
+<PageTitle>@(WorkoutId is null ? "Ny træning" : "Rediger træning")</PageTitle>
+
+<NavigationLock OnBeforeInternalNavigation="ConfirmNavigationAsync" />
+
+<main class="strength-app strength-form-page" aria-labelledby="workout-editor-title">
+    <header class="strength-back-header">
+        <button class="strength-icon-button" type="button" @onclick="TryNavigateBack" disabled="@busy" aria-label="Tilbage til program" title="Tilbage til program">←</button>
+        <h1 id="workout-editor-title">@(WorkoutId is null ? "Ny træning" : "Rediger træning")</h1>
+        <span class="strength-header-spacer"></span>
+    </header>
+
+    @if (loading)
+    {
+        <p class="strength-feedback" role="status">Indlæser træning…</p>
+    }
+    else if (error is not null)
+    {
+        <section class="strength-status-card" role="alert"><p>@error</p><button class="strength-secondary-button" @onclick="LoadAsync">Prøv igen</button></section>
+    }
+    else if (program is not null)
+    {
+        <form @onsubmit="SaveAsync" @onsubmit:preventDefault>
+            <fieldset class="strength-workout-editor" disabled="@busy">
+            <section class="strength-editor-card">
+                <p class="strength-overline">Træning</p>
+                <label class="strength-input-label" for="workout-name">Navn på træning</label>
+                <input class="strength-input" id="workout-name" maxlength="100" required @bind="workoutDraft.Name" @bind:event="oninput" @bind:after="MarkDirty" placeholder="For eksempel Ben" />
+            </section>
+
+            <section class="strength-added-exercises" aria-labelledby="added-exercises-title">
+                <div class="strength-section-row">
+                    <div>
+                        <p class="strength-overline">Øvelser</p>
+                        <h2 id="added-exercises-title">Tilføjede øvelser</h2>
+                    </div>
+                    <button class="strength-small-button" type="button" @onclick="OpenNewExercise" disabled="@(workoutDraft.Exercises!.Count >= 50)">＋ Tilføj øvelse</button>
+                </div>
+
+                @if (workoutDraft.Exercises!.Count == 0)
+                {
+                    <div class="strength-empty-compact"><p>Tilføj mindst én øvelse, før du gemmer træningen.</p></div>
+                }
+                else
+                {
+                    <ol class="strength-exercise-rows">
+                        @for (var index = 0; index < workoutDraft.Exercises.Count; index++)
+                        {
+                            var exercise = workoutDraft.Exercises[index];
+                            var position = index;
+                            <li class="strength-exercise-card">
+                                <button class="strength-exercise-card-main" type="button" @onclick="() => OpenEditExercise(position)"
+                                        aria-label="@($"Rediger øvelsen {exercise.Name}")" title="Rediger øvelse">
+                                    <span class="strength-exercise-card-title">@(index + 1). @exercise.Name</span>
+                                    <span class="strength-exercise-card-values">@FormatWeight(exercise.Weight) kg · @exercise.Sets sæt × @exercise.Repetitions reps</span>
+                                    @if (!string.IsNullOrWhiteSpace(exercise.Note))
+                                    {
+                                        <span class="strength-exercise-card-note">@exercise.Note</span>
+                                    }
+                                </button>
+                                <div class="strength-row-actions" aria-label="Handlinger for @exercise.Name">
+                                    <button type="button" class="strength-icon-action" disabled="@(index == 0)" @onclick="() => Move(position, -1)" @onclick:stopPropagation="true" aria-label="Flyt @exercise.Name op" title="Flyt op">↑</button>
+                                    <button type="button" class="strength-icon-action" disabled="@(index == workoutDraft.Exercises.Count - 1)" @onclick="() => Move(position, 1)" @onclick:stopPropagation="true" aria-label="Flyt @exercise.Name ned" title="Flyt ned">↓</button>
+                                    <button type="button" class="strength-icon-action is-danger" @onclick="() => OpenExerciseDelete(position)" @onclick:stopPropagation="true" aria-label="Slet @exercise.Name" title="Slet øvelse">🗑</button>
+                                </div>
+                            </li>
+                        }
+                    </ol>
+                }
+            </section>
+
+            @if (saveError is not null)
+            {
+                <p class="strength-field-error" role="alert">@saveError</p>
+            }
+                <div class="strength-form-actions">
+                    <button class="strength-outline-button" type="button" @onclick="TryNavigateBack" disabled="@busy">Annuller</button>
+                    <button class="strength-primary-button" type="submit" disabled="@(busy || workoutDraft.Exercises.Count == 0)">@(busy ? "Gemmer…" : "Gem træning")</button>
+                </div>
+            </fieldset>
+        </form>
+    }
+
+    <ModalDialog IsOpen="@exerciseModalOpen" Title="@ExerciseModalTitle" InitialFocusSelector="#exercise-name"
+                 DismissOnBackdrop="@(!exerciseDiscardConfirmationOpen)" DismissOnEscape="@(!exerciseDiscardConfirmationOpen)"
+                 ShowCloseButton="@(!exerciseDiscardConfirmationOpen)" OnDismiss="RequestCloseExerciseModal">
+        <form class="strength-modal-form" @onsubmit="SaveExercise" @onsubmit:preventDefault>
+            <label class="strength-input-label" for="exercise-name">Navn på øvelse</label>
+            <input class="strength-input" id="exercise-name" maxlength="100" @bind="exerciseDraft.Name" @bind:event="oninput" @bind:after="MarkExerciseDirty" placeholder="For eksempel Squat" />
+            <div class="strength-number-grid">
+                <label class="strength-input-label">Vægt (kg)<input class="strength-input" type="number" min="0" max="1000" step="0.25" @bind="exerciseDraft.Weight" @bind:after="MarkExerciseDirty" /></label>
+                <label class="strength-input-label">Sæt<input class="strength-input" type="number" min="1" max="10" @bind="exerciseDraft.Sets" @bind:after="MarkExerciseDirty" /></label>
+                <label class="strength-input-label">Reps<input class="strength-input" type="number" min="1" max="30" @bind="exerciseDraft.Repetitions" @bind:after="MarkExerciseDirty" /></label>
+            </div>
+            <label class="strength-input-label" for="exercise-note">Note (valgfri)</label>
+            <textarea class="strength-textarea" id="exercise-note" maxlength="250" rows="3" @bind="exerciseDraft.Note" @bind:event="oninput" @bind:after="MarkExerciseDirty" placeholder="Kort note til øvelsen"></textarea>
+            @if (exerciseError is not null)
+            {
+                <p class="strength-field-error" role="alert">@exerciseError</p>
+            }
+            <div class="app-modal-actions">
+                <button class="strength-quiet-button" type="button" @onclick="RequestCloseExerciseModal">Annuller</button>
+                <button class="strength-primary-button" type="submit">Gem øvelse</button>
+            </div>
+        </form>
+    </ModalDialog>
+
+    <ModalDialog IsOpen="@exerciseDiscardConfirmationOpen" Title="Forkast øvelse?" Description="Dine ændringer i øvelsen bliver ikke gemt."
+                 InitialFocusSelector="[data-modal-cancel]" Destructive="true" OnDismiss="ContinueEditingExercise">
+        <div class="app-modal-actions">
+            <button class="strength-quiet-button" type="button" data-modal-cancel @onclick="ContinueEditingExercise">Bliv i øvelsen</button>
+            <button class="strength-danger-button" type="button" @onclick="DiscardExerciseChanges">Forkast ændringer</button>
+        </div>
+    </ModalDialog>
+
+    <ModalDialog IsOpen="@HasExerciseToDelete" Title="Slet øvelse" Description="@ExerciseDeleteDescription" InitialFocusSelector="[data-modal-cancel]" Destructive="true" OnDismiss="CloseExerciseDelete">
+        <div class="app-modal-actions">
+            <button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseExerciseDelete">Annuller</button>
+            <button class="strength-danger-button" type="button" @onclick="DeleteExercise">Slet</button>
+        </div>
+    </ModalDialog>
+
+    <ModalDialog IsOpen="@discardConfirmationOpen" Title="Forlad uden at gemme?" Description="Dine ændringer i træningen bliver ikke gemt." InitialFocusSelector="[data-modal-cancel]" Destructive="true" OnDismiss="CloseDiscardConfirmation">
+        <div class="app-modal-actions">
+            <button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseDiscardConfirmation">Bliv på siden</button>
+            <button class="strength-danger-button" type="button" @onclick="DiscardChanges">Forlad uden at gemme</button>
+        </div>
+    </ModalDialog>
+</main>
+
+@code {
+    [Parameter] public Guid ProgramId { get; set; }
+    [Parameter] public Guid? WorkoutId { get; set; }
+
+    private ProgramResponse? program;
+    private WorkoutRequest workoutDraft = NewWorkout();
+    private ExerciseRequest exerciseDraft = NewExercise();
+    private int? editingIndex;
+    private int? deleteExerciseIndex;
+    private bool exerciseModalOpen;
+    private bool exerciseModalDirty;
+    private bool exerciseDiscardConfirmationOpen;
+    private bool loading;
+    private bool busy;
+    private bool isDirty;
+    private bool discardConfirmationOpen;
+    private bool hasParameters;
+    private Guid loadedProgramId;
+    private Guid? loadedWorkoutId;
+    private string? pendingNavigationUrl;
+    private string? pendingExerciseNavigationUrl;
+    private string? error;
+    private string? exerciseError;
+    private string? saveError;
+
+    private string ExerciseModalTitle => editingIndex is null ? "Tilføj øvelse" : "Rediger øvelse";
+    private bool HasExerciseToDelete => deleteExerciseIndex is not null;
+    private string ExerciseDeleteDescription => deleteExerciseIndex is { } index && index < workoutDraft.Exercises!.Count
+        ? $"Vil du slette øvelsen {workoutDraft.Exercises[index].Name}?"
+        : "Vil du slette øvelsen?";
+
+    protected override Task OnParametersSetAsync()
+    {
+        if (hasParameters && loadedProgramId == ProgramId && loadedWorkoutId == WorkoutId)
+        {
+            return Task.CompletedTask;
+        }
+
+        hasParameters = true;
+        loadedProgramId = ProgramId;
+        loadedWorkoutId = WorkoutId;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (loading || busy)
+        {
+            return;
+        }
+
+        loading = true;
+        error = null;
+        var result = await Programs.GetAsync(ProgramId);
+        loading = false;
+        program = result.Value;
+        error = result.Error;
+        if (program is not null)
+        {
+            var current = WorkoutId is null ? null : program.Workouts.SingleOrDefault(item => item.Id == WorkoutId);
+            if (WorkoutId is not null && current is null)
+            {
+                error = "Træningen blev ikke fundet.";
+                return;
+            }
+
+            workoutDraft = current is null ? NewWorkout() : Copy(current);
+            isDirty = false;
+            discardConfirmationOpen = false;
+            pendingNavigationUrl = null;
+            saveError = null;
+            CloseExerciseModal();
+            CloseExerciseDelete();
+        }
+    }
+
+    private void OpenNewExercise()
+    {
+        if (busy || workoutDraft.Exercises!.Count >= 50)
+        {
+            return;
+        }
+
+        editingIndex = null;
+        exerciseDraft = NewExercise();
+        exerciseError = null;
+        exerciseModalDirty = false;
+        exerciseDiscardConfirmationOpen = false;
+        exerciseModalOpen = true;
+    }
+
+    private void OpenEditExercise(int index)
+    {
+        if (busy || index < 0 || index >= workoutDraft.Exercises!.Count)
+        {
+            return;
+        }
+
+        editingIndex = index;
+        exerciseDraft = Copy(workoutDraft.Exercises![index]);
+        exerciseError = null;
+        exerciseModalDirty = false;
+        exerciseDiscardConfirmationOpen = false;
+        exerciseModalOpen = true;
+    }
+
+    private void SaveExercise()
+    {
+        if (busy)
+        {
+            return;
+        }
+
+        exerciseError = Validate(exerciseDraft);
+        if (exerciseError is not null)
+        {
+            return;
+        }
+
+        var copy = Copy(exerciseDraft);
+        if (editingIndex is { } index)
+        {
+            workoutDraft.Exercises![index] = copy;
+        }
+        else
+        {
+            workoutDraft.Exercises!.Add(copy);
+        }
+
+        MarkDirty();
+        CloseExerciseModal();
+    }
+
+    private void MarkExerciseDirty()
+    {
+        if (!busy)
+        {
+            exerciseModalDirty = true;
+            exerciseError = null;
+        }
+    }
+
+    private void RequestCloseExerciseModal()
+    {
+        if (exerciseModalDirty)
+        {
+            exerciseDiscardConfirmationOpen = true;
+            return;
+        }
+
+        CloseExerciseModal();
+    }
+
+    private void ContinueEditingExercise()
+    {
+        exerciseDiscardConfirmationOpen = false;
+        pendingExerciseNavigationUrl = null;
+    }
+
+    private void DiscardExerciseChanges()
+    {
+        var navigationUrl = pendingExerciseNavigationUrl;
+        pendingExerciseNavigationUrl = null;
+        exerciseDiscardConfirmationOpen = false;
+        CloseExerciseModal();
+
+        if (navigationUrl is null)
+        {
+            return;
+        }
+
+        if (isDirty)
+        {
+            pendingNavigationUrl = navigationUrl;
+            discardConfirmationOpen = true;
+            return;
+        }
+
+        Navigation.NavigateTo(navigationUrl);
+    }
+
+    private void CloseExerciseModal()
+    {
+        exerciseModalOpen = false;
+        editingIndex = null;
+        exerciseDraft = NewExercise();
+        exerciseError = null;
+        exerciseModalDirty = false;
+        exerciseDiscardConfirmationOpen = false;
+        pendingExerciseNavigationUrl = null;
+    }
+
+    private void OpenExerciseDelete(int index)
+    {
+        if (!busy && index >= 0 && index < workoutDraft.Exercises!.Count)
+        {
+            deleteExerciseIndex = index;
+        }
+    }
+
+    private void CloseExerciseDelete() => deleteExerciseIndex = null;
+
+    private void DeleteExercise()
+    {
+        if (busy)
+        {
+            return;
+        }
+
+        if (deleteExerciseIndex is { } index && index < workoutDraft.Exercises!.Count)
+        {
+            workoutDraft.Exercises.RemoveAt(index);
+            MarkDirty();
+        }
+
+        CloseExerciseDelete();
+    }
+
+    private void Move(int index, int change)
+    {
+        if (busy)
+        {
+            return;
+        }
+
+        var target = index + change;
+        if (target < 0 || target >= workoutDraft.Exercises!.Count)
+        {
+            return;
+        }
+
+        (workoutDraft.Exercises[index], workoutDraft.Exercises[target]) = (workoutDraft.Exercises[target], workoutDraft.Exercises[index]);
+        MarkDirty();
+    }
+
+    private void MarkDirty()
+    {
+        if (busy)
+        {
+            return;
+        }
+
+        isDirty = true;
+        saveError = null;
+    }
+
+    private void TryNavigateBack() => RequestNavigation(BackUrl);
+
+    private Task ConfirmNavigationAsync(LocationChangingContext context)
+    {
+        if (exerciseModalOpen && exerciseModalDirty)
+        {
+            context.PreventNavigation();
+            pendingExerciseNavigationUrl = context.TargetLocation;
+            exerciseDiscardConfirmationOpen = true;
+            return Task.CompletedTask;
+        }
+
+        if (isDirty)
+        {
+            context.PreventNavigation();
+            RequestNavigation(context.TargetLocation);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void RequestNavigation(string url)
+    {
+        if (busy)
+        {
+            return;
+        }
+
+        if (!isDirty)
+        {
+            Navigation.NavigateTo(url);
+            return;
+        }
+
+        pendingNavigationUrl = url;
+        discardConfirmationOpen = true;
+    }
+
+    private void CloseDiscardConfirmation()
+    {
+        discardConfirmationOpen = false;
+        pendingNavigationUrl = null;
+    }
+
+    private void DiscardChanges()
+    {
+        isDirty = false;
+        discardConfirmationOpen = false;
+        var url = pendingNavigationUrl ?? BackUrl;
+        pendingNavigationUrl = null;
+        Navigation.NavigateTo(url);
+    }
+
+    private string BackUrl => $"/styrke/{ProgramId}";
+
+    private async Task SaveAsync()
+    {
+        saveError = string.IsNullOrWhiteSpace(workoutDraft.Name) ? "Skriv et navn på træningen." :
+            workoutDraft.Exercises!.Count == 0 ? "Tilføj mindst én øvelse." : null;
+        if (saveError is not null || program is null || busy)
+        {
+            return;
+        }
+
+        busy = true;
+        var completeDraft = new SaveProgramRequest
+        {
+            Name = program.Name,
+            Version = program.Version,
+            Workouts = program.Workouts.Select(Copy).ToList()
+        };
+        if (WorkoutId is { } workoutId)
+        {
+            var index = completeDraft.Workouts!.FindIndex(item => item.Id == workoutId);
+            if (index < 0)
+            {
+                busy = false;
+                saveError = "Træningen blev ikke fundet. Genindlæs programmet og prøv igen.";
+                return;
+            }
+
+            completeDraft.Workouts[index] = Copy(workoutDraft);
+        }
+        else
+        {
+            completeDraft.Workouts!.Add(Copy(workoutDraft));
+        }
+
+        var result = await Programs.SaveAsync(ProgramId, completeDraft);
+        busy = false;
+        if (result.Value is not null)
+        {
+            isDirty = false;
+            Navigation.NavigateTo($"/styrke/{ProgramId}");
+            return;
+        }
+
+        saveError = result.Error;
+    }
+
+    private static WorkoutRequest NewWorkout() => new() { Exercises = [] };
+    private static ExerciseRequest NewExercise() => new() { Sets = 3, Repetitions = 10 };
+    private static WorkoutRequest Copy(WorkoutResponse source) => new() { Id = source.Id, Name = source.Name, Exercises = source.Exercises.Select(Copy).ToList() };
+    private static WorkoutRequest Copy(WorkoutRequest source) => new() { Id = source.Id, Name = source.Name, Exercises = source.Exercises?.Select(Copy).ToList() };
+    private static ExerciseRequest Copy(ExerciseResponse source) => new() { Id = source.Id, Name = source.Name, Weight = source.Weight, Sets = source.Sets, Repetitions = source.Repetitions, Note = source.Note };
+    private static ExerciseRequest Copy(ExerciseRequest source) => new() { Id = source.Id, Name = source.Name, Weight = source.Weight, Sets = source.Sets, Repetitions = source.Repetitions, Note = source.Note };
+    private static string? Validate(ExerciseRequest exercise) => string.IsNullOrWhiteSpace(exercise.Name) || exercise.Weight is < 0 or > 1000 || exercise.Sets is < 1 or > 10 || exercise.Repetitions is < 1 or > 30 ? "Udfyld navn, vægt, sæt og reps korrekt." : exercise.Note?.Length > 250 ? "Noten må højst være 250 tegn." : null;
+    private static string FormatWeight(decimal weight) => weight.ToString("0.##");
+}
