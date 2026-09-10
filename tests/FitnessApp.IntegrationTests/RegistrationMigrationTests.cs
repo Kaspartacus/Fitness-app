@@ -15,6 +15,7 @@ public sealed class RegistrationMigrationTests
     private const string StrengthProgramsMigration = "20260909170745_AddStrengthPrograms";
     private const string ExerciseDetailsMigration = "20260910180425_AddExerciseDetails";
     private const string StrengthTrainingFlowMigration = "20260910191738_AddStrengthTrainingFlow";
+    private const string CompletedWorkoutCompletionIdMigration = "20260910210000_AddCompletedWorkoutCompletionId";
 
     [Fact]
     public async Task LatestMigrationAppliesToEmptyDatabase()
@@ -27,7 +28,8 @@ public sealed class RegistrationMigrationTests
             await dbContext.Database.MigrateAsync();
 
             Assert.Equal(
-                [InitialMigration, RegistrationMigration, PasswordResetMigration, StrengthProgramsMigration, ExerciseDetailsMigration, StrengthTrainingFlowMigration],
+                [InitialMigration, RegistrationMigration, PasswordResetMigration, StrengthProgramsMigration, ExerciseDetailsMigration,
+                    StrengthTrainingFlowMigration, CompletedWorkoutCompletionIdMigration],
                 await dbContext.Database.GetAppliedMigrationsAsync());
             var columns = await ReadUserColumnsAsync(databasePath);
             Assert.Contains("RegisteredAt", columns);
@@ -45,6 +47,7 @@ public sealed class RegistrationMigrationTests
             Assert.Contains("ProgramId", await ReadColumnsAsync(databasePath, "ProgramWorkouts"));
             Assert.Contains("WorkoutId", await ReadColumnsAsync(databasePath, "ProgramScheduleEntries"));
             Assert.Contains("IsCompleted", await ReadColumnsAsync(databasePath, "CompletedWorkoutExercises"));
+            Assert.Contains("CompletionId", await ReadColumnsAsync(databasePath, "CompletedWorkouts"));
         }
         finally
         {

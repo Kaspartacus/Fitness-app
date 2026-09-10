@@ -41,3 +41,11 @@ Refine the existing strength-training UI without changing its data model: shared
 - The owner requested no application run, browser verification, tests, audit, or shared verification script. The single permitted `dotnet build FitnessApp.slnx --no-restore` passed with no errors; the only output was the environment's known `NU1900` advisory-DNS warning.
 
 Never store credentials, tokens, personal data, reset URLs, or conversation transcripts here.
+
+## Current fix status
+
+- Branch: `fix/strength-data-integrity`; base commit: `750a35ca943c2ba7ec6b6bcd2f6edab40a7479ae` (`origin/main`).
+- Completed and committed: completed-only previous performance; shared-modal internal navigation guard for active workouts; owner-scoped idempotent completion IDs and data-preserving migration; a single aggregate schedule/version read.
+- The migration assertion now includes `20260910210000_AddCompletedWorkoutCompletionId`. The performance regression test uses distinct values to verify that an earlier completed result is retained after a later skip while another newly completed exercise becomes the latest result.
+- No application run, browser verification, or audit was run. The two focused tests passed, then the full suite passed: 86 passed, 0 failed, 0 skipped.
+- Test repair commit `08039cb` is pushed without force. Pull request [#9](https://github.com/Kaspartacus/Fitness-app/pull/9) targets `main`; it has not been merged or deployed.

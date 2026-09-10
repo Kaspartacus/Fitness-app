@@ -8,6 +8,8 @@
 
 <PageTitle>@(workout?.WorkoutName ?? "Start træning")</PageTitle>
 
+<NavigationLock OnBeforeInternalNavigation="ConfirmNavigationAsync" />
+
 <main class="strength-app strength-active-page" aria-labelledby="active-title">
     <header class="strength-back-header">
         <a class="strength-icon-button" href="@($"/styrke/{ProgramId}")" aria-label="Afbryd og gå tilbage" title="Afbryd og gå tilbage">←</a>
@@ -41,6 +43,13 @@
             <button class="strength-primary-button" type="button" @onclick="CompleteAsync" disabled="@busy">@(busy ? "Gemmer…" : "Gem træning")</button>
         </div>
     </ModalDialog>
+    <ModalDialog IsOpen="@discardWorkoutOpen" Title="Forlad uden at gemme?" Description="Dine indtastede værdier bliver ikke gemt."
+                 InitialFocusSelector="[data-modal-cancel]" Destructive="true" OnDismiss="CloseDiscardWorkout">
+        <div class="app-modal-actions">
+            <button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseDiscardWorkout">Bliv i træning</button>
+            <button class="strength-danger-button" type="button" @onclick="DiscardWorkoutAndNavigate">Forlad uden at gemme</button>
+        </div>
+    </ModalDialog>
 </main>
 
 @code {
@@ -51,6 +60,10 @@
     private bool loading;
     private bool busy;
     private bool confirmFinish;
+    private bool discardWorkoutOpen;
+    private bool hasActiveDraft;
+    private Guid completionId;
+    private string? pendingNavigationUrl;
     private string? error;
     private string? saveError;
     private DateTime startedAt;
@@ -73,20 +86,57 @@
         var result = await Programs.GetWorkoutAsync(ProgramId, WorkoutId);
         loading = false; workout = result.Value; error = result.Error;
         logs = workout?.Exercises.Select(exercise => new WorkoutLog(exercise)).ToList() ?? [];
+        if (workout is not null)
+        {
+            completionId = Guid.NewGuid();
+            hasActiveDraft = true;
+        }
     }
 
     private async Task CompleteAsync()
     {
         if (busy) return;
         busy = true;
-        var request = new CompleteWorkoutRequest { Exercises = logs.Select(log => new CompletedExerciseRequest { ProgramExerciseId = log.ProgramExerciseId, Name = log.Name, Weight = log.Weight, Sets = log.Sets, Repetitions = log.Repetitions, IsCompleted = log.IsCompleted }).ToList() };
+        var request = new CompleteWorkoutRequest { CompletionId = completionId, Exercises = logs.Select(log => new CompletedExerciseRequest { ProgramExerciseId = log.ProgramExerciseId, Name = log.Name, Weight = log.Weight, Sets = log.Sets, Repetitions = log.Repetitions, IsCompleted = log.IsCompleted }).ToList() };
         var result = await Programs.CompleteWorkoutAsync(ProgramId, WorkoutId, request);
         busy = false;
-        if (result.Succeeded) { Navigation.NavigateTo("/styrke"); return; }
+        if (result.Succeeded) { hasActiveDraft = false; Navigation.NavigateTo("/styrke"); return; }
         saveError = result.Error; confirmFinish = false;
     }
 
     private void CloseFinish() => confirmFinish = false;
+
+    private Task ConfirmNavigationAsync(LocationChangingContext context)
+    {
+        if (!hasActiveDraft)
+        {
+            return Task.CompletedTask;
+        }
+
+        context.PreventNavigation();
+        if (!busy)
+        {
+            pendingNavigationUrl = context.TargetLocation;
+            discardWorkoutOpen = true;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void CloseDiscardWorkout()
+    {
+        discardWorkoutOpen = false;
+        pendingNavigationUrl = null;
+    }
+
+    private void DiscardWorkoutAndNavigate()
+    {
+        var url = pendingNavigationUrl ?? $"/styrke/{ProgramId}";
+        discardWorkoutOpen = false;
+        pendingNavigationUrl = null;
+        hasActiveDraft = false;
+        Navigation.NavigateTo(url);
+    }
 
     private static void ChangeWeight(WorkoutLog log, decimal change) => log.Weight = Math.Clamp(log.Weight + change, 0, 1000);
     private static void ChangeSets(WorkoutLog log, int change) => log.Sets = Math.Clamp(log.Sets + change, 1, 10);

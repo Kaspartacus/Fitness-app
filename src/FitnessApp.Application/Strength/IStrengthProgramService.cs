@@ -9,12 +9,13 @@ public sealed record ActiveExerciseData(Guid Id, string Name, decimal Weight, in
 public sealed record WorkoutData(Guid Id, string Name, IReadOnlyList<ExerciseData> Exercises);
 public sealed record ProgramData(Guid Id, string Name, Guid Version, IReadOnlyList<WorkoutData> Workouts);
 public sealed record ScheduleEntryData(DayOfWeek DayOfWeek, Guid? WorkoutId);
+public sealed record ScheduleData(Guid Version, IReadOnlyList<ScheduleEntryData> Entries);
 public sealed record PlannedWorkoutData(Guid ProgramId, string ProgramName, Guid WorkoutId, string WorkoutName,
     IReadOnlyList<ActiveExerciseData> Exercises);
 public sealed record StrengthOverviewData(IReadOnlyList<ProgramData> Programs, PlannedWorkoutData? Today);
 public sealed record CompletedExerciseInput(Guid? ProgramExerciseId, string? Name, decimal Weight, int Sets,
     int Repetitions, bool IsCompleted);
-public sealed record CompletionInput(IReadOnlyList<CompletedExerciseInput>? Exercises);
+public sealed record CompletionInput(Guid CompletionId, IReadOnlyList<CompletedExerciseInput>? Exercises);
 public enum ProgramStatus { Saved, NotFound, Invalid, Conflict }
 public sealed record ProgramResult(ProgramStatus Status, ProgramData? Program = null);
 
@@ -25,7 +26,7 @@ public interface IStrengthProgramService
     Task<ProgramData?> GetAsync(string userId, Guid id, CancellationToken cancellationToken);
     Task<ProgramResult> SaveAsync(string userId, Guid? id, ProgramInput input, CancellationToken cancellationToken);
     Task<ProgramStatus> DeleteAsync(string userId, Guid id, Guid version, CancellationToken cancellationToken);
-    Task<IReadOnlyList<ScheduleEntryData>?> GetScheduleAsync(string userId, Guid programId, CancellationToken cancellationToken);
+    Task<ScheduleData?> GetScheduleAsync(string userId, Guid programId, CancellationToken cancellationToken);
     Task<ProgramStatus> SaveScheduleAsync(string userId, Guid programId, Guid version,
         IReadOnlyList<ScheduleEntryData>? entries, CancellationToken cancellationToken);
     Task<PlannedWorkoutData?> GetWorkoutAsync(string userId, Guid programId, Guid workoutId, CancellationToken cancellationToken);
