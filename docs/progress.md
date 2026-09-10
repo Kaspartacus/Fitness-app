@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-09-10
+Last updated: 2026-09-11
 
 ## Running module — source and design record
 
@@ -28,6 +28,7 @@ Last updated: 2026-09-10
   ```
 
 - Runtime, browser, automated-test, dependency-audit, and full-verification-script results are intentionally not inferred from this design/source record or from earlier strength evidence. The permitted short compilation command, `dotnet build FitnessApp.slnx --no-restore --disable-build-servers --verbosity minimal -m:1 -p:BuildInParallel=false`, succeeded with zero errors. It emitted one `NU1900` warning because the sandbox could not resolve NuGet vulnerability metadata at `api.nuget.org`; it did not restore packages. Source inspection and a successful compilation do not establish runtime behavior or exact visual fidelity.
+- Commit `a97309d27079649e9e91effa20f4b1de9b69cb9b` is pushed on `feature/running`; pull request [#10](https://github.com/Kaspartacus/Fitness-app/pull/10) is open against `main`. It has not been merged or deployed.
 
 ## Strength-training Figma flow
 

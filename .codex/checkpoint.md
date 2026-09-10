@@ -1,6 +1,6 @@
 # Running-module checkpoint
 
-Updated: 2026-09-10
+Updated: 2026-09-11
 
 ## Objective
 
@@ -33,7 +33,12 @@ Implement the complete private running vertical slice within the existing Fitnes
 
 ## Next action
 
-- Complete the owner-requested commit/push/PR handoff without applying the generated migration to the local database.
+- The owner can review pull request [#10](https://github.com/Kaspartacus/Fitness-app/pull/10), apply the generated migration deliberately, and run the deferred app/browser/test checks. No merge or deployment is authorized by this record.
+
+## Running delivery status
+
+- Commit `a97309d27079649e9e91effa20f4b1de9b69cb9b` is pushed on `feature/running`.
+- Pull request [#10](https://github.com/Kaspartacus/Fitness-app/pull/10) targets `main`, remains open, and has not been merged or deployed.
 
 ## Historical strength-work record
 
