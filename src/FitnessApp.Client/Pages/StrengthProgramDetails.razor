@@ -6,62 +6,216 @@
 @inject NavigationManager Navigation
 
 <PageTitle>@(program?.Name ?? "Program")</PageTitle>
-<main class="strength-page" aria-labelledby="program-title">
-    <a class="back-link" href="/styrke">Tilbage til programmer</a>
-    <header class="strength-header"><h1 id="program-title">@(program?.Name ?? "Program")</h1></header>
-    @if (loading) { <p role="status">Indlæser program…</p> }
-    @if (error is not null)
-    {
-        <p class="notice notice-error" role="alert">@error</p>
-        @if (!missing) { <button class="button button-secondary" disabled="@busy" @onclick="LoadAsync">@(conflict ? "Genindlæs program" : "Prøv igen")</button> }
-    }
-    @if (program is not null && !loading)
-    {
-        <p class="status-message">@program.Exercises.Count øvelser</p>
-        <ol class="exercise-list">
-            @foreach (var exercise in program.Exercises)
-            {
-                <li class="program-card exercise-detail"><div><h2>@exercise.Name</h2><p>@exercise.Sets sæt × @exercise.Repetitions gentagelser</p><span class="warmup-label">@(exercise.IsWarmUp ? "Opvarmning" : "Uden opvarmning")</span></div></li>
-            }
-        </ol>
-        @if (confirmDelete)
+
+<main class="strength-app strength-detail-page strength-with-bottom-nav" aria-labelledby="program-title">
+    <header class="strength-back-header">
+        <a class="strength-icon-button" href="/styrke" aria-label="Tilbage til styrketræning" title="Tilbage til styrketræning">←</a>
+        <h1 id="program-title">@(program?.Name ?? "Program")</h1>
+        @if (program is not null)
         {
-            <section class="notice notice-warning" aria-labelledby="delete-title">
-                <h2 id="delete-title">Slet @program.Name?</h2><p>Programmet og alle dets øvelser slettes. Det kan ikke fortrydes.</p>
-                <div class="decision-actions"><button class="button button-secondary" disabled="@busy" @onclick="() => confirmDelete = false">Annuller</button><button class="button button-danger" disabled="@busy" @onclick="DeleteAsync">@(busy ? "Sletter…" : "Slet program")</button></div>
-            </section>
+            <a class="strength-small-button" href="@($"/styrke/{Id}/plan")">Planlæg</a>
         }
         else
         {
-            <div class="decision-actions strength-actions"><a class="button button-primary button-link" href="@($"/styrke/{Id}/rediger")">Rediger program</a><button class="button button-danger-outline" @onclick="() => confirmDelete = true">Slet program</button></div>
+            <span class="strength-header-spacer"></span>
         }
+    </header>
+
+    @if (loading)
+    {
+        <p class="strength-feedback" role="status">Indlæser program…</p>
     }
+    else if (error is not null)
+    {
+        <section class="strength-status-card" role="alert">
+            <p>@error</p>
+            @if (!missing)
+            {
+                <button class="strength-secondary-button" @onclick="LoadAsync">Prøv igen</button>
+            }
+        </section>
+    }
+    else if (program is not null)
+    {
+        <div class="strength-workout-list">
+            @foreach (var workout in program.Workouts)
+            {
+                <article class="strength-workout-card">
+                    <div class="strength-workout-copy">
+                        <div class="strength-workout-title-row">
+                            <div>
+                                <h2>@workout.Name</h2>
+                                <p>@workout.Exercises.Count øvelser</p>
+                            </div>
+                            <div class="strength-workout-actions">
+                                <a class="strength-text-action" href="@($"/styrke/{Id}/træninger/{workout.Id}/rediger")">Rediger</a>
+                                <button class="strength-icon-action is-danger" type="button" @onclick="() => OpenWorkoutDelete(workout.Id)" @onclick:stopPropagation="true" aria-label="Slet træningen @workout.Name" title="Slet træning">🗑</button>
+                            </div>
+                        </div>
+                        @foreach (var exercise in workout.Exercises.Take(3))
+                        {
+                            <div class="strength-exercise-preview">
+                                <span>@exercise.Name</span>
+                                <span>@exercise.Sets × @exercise.Repetitions</span>
+                            </div>
+                        }
+                        @if (workout.Exercises.Count > 3)
+                        {
+                            <p class="strength-more-exercises">+ @(workout.Exercises.Count - 3) øvelser til</p>
+                        }
+                    </div>
+                    <a class="strength-primary-button strength-card-button" href="@($"/styrke/{Id}/træninger/{workout.Id}/aktiv")">Start træning</a>
+                </article>
+            }
+        </div>
+
+        <a class="strength-outline-button strength-add-workout" href="@($"/styrke/{Id}/træninger/opret")">＋ Tilføj træning</a>
+        <div class="strength-program-actions">
+            <a class="strength-text-action" href="@($"/styrke/{Id}/rediger")">Rediger programnavn</a>
+            <button class="strength-danger-link" @onclick="OpenProgramDelete">Slet program</button>
+            @if (actionError is not null)
+            {
+                <p class="strength-field-error" role="alert">@actionError</p>
+            }
+        </div>
+    }
+
+    <StrengthBottomNavigation />
+
+    <ModalDialog IsOpen="@programDeleteOpen" Title="Slet program" Description="@ProgramDeleteDescription" InitialFocusSelector="[data-modal-cancel]" Destructive="true" DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CloseProgramDelete">
+        <div class="app-modal-actions">
+            <button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseProgramDelete" disabled="@busy">Annuller</button>
+            <button class="strength-danger-button" type="button" @onclick="DeleteProgramAsync" disabled="@busy">@(busy ? "Sletter…" : "Slet")</button>
+        </div>
+    </ModalDialog>
+
+    <ModalDialog IsOpen="@HasWorkoutToDelete" Title="Slet træning" Description="@WorkoutDeleteDescription" InitialFocusSelector="[data-modal-cancel]" Destructive="true" DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CloseWorkoutDelete">
+        <div class="app-modal-actions">
+            <button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseWorkoutDelete" disabled="@busy">Annuller</button>
+            <button class="strength-danger-button" type="button" @onclick="DeleteWorkoutAsync" disabled="@busy">@(busy ? "Sletter…" : "Slet")</button>
+        </div>
+    </ModalDialog>
 </main>
+
 @code {
     [Parameter] public Guid Id { get; set; }
+
     private ProgramResponse? program;
-    private bool loading, busy, confirmDelete, conflict, missing;
+    private bool loading;
+    private bool busy;
+    private bool missing;
+    private bool programDeleteOpen;
+    private Guid? workoutToDelete;
     private string? error;
+    private string? actionError;
+
+    private bool HasWorkoutToDelete => workoutToDelete is not null;
+    private string ProgramDeleteDescription => program is null ? "Vil du slette programmet?" : $"Vil du slette programmet {program.Name}?";
+    private string WorkoutDeleteDescription => WorkoutToDelete is { } workout
+        ? $"Vil du slette træningen {workout.Name}?"
+        : "Vil du slette træningen?";
+    private WorkoutResponse? WorkoutToDelete => workoutToDelete is { } workoutId
+        ? program?.Workouts.SingleOrDefault(workout => workout.Id == workoutId)
+        : null;
+
     protected override Task OnParametersSetAsync() => LoadAsync();
+
     private async Task LoadAsync()
     {
-        if (loading || busy) return;
+        if (loading || busy)
+        {
+            return;
+        }
+
         loading = true;
         var result = await Programs.GetAsync(Id);
         program = result.Value;
         error = result.Error;
         missing = result.NotFound;
-        conflict = false;
-        confirmDelete = false;
+        programDeleteOpen = false;
+        workoutToDelete = null;
+        actionError = null;
         loading = false;
     }
-    private async Task DeleteAsync()
+
+    private void OpenProgramDelete()
     {
-        if (busy || program is null) return;
+        workoutToDelete = null;
+        programDeleteOpen = true;
+    }
+
+    private void CloseProgramDelete() => programDeleteOpen = false;
+
+    private void OpenWorkoutDelete(Guid workoutId)
+    {
+        programDeleteOpen = false;
+        workoutToDelete = workoutId;
+    }
+
+    private void CloseWorkoutDelete() => workoutToDelete = null;
+
+    private async Task DeleteProgramAsync()
+    {
+        if (busy || program is null)
+        {
+            return;
+        }
+
         busy = true;
         var result = await Programs.DeleteAsync(Id, program.Version);
         busy = false;
-        if (result.Succeeded || result.NotFound) Navigation.NavigateTo("/styrke");
-        else { error = result.Error; conflict = result.Conflict; confirmDelete = false; }
+        if (result.Succeeded || result.NotFound)
+        {
+            Navigation.NavigateTo("/styrke");
+        }
+        else
+        {
+            actionError = result.Error;
+            CloseProgramDelete();
+        }
     }
+
+    private async Task DeleteWorkoutAsync()
+    {
+        if (busy || program is null || WorkoutToDelete is null)
+        {
+            return;
+        }
+
+        busy = true;
+        var draft = new SaveProgramRequest
+        {
+            Name = program.Name,
+            Version = program.Version,
+            Workouts = program.Workouts.Where(workout => workout.Id != workoutToDelete)
+                .Select(Copy).ToList()
+        };
+        var result = await Programs.SaveAsync(Id, draft);
+        busy = false;
+        if (result.Value is { } saved)
+        {
+            program = saved;
+            CloseWorkoutDelete();
+            actionError = null;
+            return;
+        }
+
+        actionError = result.Error;
+        CloseWorkoutDelete();
+    }
+
+    private static WorkoutRequest Copy(WorkoutResponse workout) => new()
+    {
+        Id = workout.Id,
+        Name = workout.Name,
+        Exercises = workout.Exercises.Select(exercise => new ExerciseRequest
+        {
+            Id = exercise.Id,
+            Name = exercise.Name,
+            Weight = exercise.Weight,
+            Sets = exercise.Sets,
+            Repetitions = exercise.Repetitions,
+            Note = exercise.Note
+        }).ToList()
+    };
 }

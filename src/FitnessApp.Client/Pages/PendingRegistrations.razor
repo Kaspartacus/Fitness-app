@@ -59,31 +59,28 @@
                         <p class="request-time">Registreret @FormatLocal(registration.RegisteredAt)</p>
                     </div>
 
-                    @if (rejectionToConfirm == registration.Id)
-                    {
-                        <div class="rejection-confirmation" role="group" aria-label="Bekræft afvisning">
-                            <p>Er du sikker på, at du vil afvise denne registrering?</p>
-                            <div class="decision-actions">
-                                <button class="button button-danger" type="button" @onclick="() => DecideAsync(registration.Id, false)" disabled="@IsDeciding(registration.Id)">
-                                    @(IsDeciding(registration.Id) ? "Afviser…" : "Ja, afvis")
-                                </button>
-                                <button class="button button-quiet" type="button" @onclick="CancelRejection" disabled="@IsDeciding(registration.Id)">Annuller</button>
-                            </div>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="decision-actions">
-                            <button class="button button-primary" type="button" @onclick="() => DecideAsync(registration.Id, true)" disabled="@IsDeciding(registration.Id)">
-                                @(IsDeciding(registration.Id) ? "Behandler…" : "Godkend")
-                            </button>
-                            <button class="button button-danger-outline" type="button" @onclick="() => ConfirmRejection(registration.Id)" disabled="@IsDeciding(registration.Id)">Afvis</button>
-                        </div>
-                    }
+                    <div class="decision-actions">
+                        <button class="button button-primary" type="button" @onclick="() => DecideAsync(registration.Id, true)" disabled="@IsDeciding(registration.Id)">
+                            @(IsDeciding(registration.Id) ? "Behandler…" : "Godkend")
+                        </button>
+                        <button class="button button-danger-outline" type="button" @onclick="() => ConfirmRejection(registration.Id)" disabled="@IsDeciding(registration.Id)">Afvis</button>
+                    </div>
                 </article>
             }
         </section>
     }
+
+    <ModalDialog IsOpen="@(RegistrationToReject is not null)" Title="Afvis registrering" Description="@RejectionDescription" InitialFocusSelector="[data-modal-cancel]" Destructive="true" DismissOnBackdrop="@CanDismissRejection" DismissOnEscape="@CanDismissRejection" ShowCloseButton="@CanDismissRejection" OnDismiss="CancelRejection">
+        @if (RegistrationToReject is { } registration)
+        {
+            <div class="app-modal-actions">
+                <button class="button button-quiet" type="button" data-modal-cancel @onclick="CancelRejection" disabled="@IsDeciding(registration.Id)">Annuller</button>
+                <button class="button button-danger" type="button" @onclick="() => DecideAsync(registration.Id, false)" disabled="@IsDeciding(registration.Id)">
+                    @(IsDeciding(registration.Id) ? "Afviser…" : "Afvis")
+                </button>
+            </div>
+        }
+    </ModalDialog>
 </main>
 
 @code {
@@ -94,6 +91,13 @@
     private string? rejectionToConfirm;
     private string? errorMessage;
     private string? statusMessage;
+
+    private FitnessApp.Contracts.Authentication.PendingRegistrationResponse? RegistrationToReject =>
+        rejectionToConfirm is null ? null : registrations.SingleOrDefault(item => item.Id == rejectionToConfirm);
+    private string? RejectionDescription => RegistrationToReject is { } registration
+        ? $"Vil du afvise registreringen fra {registration.DisplayName}?"
+        : null;
+    private bool CanDismissRejection => RegistrationToReject is not { } registration || !IsDeciding(registration.Id);
 
     protected override Task OnInitializedAsync() => LoadAsync();
 

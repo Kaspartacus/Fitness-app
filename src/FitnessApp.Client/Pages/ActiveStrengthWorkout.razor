@@ -1,0 +1,115 @@
+@page "/styrke/{ProgramId:guid}/træninger/{WorkoutId:guid}/aktiv"
+@attribute [Authorize]
+@implements IDisposable
+@using FitnessApp.Contracts.Strength
+@using FitnessApp.Client.Strength
+@inject StrengthProgramClient Programs
+@inject NavigationManager Navigation
+
+<PageTitle>@(workout?.WorkoutName ?? "Start træning")</PageTitle>
+
+<main class="strength-app strength-active-page" aria-labelledby="active-title">
+    <header class="strength-back-header">
+        <a class="strength-icon-button" href="@($"/styrke/{ProgramId}")" aria-label="Afbryd og gå tilbage" title="Afbryd og gå tilbage">←</a>
+        <div><h1 id="active-title">@(workout?.WorkoutName ?? "Træning")</h1><p class="strength-timer">@Elapsed</p></div>
+        <span class="strength-header-spacer"></span>
+    </header>
+    @if (loading) { <p class="strength-feedback" role="status">Klargør træning…</p> }
+    else if (error is not null) { <section class="strength-status-card" role="alert"><p>@error</p><button class="strength-secondary-button" @onclick="LoadAsync">Prøv igen</button></section> }
+    else if (workout is not null)
+    {
+        <section class="strength-active-progress" aria-label="Træningsfremskridt"><div><strong>@completedCount af @logs.Count øvelser færdige</strong><span>@Progress%</span></div><div class="strength-progress-track"><span style="width: @Progress%"></span></div></section>
+        <div class="strength-active-exercises">
+            @foreach (var log in logs)
+            {
+                <article class="strength-active-card" @key="log.ProgramExerciseId">
+                    <label class="strength-completion-row"><input type="checkbox" @bind="log.IsCompleted" /><span><strong>@log.Name</strong><small>@PerformanceLabel(log)</small></span></label>
+                    <div class="strength-stepper-grid">
+                        <div class="strength-stepper"><span>Vægt kg</span><div><button type="button" @onclick="() => ChangeWeight(log, -2.5m)">−</button><strong>@FormatWeight(log.Weight)</strong><button type="button" @onclick="() => ChangeWeight(log, 2.5m)">+</button></div></div>
+                        <div class="strength-stepper"><span>Sæt</span><div><button type="button" @onclick="() => ChangeSets(log, -1)">−</button><strong>@log.Sets</strong><button type="button" @onclick="() => ChangeSets(log, 1)">+</button></div></div>
+                        <div class="strength-stepper"><span>Gentagelser</span><div><button type="button" @onclick="() => ChangeReps(log, -1)">−</button><strong>@log.Repetitions</strong><button type="button" @onclick="() => ChangeReps(log, 1)">+</button></div></div>
+                    </div>
+                </article>
+            }
+        </div>
+        @if (saveError is not null) { <p class="strength-field-error" role="alert">@saveError</p> }
+        <button class="strength-primary-button strength-finish-button" @onclick="() => confirmFinish = true" disabled="@busy">Gem og afslut træning</button>
+    }
+    <ModalDialog IsOpen="@confirmFinish" Title="Afslut træning?" Description="Din gennemførte træning gemmes, så den kan bruges som seneste præstation næste gang." InitialFocusSelector="[data-modal-cancel]" DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CloseFinish">
+        <div class="app-modal-actions">
+            <button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseFinish" disabled="@busy">Bliv i træning</button>
+            <button class="strength-primary-button" type="button" @onclick="CompleteAsync" disabled="@busy">@(busy ? "Gemmer…" : "Gem træning")</button>
+        </div>
+    </ModalDialog>
+</main>
+
+@code {
+    [Parameter] public Guid ProgramId { get; set; }
+    [Parameter] public Guid WorkoutId { get; set; }
+    private PlannedWorkoutResponse? workout;
+    private List<WorkoutLog> logs = [];
+    private bool loading;
+    private bool busy;
+    private bool confirmFinish;
+    private string? error;
+    private string? saveError;
+    private DateTime startedAt;
+    private Timer? timer;
+
+    private int completedCount => logs.Count(log => log.IsCompleted);
+    private int Progress => logs.Count == 0 ? 0 : completedCount * 100 / logs.Count;
+    private string Elapsed => startedAt == default ? "00:00" : (DateTime.UtcNow - startedAt).ToString(@"hh\:mm\:ss");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+        timer?.Dispose();
+        if (workout is not null) { startedAt = DateTime.UtcNow; timer = new Timer(_ => InvokeAsync(StateHasChanged), null, TimeSpan.Zero, TimeSpan.FromSeconds(1)); }
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true; error = null; saveError = null;
+        var result = await Programs.GetWorkoutAsync(ProgramId, WorkoutId);
+        loading = false; workout = result.Value; error = result.Error;
+        logs = workout?.Exercises.Select(exercise => new WorkoutLog(exercise)).ToList() ?? [];
+    }
+
+    private async Task CompleteAsync()
+    {
+        if (busy) return;
+        busy = true;
+        var request = new CompleteWorkoutRequest { Exercises = logs.Select(log => new CompletedExerciseRequest { ProgramExerciseId = log.ProgramExerciseId, Name = log.Name, Weight = log.Weight, Sets = log.Sets, Repetitions = log.Repetitions, IsCompleted = log.IsCompleted }).ToList() };
+        var result = await Programs.CompleteWorkoutAsync(ProgramId, WorkoutId, request);
+        busy = false;
+        if (result.Succeeded) { Navigation.NavigateTo("/styrke"); return; }
+        saveError = result.Error; confirmFinish = false;
+    }
+
+    private void CloseFinish() => confirmFinish = false;
+
+    private static void ChangeWeight(WorkoutLog log, decimal change) => log.Weight = Math.Clamp(log.Weight + change, 0, 1000);
+    private static void ChangeSets(WorkoutLog log, int change) => log.Sets = Math.Clamp(log.Sets + change, 1, 10);
+    private static void ChangeReps(WorkoutLog log, int change) => log.Repetitions = Math.Clamp(log.Repetitions + change, 1, 30);
+    private static string FormatWeight(decimal weight) => weight.ToString("0.##");
+    private static string PerformanceLabel(WorkoutLog log) => log.PreviousWeight is { } weight
+        ? $"Sidst: {FormatWeight(weight)} kg · {log.PreviousSets} × {log.PreviousRepetitions}"
+        : $"Plan: {FormatWeight(log.PlannedWeight)} kg · {log.PlannedSets} × {log.PlannedRepetitions}";
+    public void Dispose() => timer?.Dispose();
+
+    private sealed class WorkoutLog(ActiveExerciseResponse exercise)
+    {
+        public Guid ProgramExerciseId { get; } = exercise.Id;
+        public string Name { get; } = exercise.Name;
+        public decimal PlannedWeight { get; } = exercise.Weight;
+        public int PlannedSets { get; } = exercise.Sets;
+        public int PlannedRepetitions { get; } = exercise.Repetitions;
+        public decimal? PreviousWeight { get; } = exercise.PreviousWeight;
+        public int? PreviousSets { get; } = exercise.PreviousSets;
+        public int? PreviousRepetitions { get; } = exercise.PreviousRepetitions;
+        public decimal Weight { get; set; } = exercise.Weight;
+        public int Sets { get; set; } = exercise.Sets;
+        public int Repetitions { get; set; } = exercise.Repetitions;
+        public bool IsCompleted { get; set; }
+    }
+}

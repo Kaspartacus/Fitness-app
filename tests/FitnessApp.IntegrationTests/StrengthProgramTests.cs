@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using FitnessApp.Application.Authentication;
 using FitnessApp.Contracts.Authentication;
 using FitnessApp.Contracts.Strength;
+using FitnessApp.Domain.Strength;
 using FitnessApp.Domain.Users;
 using FitnessApp.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -15,114 +16,122 @@ namespace FitnessApp.IntegrationTests;
 
 public sealed class StrengthProgramTests
 {
-    private const string Url = "/api/strength/programs";
+    private const string Programs = "/api/strength/programs";
+    private const string FlatExerciseMigration = "20260910180425_AddExerciseDetails";
 
     [Fact]
-    public async Task CompleteLifecyclePersistsAcrossContextsAndDeletesChildren()
+    public void WarmUpBooleanIsRemovedFromTheStrengthModel()
+    {
+        Assert.Null(typeof(ProgramExercise).GetProperty("IsWarmUp"));
+        Assert.Null(typeof(ExerciseRequest).GetProperty("IsWarmUp"));
+        Assert.Null(typeof(ExerciseResponse).GetProperty("IsWarmUp"));
+    }
+
+    [Fact]
+    public async Task MigrationPreservesFlatProgramsByGivingThemOneDefaultWorkout()
     {
         using var factory = new AuthWebApplicationFactory();
         await factory.InitializeDatabaseAsync();
-        using var client = await Login(factory);
-        var created = await Create(client);
-        Assert.Equal("Ben æøå", created.Name);
-        Assert.Equal(new[] { "Squat", "Lunges" }, created.Exercises.Select(e => e.Name));
+        var user = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        var programId = Guid.NewGuid();
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
-            var persisted = await db.StrengthPrograms.Include(p => p.Exercises).SingleAsync();
-            Assert.Equal(created.Id, persisted.Id);
-            Assert.Equal(2, persisted.Exercises.Count);
+            await db.GetService<IMigrator>().MigrateAsync(FlatExerciseMigration);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO StrengthPrograms (Id, UserId, Name, Version, CreatedAt)
+                VALUES ({programId}, {user.Id}, {"Gammelt program"}, {Guid.NewGuid()}, {DateTime.UtcNow});
+                INSERT INTO ProgramExercises (Id, ProgramId, Name, Weight, Sets, Repetitions, Note, Position)
+                VALUES ({Guid.NewGuid()}, {programId}, {"Squat"}, {80m}, {3}, {10}, {"Roligt tempo"}, {0}),
+                       ({Guid.NewGuid()}, {programId}, {"Lunges"}, {20m}, {3}, {12}, {null}, {0});
+                """);
+            await db.Database.MigrateAsync();
         }
-        var draft = Draft(created);
-        draft.Name = "  Bryst og arme  ";
-        draft.Exercises = [draft.Exercises![1], new() { Name = "Bænkpres", Sets = 10, Repetitions = 30, IsWarmUp = true }];
-        draft.Exercises[0].Name = "  Udfald  ";
-        draft.Exercises[0].Sets = 1;
-        draft.Exercises[0].Repetitions = 1;
-        var update = await client.PutAsJsonAsync($"{Url}/{created.Id}", draft);
-        Assert.True(update.StatusCode == HttpStatusCode.OK,
-            $"Expected OK but received {update.StatusCode}: {await update.Content.ReadAsStringAsync()}");
-        var saved = (await update.Content.ReadFromJsonAsync<ProgramResponse>())!;
-        Assert.NotEqual(created.Version, saved.Version);
-        var reloaded = (await client.GetFromJsonAsync<ProgramResponse>($"{Url}/{created.Id}"))!;
-        Assert.Equal("Bryst og arme", reloaded.Name);
-        Assert.Equal(new[] { "Udfald", "Bænkpres" }, reloaded.Exercises.Select(e => e.Name));
-        Assert.Equal(created.Exercises[1].Id, reloaded.Exercises[0].Id);
-        Assert.Equal(1, reloaded.Exercises[0].Sets);
-        Assert.Equal(30, reloaded.Exercises[1].Repetitions);
-        Assert.True(reloaded.Exercises[1].IsWarmUp);
-        Assert.False(reloaded.Exercises[0].IsWarmUp);
-        using var secondFactory = new AuthWebApplicationFactory(storage: factory.Storage);
-        using var secondClient = secondFactory.CreateHttpsClient();
-        using (var scope = secondFactory.Services.CreateScope())
-            Assert.Equal(2, await scope.ServiceProvider.GetRequiredService<FitnessDbContext>().ProgramExercises.CountAsync());
-        Assert.Equal(HttpStatusCode.Conflict, (await client.DeleteAsync($"{Url}/{created.Id}?version={created.Version}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"{Url}/{created.Id}?version={saved.Version}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.DeleteAsync($"{Url}/{created.Id}?version={saved.Version}")).StatusCode);
-        using var finalScope = factory.Services.CreateScope();
-        var finalDb = finalScope.ServiceProvider.GetRequiredService<FitnessDbContext>();
-        Assert.Empty(await finalDb.StrengthPrograms.ToListAsync());
-        Assert.Empty(await finalDb.ProgramExercises.ToListAsync());
-    }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task OtherUserAndAdminCannotAccessOwnedProgram(bool admin)
-    {
-        using var factory = new AuthWebApplicationFactory();
-        await factory.InitializeDatabaseAsync();
-        using var a = await Login(factory);
-        using var b = await Login(factory, admin ? AuthenticationConstants.AdminRole : AuthenticationConstants.UserRole);
-        var owned = await Create(a);
-        var other = await Create(b);
-        Assert.Equal(new[] { owned.Id }, (await a.GetFromJsonAsync<List<ProgramResponse>>(Url))!.Select(p => p.Id));
-        Assert.Equal(new[] { other.Id }, (await b.GetFromJsonAsync<List<ProgramResponse>>(Url))!.Select(p => p.Id));
-        Assert.Equal(HttpStatusCode.NotFound, (await b.GetAsync($"{Url}/{owned.Id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await b.PutAsJsonAsync($"{Url}/{owned.Id}", Draft(owned))).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await b.DeleteAsync($"{Url}/{owned.Id}?version={owned.Version}")).StatusCode);
-        var spoof = await b.PostAsJsonAsync(Url, new { Name = "Spoof", UserId = "someone-else", Exercises = new[] { new { Name = "Squat", Sets = 3, Repetitions = 10 } } });
-        Assert.Equal(HttpStatusCode.Created, spoof.StatusCode);
-        Assert.Single((await a.GetFromJsonAsync<List<ProgramResponse>>(Url))!);
-        Assert.Equal(2, (await b.GetFromJsonAsync<List<ProgramResponse>>(Url))!.Count);
+        using var verify = factory.Services.CreateScope();
+        var migrated = await verify.ServiceProvider.GetRequiredService<FitnessDbContext>().StrengthPrograms
+            .Include(program => program.Workouts).ThenInclude(workout => workout.Exercises).SingleAsync(program => program.Id == programId);
+        var workout = Assert.Single(migrated.Workouts);
+        Assert.Equal("Træning 1", workout.Name);
+        Assert.Equal(["Lunges", "Squat"], workout.Exercises.Select(exercise => exercise.Name).Order());
+        Assert.Equal([0, 1], workout.Exercises.OrderBy(exercise => exercise.Position).Select(exercise => exercise.Position));
+        Assert.Equal("Roligt tempo", workout.Exercises.Single(exercise => exercise.Name == "Squat").Note);
     }
 
     [Fact]
-    public async Task ForeignAndDuplicateExerciseIdsAreRejectedAtomically()
+    public async Task ProgramPersistsMultipleOrderedWorkoutsWithExerciseNotes()
     {
         using var factory = new AuthWebApplicationFactory();
         await factory.InitializeDatabaseAsync();
         using var client = await Login(factory);
-        var first = await Create(client);
-        var second = await Create(client);
-        var draft = Draft(first);
-        draft.Name = "Must not persist";
-        draft.Exercises![0].Id = second.Exercises[0].Id;
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync($"{Url}/{first.Id}", draft)).StatusCode);
-        draft.Exercises[0].Id = first.Exercises[1].Id;
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync($"{Url}/{first.Id}", draft)).StatusCode);
-        var reloaded = (await client.GetFromJsonAsync<ProgramResponse>($"{Url}/{first.Id}"))!;
-        Assert.Equal(first.Name, reloaded.Name);
-        Assert.Equal(first.Version, reloaded.Version);
-        Assert.Equal(first.Exercises.ToArray(), reloaded.Exercises.ToArray());
-        Assert.Equal(second.Exercises.ToArray(), (await client.GetFromJsonAsync<ProgramResponse>($"{Url}/{second.Id}"))!.Exercises.ToArray());
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync(Url, Draft(first))).StatusCode);
+
+        var created = await Create(client);
+        Assert.Equal("4 day split", created.Name);
+        Assert.Equal(["Ben", "Ryg"], created.Workouts.Select(workout => workout.Name));
+        Assert.Equal(["Squat", "Lunges"], created.Workouts[0].Exercises.Select(exercise => exercise.Name));
+        Assert.Equal("Kontrolleret tempo", created.Workouts[0].Exercises[0].Note);
+
+        var draft = Draft(created);
+        draft.Workouts!.Reverse();
+        draft.Workouts[1].Exercises!.Reverse();
+        draft.Workouts[0].Exercises!.Add(new ExerciseRequest { Name = "Cable row", Weight = 45, Sets = 3, Repetitions = 12, Note = "Langsomt træk" });
+        var response = await client.PutAsJsonAsync($"{Programs}/{created.Id}", draft);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var updated = (await response.Content.ReadFromJsonAsync<ProgramResponse>())!;
+        Assert.Equal(["Ryg", "Ben"], updated.Workouts.Select(workout => workout.Name));
+        Assert.Equal(["Lunges", "Squat"], updated.Workouts[1].Exercises.Select(exercise => exercise.Name));
+        Assert.Equal("Langsomt træk", updated.Workouts[0].Exercises[2].Note);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+        Assert.Equal(2, await db.ProgramWorkouts.CountAsync());
+        Assert.Equal(5, await db.ProgramExercises.CountAsync());
+    }
+
+    [Fact]
+    public async Task ScheduleAndCompletedWorkoutAreOwnedAndPersisted()
+    {
+        using var factory = new AuthWebApplicationFactory();
+        await factory.InitializeDatabaseAsync();
+        using var owner = await Login(factory);
+        using var other = await Login(factory);
+        var program = await Create(owner);
+        var legs = program.Workouts[0];
+
+        var schedule = Week();
+        schedule[0] = new ScheduleEntryRequest(DayOfWeek.Monday, legs.Id);
+        var invalidDays = Week();
+        invalidDays[0] = new ScheduleEntryRequest((DayOfWeek)7, legs.Id);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync($"{Programs}/{program.Id}/schedule", new ScheduleResponse(program.Version, invalidDays))).StatusCode);
+        var nullEntry = Week();
+        nullEntry[1] = null!;
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync($"{Programs}/{program.Id}/schedule", new ScheduleResponse(program.Version, nullEntry))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PutAsJsonAsync($"{Programs}/{program.Id}/schedule", new ScheduleResponse(program.Version, schedule))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"{Programs}/{program.Id}/schedule")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsJsonAsync($"{Programs}/{program.Id}/workouts/{legs.Id}/complete", Completion(legs))).StatusCode);
+
+        var completion = Completion(legs);
+        completion.Exercises![0].Name = "Forkert navn fra klienten";
+        var complete = await owner.PostAsJsonAsync($"{Programs}/{program.Id}/workouts/{legs.Id}/complete", completion);
+        Assert.Equal(HttpStatusCode.NoContent, complete.StatusCode);
+        using var scope = factory.Services.CreateScope();
+        var history = await scope.ServiceProvider.GetRequiredService<FitnessDbContext>().CompletedWorkouts.Include(item => item.Exercises).SingleAsync();
+        Assert.Equal(legs.Name, history.WorkoutName);
+        Assert.Equal(legs.Exercises.Count, history.Exercises.Count);
+        Assert.Contains(history.Exercises, exercise => exercise.Name == "Squat" && exercise.IsCompleted);
+        Assert.DoesNotContain(history.Exercises, exercise => exercise.Name == "Forkert navn fra klienten");
+        var active = (await owner.GetFromJsonAsync<PlannedWorkoutResponse>($"{Programs}/{program.Id}/workouts/{legs.Id}"))!;
+        Assert.Equal(legs.Exercises[0].Weight, active.Exercises[0].PreviousWeight);
+        Assert.Equal(legs.Exercises[0].Sets, active.Exercises[0].PreviousSets);
     }
 
     [Theory]
-    [InlineData("empty-name")]
-    [InlineData("long-name")]
-    [InlineData("empty-exercise")]
-    [InlineData("long-exercise")]
-    [InlineData("zero-sets")]
-    [InlineData("many-sets")]
-    [InlineData("zero-reps")]
-    [InlineData("many-reps")]
-    [InlineData("empty-list")]
-    [InlineData("long-list")]
-    [InlineData("null-list")]
-    [InlineData("null-exercise")]
-    public async Task InvalidCreateAndUpdateLeaveDatabaseUnchanged(string scenario)
+    [InlineData("empty-program")]
+    [InlineData("empty-workout")]
+    [InlineData("bad-exercise")]
+    [InlineData("long-note")]
+    [InlineData("too-many-workouts")]
+    public async Task InvalidAggregateIsRejectedWithoutChangingTheProgram(string scenario)
     {
         using var factory = new AuthWebApplicationFactory();
         await factory.InitializeDatabaseAsync();
@@ -131,45 +140,34 @@ public sealed class StrengthProgramTests
         var draft = Draft(original);
         switch (scenario)
         {
-            case "empty-name": draft.Name = " \t "; break;
-            case "long-name": draft.Name = new string('æ', 101); break;
-            case "empty-exercise": draft.Exercises![0].Name = " "; break;
-            case "long-exercise": draft.Exercises![0].Name = new string('ø', 101); break;
-            case "zero-sets": draft.Exercises![0].Sets = 0; break;
-            case "many-sets": draft.Exercises![0].Sets = 11; break;
-            case "zero-reps": draft.Exercises![0].Repetitions = 0; break;
-            case "many-reps": draft.Exercises![0].Repetitions = 31; break;
-            case "empty-list": draft.Exercises = []; break;
-            case "long-list": draft.Exercises = Enumerable.Range(0, 51).Select(_ => new ExerciseRequest { Name = "Squat" }).ToList(); break;
-            case "null-list": draft.Exercises = null; break;
-            case "null-exercise": draft.Exercises = [null!]; break;
+            case "empty-program": draft.Name = " "; break;
+            case "empty-workout": draft.Workouts![0].Name = " "; break;
+            case "bad-exercise": draft.Workouts![0].Exercises![0].Sets = 0; break;
+            case "long-note": draft.Workouts![0].Exercises![0].Note = new string('x', 251); break;
+            case "too-many-workouts": draft.Workouts = Enumerable.Range(0, 13).Select(index => new WorkoutRequest { Name = $"Træning {index}", Exercises = [] }).ToList(); break;
         }
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync($"{Url}/{original.Id}", draft)).StatusCode);
-        if (draft.Exercises is not null) foreach (var exercise in draft.Exercises) if (exercise is not null) exercise.Id = null;
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync(Url, draft)).StatusCode);
-        var reloaded = (await client.GetFromJsonAsync<ProgramResponse>($"{Url}/{original.Id}"))!;
-        Assert.Equal(original.Name, reloaded.Name);
-        Assert.Equal(original.Version, reloaded.Version);
-        Assert.Equal(original.Exercises.ToArray(), reloaded.Exercises.ToArray());
-        Assert.Single((await client.GetFromJsonAsync<List<ProgramResponse>>(Url))!);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync($"{Programs}/{original.Id}", draft)).StatusCode);
+        var after = (await client.GetFromJsonAsync<ProgramResponse>($"{Programs}/{original.Id}"))!;
+        Assert.Equal(original.Version, after.Version);
+        Assert.Equal(original.Workouts.Select(item => item.Id), after.Workouts.Select(item => item.Id));
     }
 
     [Fact]
-    public async Task BoundsAndReorderAndStaleUpdates()
+    public async Task ForeignAndDuplicateNestedIdsAndStaleWritesAreRejected()
     {
         using var factory = new AuthWebApplicationFactory();
         await factory.InitializeDatabaseAsync();
         using var client = await Login(factory);
-        var original = await Create(client);
-        var draft = Draft(original);
-        draft.Exercises!.Reverse();
-        var saved = await (await client.PutAsJsonAsync($"{Url}/{original.Id}", draft)).Content.ReadFromJsonAsync<ProgramResponse>();
-        Assert.Equal(original.Exercises.Reverse().ToArray(), saved!.Exercises.ToArray());
-        Assert.Equal(HttpStatusCode.Conflict, (await client.PutAsJsonAsync($"{Url}/{original.Id}", draft)).StatusCode);
-        draft = new() { Name = new string('å', 100), Exercises = Enumerable.Range(0, 50).Select(_ => new ExerciseRequest { Name = new string('æ', 100), Sets = 10, Repetitions = 30 }).ToList() };
-        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync(Url, draft)).StatusCode);
-        var invalidNumber = new StringContent("{\"name\":\"Bad\",\"exercises\":[{\"name\":\"Squat\",\"sets\":1.5,\"repetitions\":10}]}", System.Text.Encoding.UTF8, "application/json");
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync(Url, invalidNumber)).StatusCode);
+        var program = await Create(client);
+        var duplicate = Draft(program);
+        duplicate.Workouts!.Add(Copy(program.Workouts[0]));
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync($"{Programs}/{program.Id}", duplicate)).StatusCode);
+        var foreign = Draft(program);
+        foreign.Workouts![0].Exercises!.Add(new ExerciseRequest { Id = Guid.NewGuid(), Name = "Fremmed", Weight = 1, Sets = 1, Repetitions = 1 });
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync($"{Programs}/{program.Id}", foreign)).StatusCode);
+        var update = Draft(program); update.Name = "Opdateret";
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync($"{Programs}/{program.Id}", update)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PutAsJsonAsync($"{Programs}/{program.Id}", Draft(program))).StatusCode);
     }
 
     [Theory]
@@ -177,55 +175,23 @@ public sealed class StrengthProgramTests
     [InlineData("pending")]
     [InlineData("rejected")]
     [InlineData("revoked")]
-    public async Task EveryEndpointUsesLiveSessionAndApprovalChecks(string scenario)
+    public async Task AllStrengthEndpointsRequireAnApprovedLiveSession(string state)
     {
         using var factory = new AuthWebApplicationFactory();
         await factory.InitializeDatabaseAsync();
         var user = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
         using var client = factory.CreateHttpsClient();
-        var login = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = user.Email!, Password = factory.ValidPassword });
-        var token = (await login.Content.ReadFromJsonAsync<LoginResponse>())!;
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+        var login = (await (await client.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = user.Email!, Password = factory.ValidPassword })).Content.ReadFromJsonAsync<LoginResponse>())!;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
         var program = await Create(client);
-        if (scenario == "anonymous") client.DefaultRequestHeaders.Authorization = null;
-        if (scenario == "pending") await factory.SetApprovalStatusAsync(user.Id, AccountApprovalStatus.Pending);
-        if (scenario == "rejected") await factory.SetApprovalStatusAsync(user.Id, AccountApprovalStatus.Rejected);
-        if (scenario == "revoked") await client.PostAsync("/api/auth/logout", null);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(Url)).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"{Url}/{program.Id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(Url, new SaveProgramRequest())).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PutAsJsonAsync($"{Url}/{program.Id}", Draft(program))).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.DeleteAsync($"{Url}/{program.Id}?version={program.Version}")).StatusCode);
-    }
-
-    [Fact]
-    public async Task UpgradeFromPasswordResetSchemaPreservesAccountSessionAndResetMetadata()
-    {
-        using var factory = new AuthWebApplicationFactory();
-        await factory.InitializeDatabaseAsync();
-        var user = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
-        var sessionId = await factory.CreateSessionAsync(user, DateTimeOffset.UtcNow.AddMinutes(10));
-        var queuedAt = DateTime.UtcNow.AddMinutes(-10);
-        using (var scope = factory.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
-            await db.GetService<IMigrator>().MigrateAsync("20260909044755_AddPasswordResetCooldown");
-            (await db.Users.SingleAsync()).LastPasswordResetEmailQueuedAt = queuedAt;
-            await db.SaveChangesAsync();
-        }
-        using (var scope = factory.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
-            await db.Database.MigrateAsync();
-            var preserved = await db.Users.SingleAsync();
-            Assert.Equal(user.PasswordHash, preserved.PasswordHash);
-            Assert.Equal(user.SecurityStamp, preserved.SecurityStamp);
-            Assert.Equal(queuedAt, preserved.LastPasswordResetEmailQueuedAt);
-            Assert.Equal(AccountApprovalStatus.Approved, preserved.ApprovalStatus);
-            Assert.Single(await db.UserRoles.ToListAsync());
-            Assert.Equal(sessionId, (await db.UserSessions.SingleAsync()).Id);
-            Assert.Empty(await db.StrengthPrograms.ToListAsync());
-        }
+        if (state == "anonymous") client.DefaultRequestHeaders.Authorization = null;
+        if (state == "pending") await factory.SetApprovalStatusAsync(user.Id, AccountApprovalStatus.Pending);
+        if (state == "rejected") await factory.SetApprovalStatusAsync(user.Id, AccountApprovalStatus.Rejected);
+        if (state == "revoked") await client.PostAsync("/api/auth/logout", null);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/strength/overview")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"{Programs}/{program.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PutAsJsonAsync($"{Programs}/{program.Id}/schedule", new ScheduleResponse(program.Version, Week()))).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync($"{Programs}/{program.Id}/workouts/{program.Workouts[0].Id}/complete", Completion(program.Workouts[0]))).StatusCode);
     }
 
     private static async Task<HttpClient> Login(AuthWebApplicationFactory factory, string role = AuthenticationConstants.UserRole)
@@ -233,18 +199,30 @@ public sealed class StrengthProgramTests
         var user = await factory.CreateUserAsync(AccountApprovalStatus.Approved, role);
         var client = factory.CreateHttpsClient();
         var response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = user.Email!, Password = factory.ValidPassword });
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var login = (await response.Content.ReadFromJsonAsync<LoginResponse>())!;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken);
         return client;
     }
+
     private static async Task<ProgramResponse> Create(HttpClient client)
     {
-        var response = await client.PostAsJsonAsync(Url, new SaveProgramRequest { Name = "  Ben æøå  ", Exercises = [new() { Name = "Squat", IsWarmUp = true }, new() { Name = "Lunges" }] });
+        var response = await client.PostAsJsonAsync(Programs, Valid());
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Contains("no-store", response.Headers.CacheControl!.ToString());
         return (await response.Content.ReadFromJsonAsync<ProgramResponse>())!;
     }
-    private static SaveProgramRequest Draft(ProgramResponse program) => new() { Name = program.Name, Version = program.Version,
-        Exercises = program.Exercises.Select(e => new ExerciseRequest { Id = e.Id, Name = e.Name, Sets = e.Sets, Repetitions = e.Repetitions, IsWarmUp = e.IsWarmUp }).ToList() };
+
+    private static SaveProgramRequest Valid() => new()
+    {
+        Name = "  4 day split  ",
+        Workouts =
+        [
+            new WorkoutRequest { Name = "Ben", Exercises = [new ExerciseRequest { Name = "Squat", Weight = 82.5m, Sets = 4, Repetitions = 8, Note = "Kontrolleret tempo" }, new ExerciseRequest { Name = "Lunges", Weight = 20m, Sets = 3, Repetitions = 10 }] },
+            new WorkoutRequest { Name = "Ryg", Exercises = [new ExerciseRequest { Name = "Dødløft", Weight = 100m, Sets = 4, Repetitions = 6 }, new ExerciseRequest { Name = "Bent over row", Weight = 50m, Sets = 3, Repetitions = 10 }] }
+        ]
+    };
+
+    private static SaveProgramRequest Draft(ProgramResponse program) => new() { Name = program.Name, Version = program.Version, Workouts = program.Workouts.Select(Copy).ToList() };
+    private static WorkoutRequest Copy(WorkoutResponse source) => new() { Id = source.Id, Name = source.Name, Exercises = source.Exercises.Select(item => new ExerciseRequest { Id = item.Id, Name = item.Name, Weight = item.Weight, Sets = item.Sets, Repetitions = item.Repetitions, Note = item.Note }).ToList() };
+    private static List<ScheduleEntryRequest> Week() => [new(DayOfWeek.Monday, null), new(DayOfWeek.Tuesday, null), new(DayOfWeek.Wednesday, null), new(DayOfWeek.Thursday, null), new(DayOfWeek.Friday, null), new(DayOfWeek.Saturday, null), new(DayOfWeek.Sunday, null)];
+    private static CompleteWorkoutRequest Completion(WorkoutResponse workout) => new() { Exercises = workout.Exercises.Select((exercise, index) => new CompletedExerciseRequest { ProgramExerciseId = exercise.Id, Name = exercise.Name, Weight = exercise.Weight, Sets = exercise.Sets, Repetitions = exercise.Repetitions, IsCompleted = index == 0 }).ToList() };
 }

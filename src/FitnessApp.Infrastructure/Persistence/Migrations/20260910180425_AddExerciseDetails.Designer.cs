@@ -3,6 +3,7 @@ using System;
 using FitnessApp.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,84 +11,14 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FitnessApp.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FitnessDbContext))]
-    partial class FitnessDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260910180425_AddExerciseDetails")]
+    partial class AddExerciseDetails
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.3");
-
-            modelBuilder.Entity("FitnessApp.Domain.Strength.CompletedWorkout", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CompletedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("ProgramId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("WorkoutId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("WorkoutName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "CompletedAt");
-
-                    b.ToTable("CompletedWorkouts");
-                });
-
-            modelBuilder.Entity("FitnessApp.Domain.Strength.CompletedWorkoutExercise", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("CompletedWorkoutId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsCompleted")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Position")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<Guid?>("ProgramExerciseId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Repetitions")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Sets")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("Weight")
-                        .HasPrecision(7, 2)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CompletedWorkoutId", "Position")
-                        .IsUnique();
-
-                    b.ToTable("CompletedWorkoutExercises");
-                });
 
             modelBuilder.Entity("FitnessApp.Domain.Strength.ProgramExercise", b =>
                 {
@@ -107,6 +38,9 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                     b.Property<int>("Position")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid>("ProgramId")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Repetitions")
                         .HasColumnType("INTEGER");
 
@@ -117,65 +51,11 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                         .HasPrecision(7, 2)
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("WorkoutId")
-                        .HasColumnType("TEXT");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("WorkoutId", "Position")
-                        .IsUnique();
+                    b.HasIndex("ProgramId", "Position");
 
                     b.ToTable("ProgramExercises");
-                });
-
-            modelBuilder.Entity("FitnessApp.Domain.Strength.ProgramScheduleEntry", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("DayOfWeek")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<Guid>("ProgramId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid?>("WorkoutId")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("WorkoutId");
-
-                    b.HasIndex("ProgramId", "DayOfWeek")
-                        .IsUnique();
-
-                    b.ToTable("ProgramScheduleEntries");
-                });
-
-            modelBuilder.Entity("FitnessApp.Domain.Strength.ProgramWorkout", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Position")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<Guid>("ProgramId")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProgramId", "Position")
-                        .IsUnique();
-
-                    b.ToTable("ProgramWorkouts");
                 });
 
             modelBuilder.Entity("FitnessApp.Domain.Strength.StrengthProgram", b =>
@@ -452,51 +332,10 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("FitnessApp.Domain.Strength.CompletedWorkout", b =>
-                {
-                    b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("FitnessApp.Domain.Strength.CompletedWorkoutExercise", b =>
-                {
-                    b.HasOne("FitnessApp.Domain.Strength.CompletedWorkout", null)
-                        .WithMany("Exercises")
-                        .HasForeignKey("CompletedWorkoutId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("FitnessApp.Domain.Strength.ProgramExercise", b =>
                 {
-                    b.HasOne("FitnessApp.Domain.Strength.ProgramWorkout", null)
+                    b.HasOne("FitnessApp.Domain.Strength.StrengthProgram", null)
                         .WithMany("Exercises")
-                        .HasForeignKey("WorkoutId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("FitnessApp.Domain.Strength.ProgramScheduleEntry", b =>
-                {
-                    b.HasOne("FitnessApp.Domain.Strength.StrengthProgram", null)
-                        .WithMany("Schedule")
-                        .HasForeignKey("ProgramId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("FitnessApp.Domain.Strength.ProgramWorkout", null)
-                        .WithMany()
-                        .HasForeignKey("WorkoutId")
-                        .OnDelete(DeleteBehavior.Restrict);
-                });
-
-            modelBuilder.Entity("FitnessApp.Domain.Strength.ProgramWorkout", b =>
-                {
-                    b.HasOne("FitnessApp.Domain.Strength.StrengthProgram", null)
-                        .WithMany("Workouts")
                         .HasForeignKey("ProgramId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -573,21 +412,9 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("FitnessApp.Domain.Strength.CompletedWorkout", b =>
-                {
-                    b.Navigation("Exercises");
-                });
-
-            modelBuilder.Entity("FitnessApp.Domain.Strength.ProgramWorkout", b =>
-                {
-                    b.Navigation("Exercises");
-                });
-
             modelBuilder.Entity("FitnessApp.Domain.Strength.StrengthProgram", b =>
                 {
-                    b.Navigation("Schedule");
-
-                    b.Navigation("Workouts");
+                    b.Navigation("Exercises");
                 });
 
             modelBuilder.Entity("FitnessApp.Infrastructure.Persistence.ApplicationUser", b =>

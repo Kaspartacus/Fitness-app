@@ -1,0 +1,101 @@
+@page "/styrke/{Id:guid}/plan"
+@attribute [Authorize]
+@using FitnessApp.Contracts.Strength
+@using FitnessApp.Client.Strength
+@inject StrengthProgramClient Programs
+@inject NavigationManager Navigation
+
+<PageTitle>Planlæg program</PageTitle>
+
+<main class="strength-app strength-schedule-page" aria-labelledby="schedule-title">
+    <header class="strength-back-header">
+        <a class="strength-icon-button" href="@($"/styrke/{Id}")" aria-label="Tilbage til program" title="Tilbage til program">←</a>
+        <div><h1 id="schedule-title">Planlæg program</h1>@if (program is not null) { <p>@program.Name</p> }</div>
+        <span class="strength-header-spacer"></span>
+    </header>
+
+    @if (loading) { <p class="strength-feedback" role="status">Indlæser plan…</p> }
+    else if (error is not null) { <section class="strength-status-card" role="alert"><p>@error</p><button class="strength-secondary-button" @onclick="LoadAsync">Prøv igen</button></section> }
+    else if (program is not null)
+    {
+        <section class="strength-schedule-list" aria-label="Ugeplan">
+            @foreach (var entry in entries)
+            {
+                <button class="strength-day-row" type="button" @onclick="() => selectedDay = entry.DayOfWeek">
+                    <span>@DayName(entry.DayOfWeek)</span>
+                    @if (Workout(entry.WorkoutId) is { } workout) { <strong>@workout.Name <small>Træning</small></strong> }
+                    else { <strong class="is-rest">Hviledag</strong> }
+                    <span aria-hidden="true">›</span>
+                </button>
+            }
+        </section>
+        @if (saveError is not null) { <p class="strength-field-error" role="alert">@saveError</p> }
+        <button class="strength-primary-button strength-wide-button" @onclick="SaveAsync" disabled="@busy">@(busy ? "Gemmer…" : "Gem plan")</button>
+    }
+
+    <ModalDialog IsOpen="@ScheduleModalOpen" Title="Vælg træning" Description="@ScheduleModalDescription" OnDismiss="CloseSheet">
+        @if (selectedDay is { } day && program is not null)
+        {
+            <div class="strength-schedule-choices">
+                <button class="strength-schedule-choice @(SelectedWorkout(day) is null ? "is-selected" : "")" @onclick="() => SelectWorkout(day, null)"><span>Hviledag</span><span>○</span></button>
+                @foreach (var workout in program.Workouts)
+                {
+                    var selected = SelectedWorkout(day) == workout.Id;
+                    <button class="strength-schedule-choice @(selected ? "is-selected" : "")" @onclick="() => SelectWorkout(day, workout.Id)"><span><strong>@workout.Name</strong><small>@workout.Exercises.Count øvelser</small></span><span>@(selected ? "✓" : "○")</span></button>
+                }
+            </div>
+            <div class="app-modal-actions">
+                <button class="strength-quiet-button" type="button" @onclick="CloseSheet">Annuller</button>
+            </div>
+        }
+    </ModalDialog>
+</main>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private ProgramResponse? program;
+    private List<ScheduleEntryRequest> entries = [];
+    private DayOfWeek? selectedDay;
+    private bool loading;
+    private bool busy;
+    private string? error;
+    private string? saveError;
+
+    private bool ScheduleModalOpen => selectedDay is not null && program is not null;
+    private string? ScheduleModalDescription => selectedDay is { } day ? DayName(day) : null;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true; error = null; saveError = null;
+        var programResult = await Programs.GetAsync(Id);
+        var scheduleResult = await Programs.GetScheduleAsync(Id);
+        loading = false;
+        program = programResult.Value;
+        error = programResult.Error ?? scheduleResult.Error;
+        entries = scheduleResult.Value?.Entries.Select(entry => new ScheduleEntryRequest(entry.DayOfWeek, entry.WorkoutId)).ToList() ?? Week().ToList();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (program is null || busy) return;
+        busy = true;
+        var result = await Programs.SaveScheduleAsync(Id, new ScheduleResponse(program.Version, entries));
+        busy = false;
+        if (result.Succeeded) { Navigation.NavigateTo($"/styrke/{Id}"); return; }
+        saveError = result.Error;
+    }
+
+    private void SelectWorkout(DayOfWeek day, Guid? workoutId)
+    {
+        var index = entries.FindIndex(entry => entry.DayOfWeek == day);
+        entries[index] = new ScheduleEntryRequest(day, workoutId);
+        selectedDay = null;
+    }
+    private Guid? SelectedWorkout(DayOfWeek day) => entries.Single(entry => entry.DayOfWeek == day).WorkoutId;
+    private WorkoutResponse? Workout(Guid? id) => id is { } workoutId ? program?.Workouts.SingleOrDefault(workout => workout.Id == workoutId) : null;
+    private void CloseSheet() => selectedDay = null;
+    private static IEnumerable<ScheduleEntryRequest> Week() => new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday }.Select(day => new ScheduleEntryRequest(day, null));
+    private static string DayName(DayOfWeek day) => day switch { DayOfWeek.Monday => "Mandag", DayOfWeek.Tuesday => "Tirsdag", DayOfWeek.Wednesday => "Onsdag", DayOfWeek.Thursday => "Torsdag", DayOfWeek.Friday => "Fredag", DayOfWeek.Saturday => "Lørdag", _ => "Søndag" };
+}
