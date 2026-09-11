@@ -53,7 +53,7 @@
                 {
                     <div class="running-result-values"><div><span>Distance</span><strong>@RunningPresentation.Distance(completed.DistanceKm)</strong></div><div><span>Tid</span><strong>@RunningPresentation.Duration(completed.DurationSeconds)</strong></div><div><span>Tempo</span><strong>@RunningPresentation.Pace(completed.PaceSecondsPerKm)</strong></div></div>
                 }
-                <a class="strength-outline-button strength-card-button" href="@($"/loeb/resultater/{completed.Id}")">Se resultat</a>
+                <a class="strength-outline-button strength-card-button" href="@($"/loeb/resultater/{completed.Id}/ret")">Rediger resultat</a>
             </section>
         }
         else if (session.State == RunningSessionState.Started)
@@ -62,13 +62,16 @@
         }
         else if (session.Date > BrowserToday)
         {
-            <section class="strength-status-card"><p>Denne tur kan startes eller registreres på den planlagte dag.</p></section>
+            <section class="strength-status-card">
+                <p>Du kan registrere et resultat allerede nu. Aktiv løbestart er tilgængelig på den planlagte dag.</p>
+                <a class="strength-outline-button strength-card-button" href="@($"/loeb/plan/{session.Id}/registrer")">Registrer resultat</a>
+            </section>
         }
         else
         {
             <div class="running-page-actions">
                 <a class="strength-primary-button" href="@($"/loeb/plan/{session.Id}/aktiv")">Start løbetur</a>
-                <a class="strength-outline-button" href="@($"/loeb/plan/{session.Id}/registrer")">Registrer løbetur</a>
+                <a class="strength-outline-button" href="@($"/loeb/plan/{session.Id}/registrer")">Registrer resultat</a>
             </div>
         }
     }

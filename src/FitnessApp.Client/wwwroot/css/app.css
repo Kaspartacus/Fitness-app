@@ -852,7 +852,6 @@ a:focus-visible {
 .running-page-actions .running-full-action { grid-column: 1 / -1; }
 .running-plan-heading { display: grid; gap: .2rem; }
 .running-plan-heading > p { margin: 0; font-size: .82rem; }
-.running-week-select { width: 100%; min-height: 2.85rem; border: 1px solid var(--strength-border); border-radius: .7rem; padding: .6rem .75rem; background: var(--strength-control); color: var(--strength-text); font: inherit; }
 .running-detail-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; margin: 1rem 0; }
 .running-detail-metric { padding: .85rem; border: 1px solid var(--strength-border); border-radius: .8rem; background: var(--strength-control); }
 .running-detail-metric span, .running-detail-metric strong { display: block; }
@@ -941,4 +940,57 @@ a:focus-visible {
     .strength-bottom-nav { display: none; }
     .strength-program-grid, .strength-workout-list { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
     .strength-finish-button { bottom: 2rem; width: min(26rem, calc(100% - 3rem)); }
+}
+
+/* Running refinements: compact selectors and a balanced desktop plan setup. */
+.running-wizard-custom-input { margin-top: 1rem; }
+.running-week-selector { display: grid; grid-template-columns: 2.65rem minmax(0, 1fr) 2.65rem; gap: .55rem; align-items: stretch; }
+.running-week-navigation { display: grid; min-height: 3.2rem; place-items: center; border: 1px solid var(--strength-border); border-radius: .75rem; background: var(--strength-raised); color: var(--strength-text); font: inherit; font-size: 1.35rem; cursor: pointer; }
+.running-week-navigation:hover:not(:disabled) { border-color: #5781ae; background: #26384a; }
+.running-week-navigation:disabled { opacity: .42; cursor: not-allowed; }
+.running-week-trigger { display: grid; min-width: 0; gap: .15rem; border: 1px solid var(--strength-border); border-radius: .75rem; padding: .65rem .8rem; background: var(--strength-control); color: var(--strength-text); font: inherit; text-align: left; cursor: pointer; }
+.running-week-trigger:hover { border-color: #5781ae; background: #26384a; }
+.running-week-trigger span { color: var(--strength-accent); font-size: .68rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.running-week-trigger strong { overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
+.running-week-list { display: grid; max-height: min(58dvh, 28rem); gap: .5rem; overflow-y: auto; padding-right: .1rem; }
+.running-week-option { display: grid; width: 100%; gap: .2rem; border: 1px solid var(--strength-border); border-radius: .75rem; padding: .8rem; background: var(--strength-raised); color: var(--strength-text); font: inherit; text-align: left; cursor: pointer; }
+.running-week-option:hover { border-color: #5781ae; background: #26384a; }
+.running-week-option.is-selected { border-color: #5781ae; background: #1d4672; box-shadow: inset 0 0 0 1px rgb(155 197 244 / 20%); }
+.running-week-option strong { font-size: .88rem; }
+.running-week-option span { color: var(--strength-muted); font-size: .76rem; }
+.running-date-picker-field { display: grid; gap: .42rem; }
+.running-date-picker-label, .running-duration-fields-label { color: #c6d5e6; font-size: .78rem; font-weight: 750; }
+.running-date-picker-trigger { display: flex; width: 100%; min-height: 2.85rem; align-items: center; justify-content: space-between; gap: .75rem; border: 1px solid var(--strength-border); border-radius: .7rem; padding: .6rem .75rem; background: var(--strength-control); color: var(--strength-text); font: inherit; text-align: left; cursor: pointer; }
+.running-date-picker-trigger:hover:not(:disabled) { border-color: #5781ae; background: #26384a; }
+.running-date-picker-trigger:disabled { opacity: .5; cursor: not-allowed; }
+.running-date-picker-trigger-icon { color: var(--strength-accent); font-size: 1rem; }
+.running-date-picker { display: grid; gap: .75rem; }
+.running-date-picker-navigation { display: grid; grid-template-columns: 2rem 2rem minmax(0, 1fr) 2rem 2rem; gap: .3rem; align-items: center; }
+.running-date-picker-navigation-button { display: grid; width: 2rem; height: 2rem; place-items: center; border: 1px solid var(--strength-border); border-radius: .55rem; background: var(--strength-raised); color: var(--strength-text); font: inherit; font-size: 1rem; cursor: pointer; }
+.running-date-picker-navigation-button:hover:not(:disabled) { border-color: #5781ae; background: #26384a; }
+.running-date-picker-navigation-button:disabled { opacity: .42; cursor: not-allowed; }
+.running-date-picker-month { min-width: 0; overflow: hidden; font-size: .86rem; text-align: center; text-overflow: ellipsis; text-transform: capitalize; white-space: nowrap; }
+.running-date-picker-weekdays, .running-date-picker-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .2rem; }
+.running-date-picker-weekdays { color: var(--strength-muted); font-size: .66rem; font-weight: 750; text-align: center; }
+.running-date-picker-day { display: grid; min-height: 2.25rem; place-items: center; border: 1px solid transparent; border-radius: .5rem; background: transparent; color: var(--strength-text); font: inherit; font-size: .78rem; cursor: pointer; }
+.running-date-picker-day:hover:not(:disabled) { border-color: #5781ae; background: #26384a; }
+.running-date-picker-day.is-outside-month { color: var(--strength-muted); opacity: .64; }
+.running-date-picker-day.is-today { border-color: #5781ae; }
+.running-date-picker-day.is-selected { border-color: #72a8e4; background: #1d5b94; color: #f2f8ff; font-weight: 800; }
+.running-date-picker-day:disabled { opacity: .3; cursor: not-allowed; }
+.running-duration-fields { display: grid; gap: .42rem; }
+.running-duration-fields-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; }
+.running-duration-field { display: grid; gap: .35rem; }
+.running-duration-field label { color: var(--strength-muted); font-size: .72rem; font-weight: 750; }
+.running-duration-input { min-width: 0; }
+
+@media (min-width: 48rem) {
+    .strength-app.running-wizard { width: min(calc(100% - 3rem), 48rem); }
+    .running-wizard-content { width: min(100%, 42rem); margin-inline: auto; }
+    .running-wizard-footer { width: min(100%, 42rem); margin: 1.75rem auto -3rem; padding-inline: 0; }
+    .running-wizard-options, .running-distance-choices, .running-frequency-choices, .running-day-choices { display: flex; flex-wrap: wrap; justify-content: center; }
+    .running-wizard-options .running-choice { flex: 0 1 calc(50% - .3rem); min-height: 5.4rem; }
+    .running-distance-choices .running-distance-choice { flex: 0 1 calc((100% - 1.2rem) / 3); min-height: 3.25rem; }
+    .running-frequency-choices .running-frequency-choice { flex: 0 1 calc((100% - 1.8rem) / 4); min-height: 3.25rem; }
+    .running-day-choices .running-day-choice { flex: 0 1 calc((100% - 1.2rem) / 3); min-height: 3.25rem; }
 }

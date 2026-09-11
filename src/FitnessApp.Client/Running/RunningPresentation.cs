@@ -84,39 +84,6 @@ internal static class RunningPresentation
         return decimal.TryParse(input, decimalInput, culture, out distance);
     }
 
-    public static bool TryParseDuration(string? value, out int seconds)
-    {
-        seconds = 0;
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        var parts = value.Trim().Split(':', StringSplitOptions.TrimEntries);
-        if (parts.Length is < 2 or > 3 || parts.Any(part => !int.TryParse(part, NumberStyles.None,
-                CultureInfo.InvariantCulture, out _)))
-        {
-            return false;
-        }
-
-        var numbers = parts.Select(part => int.Parse(part, CultureInfo.InvariantCulture)).ToArray();
-        var hours = parts.Length == 3 ? numbers[0] : 0;
-        var minutes = parts.Length == 3 ? numbers[1] : numbers[0];
-        var remainingSeconds = parts.Length == 3 ? numbers[2] : numbers[1];
-        if (hours is < 0 or > 24 || minutes is < 0 or > 59 || remainingSeconds is < 0 or > 59 ||
-            (hours == 24 && (minutes != 0 || remainingSeconds != 0)))
-        {
-            return false;
-        }
-
-        seconds = checked(hours * 3600 + minutes * 60 + remainingSeconds);
-        return seconds > 0;
-    }
-
-    public static string DurationInput(int? seconds) => seconds is { } value && value > 0
-        ? TimeSpan.FromSeconds(value).ToString(value >= 3600 ? @"h\:mm\:ss" : @"m\:ss")
-        : "";
-
     private static string PaceTime(int seconds) => TimeSpan.FromSeconds(seconds).ToString(
         seconds >= 3600 ? @"h\:mm\:ss" : @"m\:ss");
 

@@ -364,10 +364,8 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
             return new RunningResultOperationResult(RunningStatus.NotFound);
         }
 
-        var today = Today();
-        var resultDate = input.Date ?? today;
-        if (session.Date > today || resultDate < session.Date ||
-            !IsValidResult(resultDate, input.DistanceKm, input.DurationSeconds, input.AverageHeartRate, input.Note,
+        var resultDate = input.Date ?? Today();
+        if (!IsValidResult(resultDate, input.DistanceKm, input.DurationSeconds, input.AverageHeartRate, input.Note,
                 requireDistanceAndDuration: false))
         {
             return new RunningResultOperationResult(RunningStatus.Invalid);
@@ -463,15 +461,6 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
         if (result.SessionId is null && (input.DistanceKm is null || input.DurationSeconds is null))
         {
             return new RunningResultOperationResult(RunningStatus.Invalid);
-        }
-
-        if (result.SessionId is { } sessionId)
-        {
-            var session = await FindOwnedSessionAsync(userId, sessionId, cancellationToken);
-            if (session is not null && input.Date < session.Date)
-            {
-                return new RunningResultOperationResult(RunningStatus.Invalid);
-            }
         }
 
         var nextVersion = Guid.NewGuid();

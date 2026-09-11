@@ -42,16 +42,16 @@
                 case 1:
                     <h2 class="running-wizard-title">Hvor langt kan du løbe på 30 minutter?</h2><p class="running-wizard-copy">Giv et realistisk bud — selv et skøn er nok.</p>
                     <div class="running-distance-choices">@foreach (var distance in BaselinePresets) { <button class="running-distance-choice @(draft.ThirtyMinuteDistanceText == distance ? "is-selected" : null)" type="button" @onclick="() => SelectBaseline(distance)">@distance</button> }</div>
-                    <label class="strength-input-label" style="margin-top: 1rem">Eller indtast selv <input class="strength-input" inputmode="decimal" autocomplete="off" placeholder="fx 3,5" @bind="draft.ThirtyMinuteDistanceText" @bind:event="oninput" @bind:after="MarkDirty" /><span>km på 30 minutter</span></label>
+                    <label class="strength-input-label running-wizard-custom-input">Eller indtast selv <input class="strength-input" inputmode="decimal" autocomplete="off" placeholder="fx 3,5" @bind="draft.ThirtyMinuteDistanceText" @bind:event="oninput" @bind:after="MarkDirty" /><span>km på 30 minutter</span></label>
                     break;
                 case 2:
                     <h2 class="running-wizard-title">Hvor langt vil du kunne løbe?</h2><p class="running-wizard-copy">Vælg den distance, du vil arbejde hen imod.</p>
                     <div class="running-wizard-options">@foreach (var goal in GoalPresets) { <button class="running-choice @(draft.TargetDistanceText == goal.Value ? "is-selected" : null)" type="button" @onclick="() => SelectGoal(goal.Value)"><strong>@goal.Name</strong></button> }</div>
-                    <label class="strength-input-label" style="margin-top: 1rem">Anden distance <input class="strength-input" inputmode="decimal" autocomplete="off" placeholder="fx 7,5" @bind="draft.TargetDistanceText" @bind:event="oninput" @bind:after="MarkDirty" /><span>km</span></label>
+                    <label class="strength-input-label running-wizard-custom-input">Anden distance <input class="strength-input" inputmode="decimal" autocomplete="off" placeholder="fx 7,5" @bind="draft.TargetDistanceText" @bind:event="oninput" @bind:after="MarkDirty" /><span>km</span></label>
                     break;
                 case 3:
                     <h2 class="running-wizard-title">Hvornår vil du nå målet?</h2><p class="running-wizard-copy">Sæt en realistisk deadline, der motiverer dig. Vi afviser et mål, som ikke kan planlægges ansvarligt.</p>
-                    <label class="strength-input-label">Måldato <input class="strength-input" type="date" min="@MinimumTargetDate" value="@draft.TargetDateText" @onchange="OnTargetDateChanged" /></label>
+                    <RunningDatePicker Id="running-target-date" Label="Måldato" ModalTitle="Vælg måldato" Placeholder="Vælg en måldato" Value="@TargetDate" ValueChanged="SetTargetDateAsync" Min="@MinimumTargetDate" Max="@MaximumTargetDate" />
                     break;
                 case 4:
                     <h2 class="running-wizard-title">Hvor mange dage om ugen vil du løbe?</h2><p class="running-wizard-copy">Realistisk og bæredygtig er bedre end ambitiøs og opgivet.</p>
@@ -294,8 +294,15 @@
     }
 
     private bool TryGetTargetDate(out DateOnly date) => DateOnly.TryParseExact(draft.TargetDateText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
-    private string MinimumTargetDate => RunningPresentation.CopenhagenToday.AddDays(7).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-    private void OnTargetDateChanged(ChangeEventArgs args) { draft.TargetDateText = args.Value?.ToString() ?? ""; MarkDirty(); }
+    private DateOnly? TargetDate => TryGetTargetDate(out var date) ? date : null;
+    private DateOnly MinimumTargetDate => RunningPresentation.CopenhagenToday.AddDays(7);
+    private DateOnly MaximumTargetDate => RunningPresentation.CopenhagenToday.AddDays(365);
+    private Task SetTargetDateAsync(DateOnly? date)
+    {
+        draft.TargetDateText = date?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "";
+        MarkDirty();
+        return Task.CompletedTask;
+    }
     private void SelectLevel(RunningLevel level) { draft.Level = level; MarkDirty(); }
     private void SelectBaseline(string value) { draft.ThirtyMinuteDistanceText = value; MarkDirty(); }
     private void SelectGoal(string value) { draft.TargetDistanceText = value; MarkDirty(); }

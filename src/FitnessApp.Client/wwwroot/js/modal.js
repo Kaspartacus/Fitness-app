@@ -16,7 +16,7 @@ window.fitnessModal = (() => {
 
     function focusableElements(dialog) {
         return [...dialog.querySelectorAll(focusableSelector)]
-            .filter(element => !element.hasAttribute("hidden") && element.getClientRects().length > 0);
+            .filter(element => !element.hasAttribute("hidden") && element.getAttribute("tabindex") !== "-1" && element.getClientRects().length > 0);
     }
 
     function lockScrolling() {
@@ -107,5 +107,9 @@ window.fitnessModal = (() => {
         if (wasTopmost && state.opener?.isConnected) state.opener.focus();
     }
 
-    return { activate, deactivate };
+    function focus(element) {
+        if (element instanceof HTMLElement && !element.disabled) element.focus();
+    }
+
+    return { activate, deactivate, focus };
 })();

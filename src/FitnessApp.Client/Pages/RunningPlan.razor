@@ -10,7 +10,7 @@
     <header class="strength-back-header">
         <a class="strength-icon-button" href="/loeb" aria-label="Tilbage til løb" title="Tilbage til løb">←</a>
         <div class="running-plan-heading"><h1 id="plan-title">Din løbeplan</h1><p>@(plan is null ? "" : $"Mål: {RunningPresentation.Distance(plan.TargetDistanceKm)} · {RunningPresentation.Date(plan.TargetDate)}")</p></div>
-        <a class="strength-icon-button" href="/loeb/ny" aria-label="Opret ny plan" title="Opret ny plan">＋</a>
+        <span class="strength-header-spacer"></span>
     </header>
 
     @if (isLoading)
@@ -37,9 +37,17 @@
         @if (weeks.Count > 0)
         {
             <section class="strength-section" aria-labelledby="week-title">
-                <label class="strength-input-label" for="running-week"><span id="week-title">Vælg uge</span><select id="running-week" class="running-week-select" @bind="selectedWeek"><option value="-1" disabled>Vælg uge</option>@for (var index = 0; index < weeks.Count; index++) { var week = weeks[index]; <option value="@index">Uge @(index + 1) · @RunningPresentation.ShortDate(week.Start)–@RunningPresentation.ShortDate(week.End)</option> }</select></label>
+                <p class="strength-overline" id="week-title">Vælg uge</p>
                 @if (selectedWeek >= 0 && selectedWeek < weeks.Count)
                 {
+                    <div class="running-week-selector" aria-labelledby="week-title">
+                        <button class="running-week-navigation" type="button" @onclick="SelectPreviousWeek" disabled="@(selectedWeek == 0)" aria-label="Forrige uge" title="Forrige uge">‹</button>
+                        <button class="running-week-trigger" type="button" @onclick="OpenWeekPicker" aria-haspopup="dialog" aria-expanded="@(weekPickerOpen ? "true" : "false")">
+                            <span>Uge @(selectedWeek + 1)</span>
+                            <strong>@WeekRange(weeks[selectedWeek])</strong>
+                        </button>
+                        <button class="running-week-navigation" type="button" @onclick="SelectNextWeek" disabled="@(selectedWeek == weeks.Count - 1)" aria-label="Næste uge" title="Næste uge">›</button>
+                    </div>
                     <div class="running-session-list" style="margin-top: .9rem">
                         @foreach (var session in weeks[selectedWeek].Sessions)
                         {
@@ -59,6 +67,20 @@
         }
     }
 
+    <ModalDialog IsOpen="@weekPickerOpen" Title="Vælg uge" Description="Vælg den uge i planen, du vil se." InitialFocusSelector="[data-week-selected='true']" OnDismiss="CloseWeekPicker">
+        <div class="running-week-list" aria-label="Planens uger">
+            @for (var index = 0; index < weeks.Count; index++)
+            {
+                var weekIndex = index;
+                var week = weeks[weekIndex];
+                <button class="running-week-option @(weekIndex == selectedWeek ? "is-selected" : null)" type="button" aria-pressed="@(weekIndex == selectedWeek)" data-week-selected="@(weekIndex == selectedWeek ? "true" : null)" @onclick="() => SelectWeek(weekIndex)">
+                    <strong>Uge @(weekIndex + 1)</strong>
+                    <span>@WeekRange(week)</span>
+                </button>
+            }
+        </div>
+    </ModalDialog>
+
     <StrengthBottomNavigation Active="running" />
 </main>
 
@@ -67,6 +89,7 @@
     private bool isLoading;
     private string? error;
     private int selectedWeek = -1;
+    private bool weekPickerOpen;
     private List<PlanWeek> weeks = [];
 
     protected override Task OnInitializedAsync() => LoadAsync();
@@ -85,6 +108,7 @@
         error = overview.Error;
         weeks = plan is null ? [] : BuildWeeks(plan.Sessions);
         selectedWeek = SelectInitialWeek(weeks);
+        weekPickerOpen = false;
         isLoading = false;
     }
 
@@ -108,9 +132,47 @@
         return items.Count == 0 ? -1 : 0;
     }
 
+    private void OpenWeekPicker() => weekPickerOpen = true;
+
+    private void CloseWeekPicker() => weekPickerOpen = false;
+
+    private void SelectPreviousWeek()
+    {
+        if (selectedWeek > 0)
+        {
+            selectedWeek--;
+        }
+    }
+
+    private void SelectNextWeek()
+    {
+        if (selectedWeek >= 0 && selectedWeek < weeks.Count - 1)
+        {
+            selectedWeek++;
+        }
+    }
+
+    private void SelectWeek(int index)
+    {
+        if (index < 0 || index >= weeks.Count)
+        {
+            return;
+        }
+
+        selectedWeek = index;
+        weekPickerOpen = false;
+    }
+
     private static int Completed(RunningPlanResponse source) => source.Sessions.Count(session => session.State == RunningSessionState.Completed);
     private static int Progress(RunningPlanResponse source) => source.Sessions.Count == 0 ? 0 : (int)Math.Round(Completed(source) * 100m / source.Sessions.Count, MidpointRounding.AwayFromZero);
     private static string ShortDay(DateOnly date) => date.ToString("ddd", System.Globalization.CultureInfo.GetCultureInfo("da-DK"));
+    private static string WeekRange(PlanWeek week)
+    {
+        var culture = System.Globalization.CultureInfo.GetCultureInfo("da-DK");
+        var startFormat = week.Start.Year == week.End.Year ? "ddd d. MMM" : "ddd d. MMM yyyy";
+        var endFormat = "ddd d. MMM yyyy";
+        return $"{week.Start.ToString(startFormat, culture)}–{week.End.ToString(endFormat, culture)}";
+    }
     private static string LevelName(RunningLevel level) => level switch { RunningLevel.NewToRunning => "Helt ny", RunningLevel.Beginner => "Begynder", RunningLevel.Recreational => "Let øvet", RunningLevel.Trained => "Øvet", _ => "Erfaren" };
     private static string KindName(RunningSessionKind kind) => kind switch { RunningSessionKind.Easy => "Rolig tur", RunningSessionKind.Tempo => "Tempotur", RunningSessionKind.Intervals => "Intervaller", _ => "Lang tur" };
 

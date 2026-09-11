@@ -29,11 +29,7 @@
     }
     else if (AlreadyCompleted)
     {
-        <section class="strength-status-card"><p>Denne planlagte tur er allerede registreret.</p><a class="strength-primary-button strength-card-button" href="@($"/loeb/resultater/{session!.Result!.Id}")">Se resultat</a></section>
-    }
-    else if (IsFutureSession)
-    {
-        <section class="strength-status-card"><p>Denne tur kan først registreres på den planlagte dag.</p><a class="strength-outline-button strength-card-button" href="@BackUrl">Tilbage til turen</a></section>
+        <section class="strength-status-card"><p>Denne planlagte tur er allerede registreret.</p><a class="strength-primary-button strength-card-button" href="@($"/loeb/resultater/{session!.Result!.Id}/ret")">Rediger resultat</a></section>
     }
     else
     {
@@ -52,16 +48,12 @@
         <form class="running-result-form" @onsubmit="SaveAsync" @onsubmit:preventDefault>
             <fieldset class="strength-editor-card" disabled="@isSaving">
                 <p class="strength-overline">Faktisk</p>
-                <label class="strength-input-label" for="running-date">Dato
-                    <input class="strength-input" id="running-date" type="date" min="@MinimumDate" max="@TodayInput" value="@dateText" @onchange="OnDateChanged" />
-                </label>
+                <RunningDatePicker Id="running-date" Label="Dato" Value="@SelectedDate" ValueChanged="SetDateAsync" Min="@EarliestResultDate" Max="@BrowserToday" Disabled="@isSaving" />
                 <div class="running-result-input-grid">
                     <label class="strength-input-label" for="running-distance">Distance (km)
                         <input class="strength-input" id="running-distance" inputmode="decimal" autocomplete="off" placeholder="fx 5,2" @bind="distanceText" @bind:event="oninput" @bind:after="MarkDirty" />
                     </label>
-                    <label class="strength-input-label" for="running-duration">Tid
-                        <input class="strength-input" id="running-duration" inputmode="numeric" autocomplete="off" placeholder="mm:ss eller t:mm:ss" @bind="durationText" @bind:event="oninput" @bind:after="MarkDirty" />
-                    </label>
+                    <RunningDurationFields IdPrefix="running-duration" Label="Tid" Minutes="@durationMinutesText" MinutesChanged="SetDurationMinutesAsync" Seconds="@durationSecondsText" SecondsChanged="SetDurationSecondsAsync" OnInput="MarkDirty" Disabled="@isSaving" />
                 </div>
                 <label class="strength-input-label" for="running-heart-rate">Gennemsnitlig puls (valgfri)
                     <input class="strength-input" id="running-heart-rate" inputmode="numeric" autocomplete="off" placeholder="fx 152" @bind="heartRateText" @bind:event="oninput" @bind:after="MarkDirty" />
@@ -107,7 +99,8 @@
     private Guid completionId = Guid.NewGuid();
     private string dateText = "";
     private string distanceText = "";
-    private string durationText = "";
+    private string durationMinutesText = "";
+    private string durationSecondsText = "";
     private string heartRateText = "";
     private string note = "";
     private bool hasLoaded;
@@ -127,10 +120,10 @@
     private string SaveLabel => Mode == EditorMode.Edit ? "Gem rettelser" : "Gem resultat";
     private string BackUrl => Mode switch { EditorMode.Edit when ResultId is { } id => $"/loeb/resultater/{id}", EditorMode.Session when SessionId is { } id => $"/loeb/plan/{id}", _ => "/loeb" };
     private bool AlreadyCompleted => Mode == EditorMode.Session && session?.State == RunningSessionState.Completed && session.Result is not null;
-    private bool IsFutureSession => Mode == EditorMode.Session && session is not null && session.Date > BrowserToday;
     private static DateOnly BrowserToday => RunningPresentation.CopenhagenToday;
+    private static DateOnly EarliestResultDate => new(2000, 1, 1);
     private string TodayInput => BrowserToday.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-    private string? MinimumDate => session?.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    private DateOnly? SelectedDate => DateOnly.TryParseExact(dateText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
 
     protected override Task OnParametersSetAsync()
     {
@@ -171,7 +164,8 @@
         string? loadedError = null;
         var nextDateText = "";
         var nextDistanceText = "";
-        var nextDurationText = "";
+        var nextDurationMinutesText = "";
+        var nextDurationSecondsText = "";
         var nextHeartRateText = "";
         var nextNote = "";
 
@@ -182,7 +176,7 @@
             loadedError = response.Error ?? (loadedSession is null ? "Den planlagte løbetur blev ikke fundet." : null);
             if (loadedSession is not null)
             {
-                nextDateText = loadedSession.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                nextDateText = TodayInput;
             }
         }
         else if (requestedMode == EditorMode.Edit && requestedResultId is { } resultId)
@@ -194,7 +188,8 @@
             {
                 nextDateText = loadedResult.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
                 nextDistanceText = loadedResult.DistanceKm?.ToString("0.##", CultureInfo.GetCultureInfo("da-DK")) ?? "";
-                nextDurationText = RunningPresentation.DurationInput(loadedResult.DurationSeconds);
+                nextDurationMinutesText = DurationMinutesInput(loadedResult.DurationSeconds);
+                nextDurationSecondsText = DurationSecondsInput(loadedResult.DurationSeconds);
                 nextHeartRateText = loadedResult.AverageHeartRate?.ToString(CultureInfo.InvariantCulture) ?? "";
                 nextNote = loadedResult.Note ?? "";
                 if (loadedResult.SessionId is { } resultSessionId)
@@ -206,7 +201,8 @@
         }
         else
         {
-            nextDateText = DateOnly.TryParseExact(requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedRequestedDate) && parsedRequestedDate <= BrowserToday
+            nextDateText = DateOnly.TryParseExact(requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedRequestedDate) &&
+                parsedRequestedDate >= EarliestResultDate && parsedRequestedDate <= BrowserToday
                 ? parsedRequestedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
                 : TodayInput;
         }
@@ -221,7 +217,8 @@
         completionId = nextCompletionId;
         dateText = nextDateText;
         distanceText = nextDistanceText;
-        durationText = nextDurationText;
+        durationMinutesText = nextDurationMinutesText;
+        durationSecondsText = nextDurationSecondsText;
         heartRateText = nextHeartRateText;
         note = nextNote;
         loadError = loadedError;
@@ -335,15 +332,10 @@
     {
         values = default;
         fieldError = null;
-        if (!DateOnly.TryParseExact(dateText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) || date > BrowserToday)
+        if (!DateOnly.TryParseExact(dateText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ||
+            date < EarliestResultDate || date > BrowserToday)
         {
-            fieldError = "Vælg en gyldig dato, som ikke ligger i fremtiden.";
-            return false;
-        }
-
-        if (session is not null && date < session.Date)
-        {
-            fieldError = "Resultatets dato kan ikke ligge før den planlagte tur.";
+            fieldError = "Vælg en gyldig dato fra 1. januar 2000 til i dag.";
             return false;
         }
 
@@ -354,7 +346,7 @@
         if (!omitMeasurements)
         {
             var hasDistance = !string.IsNullOrWhiteSpace(distanceText);
-            var hasDuration = !string.IsNullOrWhiteSpace(durationText);
+            var hasDuration = !string.IsNullOrWhiteSpace(durationMinutesText) || !string.IsNullOrWhiteSpace(durationSecondsText);
             if (hasDistance != hasDuration)
             {
                 fieldError = "Angiv både distance og tid, eller lad begge felter stå tomme.";
@@ -375,9 +367,9 @@
                     return false;
                 }
 
-                if (!RunningPresentation.TryParseDuration(durationText, out var parsedDuration) || parsedDuration is < 1 or > 86_400)
+                if (!TryParseDurationFields(out var parsedDuration))
                 {
-                    fieldError = "Angiv tid som mm:ss eller t:mm:ss, højst 24 timer.";
+                    fieldError = "Angiv minutter og sekunder (0–59 sekunder), højst 24 timer.";
                     return false;
                 }
 
@@ -408,8 +400,58 @@
         return true;
     }
 
-    private void OnDateChanged(ChangeEventArgs args) { dateText = args.Value?.ToString() ?? ""; MarkDirty(); }
-    private bool HasEnteredDetails => !string.IsNullOrWhiteSpace(distanceText) || !string.IsNullOrWhiteSpace(durationText) || !string.IsNullOrWhiteSpace(heartRateText) || !string.IsNullOrWhiteSpace(note);
+    private Task SetDateAsync(DateOnly? date)
+    {
+        dateText = date?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "";
+        MarkDirty();
+        return Task.CompletedTask;
+    }
+
+    private Task SetDurationMinutesAsync(string? value)
+    {
+        durationMinutesText = value ?? "";
+        return Task.CompletedTask;
+    }
+
+    private Task SetDurationSecondsAsync(string? value)
+    {
+        durationSecondsText = value ?? "";
+        return Task.CompletedTask;
+    }
+
+    private bool HasEnteredDetails => !string.IsNullOrWhiteSpace(distanceText) || !string.IsNullOrWhiteSpace(durationMinutesText) || !string.IsNullOrWhiteSpace(durationSecondsText) || !string.IsNullOrWhiteSpace(heartRateText) || !string.IsNullOrWhiteSpace(note);
+
+    private bool TryParseDurationFields(out int seconds)
+    {
+        seconds = 0;
+        var hasMinutes = !string.IsNullOrWhiteSpace(durationMinutesText);
+        var hasSeconds = !string.IsNullOrWhiteSpace(durationSecondsText);
+        var parsedMinutes = 0;
+        var parsedSeconds = 0;
+        if ((!hasMinutes && !hasSeconds) ||
+            (hasMinutes && (!int.TryParse(durationMinutesText, NumberStyles.None, CultureInfo.InvariantCulture, out parsedMinutes) || parsedMinutes < 0)) ||
+            (hasSeconds && (!int.TryParse(durationSecondsText, NumberStyles.None, CultureInfo.InvariantCulture, out parsedSeconds) || parsedSeconds is < 0 or > 59)))
+        {
+            return false;
+        }
+
+        var totalSeconds = (long)parsedMinutes * 60 + parsedSeconds;
+        if (totalSeconds is < 1 or > 86_400)
+        {
+            return false;
+        }
+
+        seconds = (int)totalSeconds;
+        return true;
+    }
+
+    private static string DurationMinutesInput(int? durationSeconds) => durationSeconds is { } value && value > 0
+        ? (value / 60).ToString(CultureInfo.InvariantCulture)
+        : "";
+
+    private static string DurationSecondsInput(int? durationSeconds) => durationSeconds is { } value && value > 0
+        ? (value % 60).ToString(CultureInfo.InvariantCulture)
+        : "";
     private void MarkDirty() { if (!isSaving) { isDirty = true; fieldError = null; saveError = null; conflictedResultId = null; } }
     private void CloseWithoutDetails() => withoutDetailsOpen = false;
     private void CloseDiscard() { discardOpen = false; pendingNavigationUrl = null; }

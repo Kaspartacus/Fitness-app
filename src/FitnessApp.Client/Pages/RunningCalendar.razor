@@ -47,17 +47,17 @@
             <section class="running-calendar-selected" aria-live="polite">
                 @if (selectedDate is { } selectedCalendarDate)
                 {
-                    <div class="strength-section-row"><div><p class="strength-overline">Valgt dag</p><h2>@RunningPresentation.Date(selectedCalendarDate)</h2></div>@if (selectedCalendarDate <= BrowserToday) { <a class="strength-text-action" href="@ManualLogHref(selectedCalendarDate)">Registrer løb</a> }</div>
-                    @if (selectedCalendarDate > BrowserToday)
-                    {
-                        <p class="strength-feedback">Manuelle løb kan først registreres på selve dagen.</p>
-                    }
+                    <div class="strength-section-row"><div><p class="strength-overline">Valgt dag</p><h2>@RunningPresentation.Date(selectedCalendarDate)</h2></div>@if (selectedCalendarDate >= EarliestResultDate && selectedCalendarDate <= BrowserToday) { <a class="strength-text-action" href="@ManualLogHref(selectedCalendarDate)">Registrer løb</a> }</div>
                     @if (SessionsOn(selectedCalendarDate).Count == 0)
                     {
-                        <div class="strength-empty-compact"><p>Ingen planlagt løbetur denne dag.</p></div>
+                        <div class="strength-empty-compact"><p>Ingen planlagt løbetur denne dag.</p>@if (selectedCalendarDate > BrowserToday) { <p>Et manuelt løb kan registreres med en faktisk dato i dag eller tidligere.</p> }</div>
                     }
                     else
                     {
+                        @if (selectedCalendarDate > BrowserToday)
+                        {
+                            <p class="strength-feedback">Åbn den planlagte tur for at registrere resultatet før tid.</p>
+                        }
                         <div class="running-session-list">@foreach (var session in SessionsOn(selectedCalendarDate)) { <a class="running-session-row" href="@SessionHref(session)"><span class="running-session-date">@ShortDay(session.Date)<br />@session.Date.Day</span><span class="running-session-copy"><strong>@KindName(session.Kind)</strong><span>@RunningPresentation.Distance(session.PlannedDistanceKm) · @RunningPresentation.PaceRange(session.PaceMinSecondsPerKm, session.PaceMaxSecondsPerKm)</span><span class="@StatusClass(session)">@StatusText(session)</span></span><span class="running-session-chevron" aria-hidden="true">›</span></a> }</div>
                     }
                 }
@@ -164,8 +164,9 @@
     private static string KindName(RunningSessionKind kind) => kind switch { RunningSessionKind.Easy => "Rolig tur", RunningSessionKind.Tempo => "Tempotur", RunningSessionKind.Intervals => "Intervaller", _ => "Lang tur" };
     private static string StatusText(RunningSessionResponse session) => session.State switch { RunningSessionState.Completed => "Gennemført", RunningSessionState.Started => "I gang", _ => "Planlagt" };
     private static string StatusClass(RunningSessionResponse session) => $"running-session-status{(session.State == RunningSessionState.Completed ? " is-complete" : session.State == RunningSessionState.Started ? " is-active" : "")}";
-    private static string SessionHref(RunningSessionResponse session) => session.State == RunningSessionState.Completed && session.Result is { } result ? $"/loeb/resultater/{result.Id}" : $"/loeb/plan/{session.Id}";
+    private static string SessionHref(RunningSessionResponse session) => $"/loeb/plan/{session.Id}";
     private static string ManualLogHref(DateOnly date) => $"/loeb/registrer?dato={date:yyyy-MM-dd}";
     private static DateOnly BrowserToday => RunningPresentation.CopenhagenToday;
+    private static DateOnly EarliestResultDate => new(2000, 1, 1);
     private sealed record CalendarCell(DateOnly? Date);
 }

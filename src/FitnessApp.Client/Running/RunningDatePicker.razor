@@ -1,0 +1,280 @@
+@using System.Globalization
+@using FitnessApp.Client.Layout
+@namespace FitnessApp.Client.Running
+@inject IJSRuntime JavaScript
+
+<div class="running-date-picker-field">
+    <label class="running-date-picker-label" for="@InputId">@Label</label>
+    <button id="@InputId" class="running-date-picker-trigger" type="button" disabled="@Disabled"
+            aria-haspopup="dialog" aria-expanded="@isOpen" @onclick="Open">
+        <span>@DisplayValue</span>
+        <span class="running-date-picker-trigger-icon" aria-hidden="true">▣</span>
+    </button>
+</div>
+
+<ModalDialog IsOpen="@isOpen" Title="@ModalTitle" InitialFocusSelector="[data-date-picker-focus]" OnDismiss="Close">
+    <div class="running-date-picker" aria-label="Datovælger">
+        <div class="running-date-picker-navigation" aria-label="Skift måned eller år">
+            <button class="running-date-picker-navigation-button" type="button" @onclick="PreviousYear"
+                    disabled="@(!CanNavigateYears(-1))" aria-label="Forrige år" title="Forrige år">«</button>
+            <button class="running-date-picker-navigation-button" type="button" @onclick="PreviousMonth"
+                    disabled="@(!CanNavigateMonths(-1))" aria-label="Forrige måned" title="Forrige måned">‹</button>
+            <strong class="running-date-picker-month" aria-live="polite">@MonthName</strong>
+            <button class="running-date-picker-navigation-button" type="button" @onclick="NextMonth"
+                    disabled="@(!CanNavigateMonths(1))" aria-label="Næste måned" title="Næste måned">›</button>
+            <button class="running-date-picker-navigation-button" type="button" @onclick="NextYear"
+                    disabled="@(!CanNavigateYears(1))" aria-label="Næste år" title="Næste år">»</button>
+        </div>
+
+        <div class="running-date-picker-weekdays" aria-hidden="true">
+            @foreach (var dayName in WeekdayNames)
+            {
+                <span>@dayName</span>
+            }
+        </div>
+
+        <div class="running-date-picker-days" role="group" aria-label="@MonthName">
+            @foreach (var day in CalendarDays)
+            {
+                var isSelected = Value == day;
+                var isToday = day == Today;
+                var isCurrentMonth = day.Month == displayedMonth.Month;
+                var isDisabled = !IsSelectable(day);
+                var isFocusTarget = FocusDate == day;
+                <button @key="day" class="@DayClass(isSelected, isToday, isCurrentMonth)" type="button"
+                        disabled="@isDisabled" aria-pressed="@isSelected" aria-current="@(isToday ? "date" : null)"
+                        aria-label="@DayAriaLabel(day)" data-date-picker-focus="@(isFocusTarget ? "true" : null)" tabindex="@(isFocusTarget ? "0" : "-1")"
+                        @ref="dayButtons[day]" @onkeydown="args => HandleDayKeyDownAsync(day, args)"
+                        @onclick="() => SelectAsync(day)">@day.Day</button>
+            }
+        </div>
+    </div>
+</ModalDialog>
+
+@code {
+    private static readonly CultureInfo DanishCulture = CultureInfo.GetCultureInfo("da-DK");
+    private static readonly string[] WeekdayNames = ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"];
+    private readonly string generatedId = $"running-date-picker-{Guid.NewGuid():N}";
+    private readonly Dictionary<DateOnly, ElementReference> dayButtons = [];
+    private DateOnly displayedMonth = new(2000, 1, 1);
+    private DateOnly? keyboardFocusDate;
+    private DateOnly? pendingFocusDate;
+    private bool isOpen;
+
+    [Parameter, EditorRequired] public string Label { get; set; } = "Dato";
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string ModalTitle { get; set; } = "Vælg dato";
+    [Parameter] public string Placeholder { get; set; } = "Vælg dato";
+    [Parameter] public DateOnly? Value { get; set; }
+    [Parameter] public EventCallback<DateOnly?> ValueChanged { get; set; }
+    [Parameter] public DateOnly? Min { get; set; }
+    [Parameter] public DateOnly? Max { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+
+    private string InputId => string.IsNullOrWhiteSpace(Id) ? generatedId : Id;
+    private DateOnly Today => RunningPresentation.CopenhagenToday;
+    private string DisplayValue => Value is { } value
+        ? value.ToString("d. MMMM yyyy", DanishCulture)
+        : Placeholder;
+    private string MonthName => displayedMonth.ToString("MMMM yyyy", DanishCulture);
+
+    private IEnumerable<DateOnly> CalendarDays
+    {
+        get
+        {
+            var firstDay = new DateOnly(displayedMonth.Year, displayedMonth.Month, 1);
+            var mondayOffset = ((int)firstDay.DayOfWeek + 6) % 7;
+            var start = firstDay.AddDays(-mondayOffset);
+            for (var index = 0; index < 42; index++)
+            {
+                yield return start.AddDays(index);
+            }
+        }
+    }
+
+    private DateOnly? FocusDate
+    {
+        get
+        {
+            if (keyboardFocusDate is { } focused && IsCurrentMonth(focused) && IsSelectable(focused))
+            {
+                return focused;
+            }
+
+            if (Value is { } selected && IsCurrentMonth(selected) && IsSelectable(selected))
+            {
+                return selected;
+            }
+
+            if (IsCurrentMonth(Today) && IsSelectable(Today))
+            {
+                return Today;
+            }
+
+            foreach (var day in CalendarDays)
+            {
+                if (IsSelectable(day))
+                {
+                    return day;
+                }
+            }
+
+            return null;
+        }
+    }
+
+    private void Open()
+    {
+        if (Disabled)
+        {
+            return;
+        }
+
+        var initialDate = Value is { } selected && IsSelectable(selected)
+            ? selected
+            : ClosestAvailableDate();
+        displayedMonth = StartOfMonth(initialDate);
+        keyboardFocusDate = null;
+        isOpen = true;
+    }
+
+    private void Close() => isOpen = false;
+
+    private async Task SelectAsync(DateOnly value)
+    {
+        if (!IsSelectable(value))
+        {
+            return;
+        }
+
+        await ValueChanged.InvokeAsync(value);
+        keyboardFocusDate = value;
+        Close();
+    }
+
+    private void PreviousMonth() => displayedMonth = displayedMonth.AddMonths(-1);
+    private void NextMonth() => displayedMonth = displayedMonth.AddMonths(1);
+    private void PreviousYear() => displayedMonth = displayedMonth.AddYears(-1);
+    private void NextYear() => displayedMonth = displayedMonth.AddYears(1);
+
+    private bool CanNavigateMonths(int months) => TryMoveMonth(months, out var month) && MonthHasSelectableDate(month);
+    private bool CanNavigateYears(int years) => TryMoveYear(years, out var month) && MonthHasSelectableDate(month);
+
+    private bool TryMoveMonth(int months, out DateOnly month)
+    {
+        try
+        {
+            month = displayedMonth.AddMonths(months);
+            return true;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            month = displayedMonth;
+            return false;
+        }
+    }
+
+    private bool TryMoveYear(int years, out DateOnly month)
+    {
+        try
+        {
+            month = displayedMonth.AddYears(years);
+            return true;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            month = displayedMonth;
+            return false;
+        }
+    }
+
+    private bool IsSelectable(DateOnly value) =>
+        (Min is null || value >= Min) &&
+        (Max is null || value <= Max);
+
+    private bool MonthHasSelectableDate(DateOnly month)
+    {
+        var first = StartOfMonth(month);
+        var last = new DateOnly(month.Year, month.Month, DateTime.DaysInMonth(month.Year, month.Month));
+        return (Min is null || last >= Min) && (Max is null || first <= Max);
+    }
+
+    private DateOnly ClosestAvailableDate()
+    {
+        if (Min is { } minimum && Today < minimum)
+        {
+            return minimum;
+        }
+
+        if (Max is { } maximum && Today > maximum)
+        {
+            return maximum;
+        }
+
+        return Today;
+    }
+
+    private bool IsCurrentMonth(DateOnly value) =>
+        value.Year == displayedMonth.Year && value.Month == displayedMonth.Month;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (pendingFocusDate is not { } focusDate || !dayButtons.TryGetValue(focusDate, out var element))
+        {
+            return;
+        }
+
+        pendingFocusDate = null;
+        await JavaScript.InvokeVoidAsync("fitnessModal.focus", element);
+    }
+
+    private Task HandleDayKeyDownAsync(DateOnly current, KeyboardEventArgs args)
+    {
+        var target = args.Key switch
+        {
+            "ArrowLeft" => current.AddDays(-1),
+            "ArrowRight" => current.AddDays(1),
+            "ArrowUp" => current.AddDays(-7),
+            "ArrowDown" => current.AddDays(7),
+            "Home" => current.AddDays(-((int)current.DayOfWeek + 6) % 7),
+            "End" => current.AddDays(6 - ((int)current.DayOfWeek + 6) % 7),
+            "PageUp" => AddMonths(current, args.ShiftKey ? -12 : -1),
+            "PageDown" => AddMonths(current, args.ShiftKey ? 12 : 1),
+            _ => null
+        };
+
+        if (target is not { } nextDate || !IsSelectable(nextDate))
+        {
+            return Task.CompletedTask;
+        }
+
+        displayedMonth = StartOfMonth(nextDate);
+        keyboardFocusDate = nextDate;
+        pendingFocusDate = nextDate;
+        return Task.CompletedTask;
+    }
+
+    private static DateOnly? AddMonths(DateOnly value, int months)
+    {
+        try
+        {
+            return value.AddMonths(months);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return null;
+        }
+    }
+
+    private static DateOnly StartOfMonth(DateOnly value) => new(value.Year, value.Month, 1);
+
+    private static string DayClass(bool isSelected, bool isToday, bool isCurrentMonth) => string.Join(' ', new[]
+    {
+        "running-date-picker-day",
+        isSelected ? "is-selected" : null,
+        isToday ? "is-today" : null,
+        !isCurrentMonth ? "is-outside-month" : null
+    }.Where(className => className is not null));
+
+    private static string DayAriaLabel(DateOnly value) => value.ToString("dddd d. MMMM yyyy", DanishCulture);
+}

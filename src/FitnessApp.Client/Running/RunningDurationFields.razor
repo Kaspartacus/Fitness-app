@@ -1,0 +1,53 @@
+@namespace FitnessApp.Client.Running
+
+<div class="running-duration-fields" role="group" aria-labelledby="@GroupLabelId">
+    <span id="@GroupLabelId" class="running-duration-fields-label">@Label</span>
+    <div class="running-duration-fields-inputs">
+        <div class="running-duration-field">
+            <label for="@MinutesId">@MinutesLabel</label>
+            <input id="@MinutesId" name="@MinutesId" class="strength-input running-duration-input" type="number"
+                   min="0" step="1" inputmode="numeric" autocomplete="off" disabled="@Disabled"
+                   value="@Minutes" @oninput="SetMinutesAsync" />
+        </div>
+        <div class="running-duration-field">
+            <label for="@SecondsId">@SecondsLabel</label>
+            <input id="@SecondsId" name="@SecondsId" class="strength-input running-duration-input" type="number"
+                   min="0" max="59" step="1" inputmode="numeric" autocomplete="off" disabled="@Disabled"
+                   value="@Seconds" @oninput="SetSecondsAsync" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly string generatedId = $"running-duration-{Guid.NewGuid():N}";
+
+    [Parameter] public string? IdPrefix { get; set; }
+    [Parameter] public string Label { get; set; } = "Tid";
+    [Parameter] public string MinutesLabel { get; set; } = "Minutter";
+    [Parameter] public string SecondsLabel { get; set; } = "Sekunder";
+    [Parameter] public string? Minutes { get; set; }
+    [Parameter] public EventCallback<string?> MinutesChanged { get; set; }
+    [Parameter] public string? Seconds { get; set; }
+    [Parameter] public EventCallback<string?> SecondsChanged { get; set; }
+    [Parameter] public EventCallback OnInput { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+
+    private string Prefix => string.IsNullOrWhiteSpace(IdPrefix) ? generatedId : IdPrefix;
+    private string GroupLabelId => $"{Prefix}-label";
+    private string MinutesId => $"{Prefix}-minutes";
+    private string SecondsId => $"{Prefix}-seconds";
+
+    private async Task SetMinutesAsync(ChangeEventArgs args)
+    {
+        await MinutesChanged.InvokeAsync(args.Value?.ToString());
+        await NotifyInputAsync();
+    }
+
+    private async Task SetSecondsAsync(ChangeEventArgs args)
+    {
+        await SecondsChanged.InvokeAsync(args.Value?.ToString());
+        await NotifyInputAsync();
+    }
+
+    private Task NotifyInputAsync() => OnInput.HasDelegate ? OnInput.InvokeAsync() : Task.CompletedTask;
+}
