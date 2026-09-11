@@ -1,6 +1,6 @@
 # FitnessApp
 
-FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, account administration and authentication, password reset by email, and private strength-program management through the Danish UI.
+FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, account administration and authentication, password reset by email, private strength-program management, and personal running plans and results through the Danish UI.
 
 Product scope and the distinction between implemented and deferred work are documented in [docs/project.md](docs/project.md). Verification evidence and blockers are tracked in [docs/progress.md](docs/progress.md).
 
@@ -25,7 +25,7 @@ There is one hosted application and one startup project: `FitnessApp.Server`. Th
 dotnet run --project src/FitnessApp.Server
 ```
 
-Strength training is a feature of this existing layered modular monolith; it does not add a solution, application, executable, web host, or independent startup process.
+Strength training and running are features of this existing layered modular monolith; neither adds a solution, application, executable, web host, or independent startup process.
 
 ```text
 src/
@@ -120,6 +120,28 @@ Approval permits a later login but does **not** prove ownership of the submitted
 An Approved user opens **Styrketræning** from the protected home page to create, view, edit, reorder, and delete personal programs. A program holds up to 12 ordered workouts, and every workout holds 1–50 ordered exercises. The Figma-aligned mobile flow includes today’s workout, weekly planning, start training, editable actual weight/sets/repetitions, completion, and the latest saved performance for every exercise. Each exercise stores a name, 0–1000 kg planned weight, 1–10 planned sets, 1–30 planned repetitions, and an optional note of up to 250 characters. Warm-up is represented as an ordinary exercise when wanted; there is no separate warm-up flag.
 
 The server derives ownership from the validated session. Lists, reads, updates, and deletes are scoped to that user, including for administrators. Program and exercise changes commit atomically. A version token rejects stale updates or deletions made from another tab and lets the user retain the local draft before choosing whether to reload.
+
+## Running
+
+An Approved user opens **Løb** to see the active plan, this week's sessions, planned-session details, registered results, and the running calendar. **Resultathistorik** is the separate reopening route for all manual and archived-plan results; it is deliberately not a **Seneste løb** overview section, which is absent from the current design. Without a plan, the overview explains the empty state and opens the setup flow. The Figma Make version-47 source and published public preview were reviewed as visual/journey reference for the Danish multi-step setup, plan overview, session detail, active run, manual registration, result detail/correction, and calendar entry point. Figma review is not runtime or pixel-parity verification.
+
+Setup records the runner's current level, the distance they can cover in 30 minutes, target distance and date, weekly frequency, and preferred weekdays. The server derives the owner from the approved session; administrators receive no private-data bypass. Scheduled dates are persisted as `DateOnly` and interpreted consistently in `Europe/Copenhagen`, using a server `TimeProvider` rather than the server's incidental local timezone; client date constraints and calendar display use the same Copenhagen-local day. Danish and invariant decimal input are accepted for kilometres. Server validation accepts a 0.5–15 km 30-minute ability, a 1–100 km target, a target date 7–365 days ahead, and exactly one to seven distinct weekdays matching the selected frequency.
+
+Plan generation is local and deterministic. It schedules every selected weekday from the Copenhagen-local today through the target date, derives Easy, Tempo, Intervals, and Long Run sessions from the stated current ability, and checks the target against the capacity of the final scheduled session. Capacity grows by no more than 10% per completed week, so an infeasible target/date/frequency receives a clear validation response instead of a hard-coded prototype schedule. A new plan is refused while another is active; replacement requires explicit confirmation and the matching plan version, retires the former plan, and leaves its sessions and completed/manual history intact.
+
+Planned sessions retain their type, target distance, pace range, and structure separately from actual results. A planned session can be completed with actual distance, duration, average heart rate, and an optional note, or marked completed without inventing measurements. Manual registration requires a date through Copenhagen-local today plus actual distance and duration; its average heart rate and note are optional. Corrections retain distance and duration for a manual result, while a planned completion may remain measurement-free. Pace is calculated only when a non-zero actual distance and duration exist. Completion uses a unique owner-scoped idempotency value, and saved results use a version value so a stale editor can retain its draft and reload deliberately.
+
+Starting a non-future planned run records its server timestamp and is safe to repeat; a plan permits only one active, uncompleted run at a time, and a conflicting start takes the runner to that existing run. Cancellation clears only an active, uncompleted start. The active screen derives elapsed time from that recorded source and the current clock; it does not manufacture live distance, pace, heart rate, GPS, maps, background tracking, or sensor data. Recoverable load/save failures preserve entered values and offer Danish retry or cancel paths; a stale plan refreshes its version while preserving the setup draft, and destructive/replacement choices require confirmation. Future calendar days do not imply that a manual result can be registered early.
+
+### Applying the running migration
+
+`20260910221108_AddRunningModule` has been generated and reviewed. It has not been applied to a local database. Apply it deliberately when the environment is ready:
+
+```bash
+dotnet tool run dotnet-ef database update \
+  --project src/FitnessApp.Infrastructure \
+  --startup-project src/FitnessApp.Server
+```
 
 ## Password reset and email delivery
 

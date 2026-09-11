@@ -1,0 +1,133 @@
+@page "/loeb/plan/{SessionId:guid}"
+@attribute [Authorize]
+@using FitnessApp.Client.Running
+@using FitnessApp.Contracts.Running
+@inject RunningClient Running
+
+<PageTitle>@(session is null ? "Planlagt løb" : KindName(session.Kind))</PageTitle>
+
+<main class="strength-app running-app strength-with-bottom-nav" aria-labelledby="session-title">
+    <header class="strength-back-header">
+        <a class="strength-icon-button" href="/loeb/plan" aria-label="Tilbage til planen" title="Tilbage til planen">←</a>
+        <div><h1 id="session-title">@(session is null ? "Planlagt løb" : KindName(session.Kind))</h1>@if (session is not null) { <p>@RunningPresentation.Date(session.Date)</p> }</div>
+        <span class="strength-header-spacer"></span>
+    </header>
+
+    @if (isLoading)
+    {
+        <p class="strength-feedback" role="status">Indlæser løbetur…</p>
+    }
+    else if (error is not null)
+    {
+        <section class="strength-status-card" role="alert"><p>@error</p><button class="strength-secondary-button" type="button" @onclick="LoadAsync">Prøv igen</button></section>
+    }
+    else if (session is not null)
+    {
+        <section class="strength-editor-card" aria-label="Planlagt løb">
+            <p class="strength-overline">Planlagt</p>
+            <div class="running-detail-metrics">
+                <div class="running-detail-metric"><span>Distance</span><strong>@RunningPresentation.Distance(session.PlannedDistanceKm)</strong></div>
+                <div class="running-detail-metric"><span>Måltempo</span><strong>@RunningPresentation.PaceRange(session.PaceMinSecondsPerKm, session.PaceMaxSecondsPerKm)</strong></div>
+            </div>
+        </section>
+
+        <section class="strength-section" aria-labelledby="structure-title">
+            <p class="strength-overline" id="structure-title">Træningsstruktur</p>
+            <div class="running-structure-list">
+                @foreach (var step in StructureSteps(session.Structure).Select((text, index) => new { text, index }))
+                {
+                    <article class="running-structure-step"><span class="running-structure-number">@(step.index + 1)</span><div><strong>@StepTitle(step.text)</strong><span>@StepCopy(step.text)</span></div></article>
+                }
+            </div>
+        </section>
+
+        @if (session.State == RunningSessionState.Completed && session.Result is { } completed)
+        {
+            <section class="running-result-panel is-actual" aria-label="Registreret resultat">
+                <p class="strength-overline">Faktisk</p>
+                @if (completed.DistanceKm is null || completed.DurationSeconds is null)
+                {
+                    <p>Gennemført uden registrerede målinger.</p>
+                }
+                else
+                {
+                    <div class="running-result-values"><div><span>Distance</span><strong>@RunningPresentation.Distance(completed.DistanceKm)</strong></div><div><span>Tid</span><strong>@RunningPresentation.Duration(completed.DurationSeconds)</strong></div><div><span>Tempo</span><strong>@RunningPresentation.Pace(completed.PaceSecondsPerKm)</strong></div></div>
+                }
+                <a class="strength-outline-button strength-card-button" href="@($"/loeb/resultater/{completed.Id}/ret")">Rediger resultat</a>
+            </section>
+        }
+        else if (session.State == RunningSessionState.Started)
+        {
+            <section class="strength-status-card"><p>Løbeturen er i gang. Den viste tid beregnes fra det starttidspunkt, der er gemt på serveren.</p><a class="strength-primary-button strength-card-button" href="@($"/loeb/plan/{session.Id}/aktiv")">Fortsæt løbetur</a></section>
+        }
+        else if (session.Date > BrowserToday)
+        {
+            <div class="running-page-actions">
+                <a class="strength-primary-button running-full-action" href="@($"/loeb/plan/{session.Id}/registrer")">Registrer resultat</a>
+            </div>
+        }
+        else
+        {
+            <div class="running-page-actions">
+                <a class="strength-primary-button" href="@($"/loeb/plan/{session.Id}/aktiv")">Start løbetur</a>
+                <a class="strength-outline-button" href="@($"/loeb/plan/{session.Id}/registrer")">Registrer resultat</a>
+            </div>
+        }
+    }
+
+    <StrengthBottomNavigation Active="running" />
+</main>
+
+@code {
+    [Parameter] public Guid SessionId { get; set; }
+    private RunningSessionResponse? session;
+    private bool isLoading;
+    private string? error;
+    private int loadRequestVersion;
+    private static DateOnly BrowserToday => RunningPresentation.CopenhagenToday;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var requestedSessionId = SessionId;
+        var requestVersion = ++loadRequestVersion;
+        isLoading = true;
+        error = null;
+        session = null;
+        var response = await Running.GetSessionAsync(requestedSessionId);
+
+        if (requestVersion != loadRequestVersion || requestedSessionId != SessionId)
+        {
+            return;
+        }
+
+        session = response.Value;
+        error = response.Error ?? (session is null ? "Den planlagte løbetur blev ikke fundet." : null);
+        isLoading = false;
+    }
+
+    private static string KindName(RunningSessionKind kind) => kind switch
+    {
+        RunningSessionKind.Easy => "Rolig tur",
+        RunningSessionKind.Tempo => "Tempotur",
+        RunningSessionKind.Intervals => "Intervaller",
+        _ => "Lang tur"
+    };
+
+    private static IReadOnlyList<string> StructureSteps(string? structure) => string.IsNullOrWhiteSpace(structure)
+        ? ["Følg dit planlagte tempo og afslut roligt."]
+        : structure.Split(['\n', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static string StepTitle(string step)
+    {
+        var separator = step.IndexOf(':');
+        return separator > 0 ? step[..separator] : step;
+    }
+
+    private static string StepCopy(string step)
+    {
+        var separator = step.IndexOf(':');
+        return separator > 0 && separator < step.Length - 1 ? step[(separator + 1)..].Trim() : "";
+    }
+}

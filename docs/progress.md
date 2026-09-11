@@ -1,6 +1,34 @@
 # Progress
 
-Last updated: 2026-09-10
+Last updated: 2026-09-11
+
+## Running module — source and design record
+
+- The current Figma Make running source (version 47) and the published public preview were reviewed as the visual reference and intended user journey. The reviewed route includes the running overview, setup/onboarding choices, plan and scheduled-session detail, active run, manual log, saved-result detail, date selection, and calendar entry points. Figma is not treated as a complete functional specification or runtime evidence.
+- The translated Danish flow is implemented at `/loeb` (overview), `/loeb/ny` (seven-step setup), `/loeb/plan` (week selection), `/loeb/planlaeg` (weekly running days), `/loeb/plan/{sessionId}` (session detail), `/loeb/plan/{sessionId}/aktiv` (active run), `/loeb/registrer` and `/loeb/plan/{sessionId}/registrer` (manual/planned registration), `/loeb/resultater` (result history), `/loeb/resultater/{resultId}` plus `/ret` (result detail/correction), and `/kalender` (month/day selection). An empty overview leads to setup; setup creates or replaces a personal plan; the overview's contextual **Planlæg** action opens weekday planning rather than the calendar; plan/calendar sessions open their details; every planned session can register a result from its detail, while a completed session offers correction; manual registration creates a result; result detail permits correction; and the separate result history reopens all manual and archived-plan results. The overview intentionally omits **Seneste løb**, which is absent from the current reference.
+- Existing shared visual patterns are reused: charcoal cards and navy/light-blue states, top-left back controls, shared centered modals for confirmation, cancellation, date, and week selection, and the mobile-only bottom navigation. The desktop setup has a constrained centered content column with equal, centered option rows; result time uses separate minutes/seconds fields. The Figma prototype did not define all loading, empty, validation, retry, cancellation, conflict, or error states, so those are deliberate product extensions rather than reproduced prototype behavior.
+- The active-run timer is source-controlled: it calculates elapsed time from the recorded start timestamp and the current clock. It does not imply GPS, maps, background tracking, sensor access, or measured live distance, pace, or heart rate; no simulated live measurements are shown.
+
+## Running persistence and product decisions
+
+- Running data remains inside the existing Client, Server, Application, Domain, Infrastructure, and Contracts projects. Protected `/api/running` responses are `no-store`; plans, selected weekdays, dated sessions, server-recorded starts, and actual results use the normal layered persistence path. Every read/write derives the owner from the approved JWT subject, including for administrators.
+- Scheduled days and result dates are `DateOnly` calendar values interpreted consistently in `Europe/Copenhagen`, via `TimeProvider`, not the host machine's incidental timezone. Client date constraints, current-week selection, and calendar display derive the same Copenhagen-local day. The API validates dates, decimal kilometre values, durations, heart rate, notes, selected weekdays, and stale version values. Setup allows the five defined levels, a 0.5–15 km 30-minute ability, a 1–100 km target, a target date 7–365 days ahead, and exactly one to seven distinct weekdays matching the requested frequency. Danish decimal input is supported in the client.
+- Generation is deterministic and local: it schedules every selected weekday from Copenhagen-local today through the target date, chooses Easy/Tempo/Intervals/Long Run session kinds, and tests the target against the final scheduled session's capacity. Capacity compounds by at most 10% each completed week; an infeasible target/date/frequency returns a clear validation response rather than a copied prototype plan.
+- Each scheduled session keeps planned kind, target distance, pace range, and structure separate from actual results. Manual registration (and correction of a manual result) requires a date from 2000 through Copenhagen-local today plus real distance and duration; average heart rate and note are optional. A planned result is always associated with its own session, may be registered early or later, defaults its actual date to Copenhagen-local today, and may use any valid past actual date irrespective of the scheduled date. Active starts remain restricted to the scheduled day. Planned completion can be saved or corrected with no measurements. Pace is calculated only when both actual duration and a non-zero distance are present.
+- Completion carries a unique owner-scoped idempotency value, while result correction uses a version value to detect stale writes and keep a recoverable local draft. Replacement requires explicit confirmation plus matching active-plan ID/version, retires the earlier plan in a transaction, and leaves its sessions/results intact. The weekly-day planner keeps the existing weekly frequency and updates the active plan version atomically: only future, unstarted sessions without a result are regenerated, while historical, active, and early-completed sessions stay attached to the plan. Starts are idempotent for active non-future sessions; cancellation clears only an uncompleted active start. Calendar session ranges use inclusive ISO `DateOnly` boundaries and are limited to 93 days.
+
+## Running migration and verification boundary
+
+- `20260910221108_AddRunningModule` and the matching model snapshot were generated and source-reviewed. They have **not** been applied to the configured local SQLite database. Apply the migration deliberately from the repository root when the environment is ready:
+
+  ```bash
+  dotnet tool run dotnet-ef database update \
+    --project src/FitnessApp.Infrastructure \
+    --startup-project src/FitnessApp.Server
+  ```
+
+- Runtime, browser, automated-test, dependency-audit, and full-verification-script results are intentionally not inferred from this design/source record or from earlier strength evidence. The permitted short compilation command, `dotnet build FitnessApp.slnx --no-restore --disable-build-servers --verbosity minimal -m:1 -p:BuildInParallel=false`, succeeded with zero errors. It emitted one `NU1900` warning because the sandbox could not resolve NuGet vulnerability metadata at `api.nuget.org`; it did not restore packages. Source inspection and a successful compilation do not establish runtime behavior or exact visual fidelity.
+- Commit `a97309d27079649e9e91effa20f4b1de9b69cb9b` is pushed on `feature/running`; pull request [#10](https://github.com/Kaspartacus/Fitness-app/pull/10) is open against `main`. It has not been merged or deployed.
 
 ## Strength-training Figma flow
 

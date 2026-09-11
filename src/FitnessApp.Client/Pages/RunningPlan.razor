@@ -1,0 +1,180 @@
+@page "/loeb/plan"
+@attribute [Authorize]
+@using FitnessApp.Client.Running
+@using FitnessApp.Contracts.Running
+@inject RunningClient Running
+
+<PageTitle>Løbeplan</PageTitle>
+
+<main class="strength-app running-app strength-with-bottom-nav" aria-labelledby="plan-title">
+    <header class="strength-back-header">
+        <a class="strength-icon-button" href="/loeb" aria-label="Tilbage til løb" title="Tilbage til løb">←</a>
+        <div class="running-plan-heading"><h1 id="plan-title">Din løbeplan</h1><p>@(plan is null ? "" : $"Mål: {RunningPresentation.Distance(plan.TargetDistanceKm)} · {RunningPresentation.Date(plan.TargetDate)}")</p></div>
+        <span class="strength-header-spacer"></span>
+    </header>
+
+    @if (isLoading)
+    {
+        <p class="strength-feedback" role="status">Indlæser løbeplan…</p>
+    }
+    else if (error is not null)
+    {
+        <section class="strength-status-card" role="alert"><p>@error</p><button class="strength-secondary-button" type="button" @onclick="LoadAsync">Prøv igen</button></section>
+    }
+    else if (plan is null)
+    {
+        <section class="strength-empty-state"><span class="strength-empty-icon">⌁</span><h2>Ingen aktiv plan</h2><p>Opret en plan, før du kan se planlagte løb.</p><a class="strength-primary-button" href="/loeb/ny">Opret løbeplan</a></section>
+    }
+    else
+    {
+        <section class="running-goal-card" aria-label="Planoversigt">
+            <p class="strength-overline">Din plan</p>
+            <h2>@RunningPresentation.Distance(plan.TargetDistanceKm)</h2>
+            <p>@LevelName(plan.Level) · @plan.WeeklyFrequency @(plan.WeeklyFrequency == 1 ? "dag" : "dage") om ugen</p>
+            <div class="running-plan-progress"><div><span>@Completed(plan) af @plan.Sessions.Count ture</span><strong>@Progress(plan) %</strong></div><div class="strength-progress-track"><span style="width: @Progress(plan)%"></span></div></div>
+        </section>
+
+        @if (weeks.Count > 0)
+        {
+            <section class="strength-section" aria-labelledby="week-title">
+                <p class="strength-overline" id="week-title">Vælg uge</p>
+                @if (selectedWeek >= 0 && selectedWeek < weeks.Count)
+                {
+                    <div class="running-week-selector" aria-labelledby="week-title">
+                        <button class="running-week-navigation" type="button" @onclick="SelectPreviousWeek" disabled="@(selectedWeek == 0)" aria-label="Forrige uge" title="Forrige uge">‹</button>
+                        <button class="running-week-trigger" type="button" @onclick="OpenWeekPicker" aria-haspopup="dialog" aria-expanded="@(weekPickerOpen ? "true" : "false")">
+                            <span>Uge @(selectedWeek + 1)</span>
+                            <strong>@WeekRange(weeks[selectedWeek])</strong>
+                        </button>
+                        <button class="running-week-navigation" type="button" @onclick="SelectNextWeek" disabled="@(selectedWeek == weeks.Count - 1)" aria-label="Næste uge" title="Næste uge">›</button>
+                    </div>
+                    <div class="running-session-list" style="margin-top: .9rem">
+                        @foreach (var session in weeks[selectedWeek].Sessions)
+                        {
+                            <a class="running-session-row" href="@($"/loeb/plan/{session.Id}")">
+                                <span class="running-session-date">@ShortDay(session.Date)<br />@session.Date.Day</span>
+                                <span class="running-session-copy"><strong>@KindName(session.Kind)</strong><span>@RunningPresentation.Distance(session.PlannedDistanceKm) · @RunningPresentation.PaceRange(session.PaceMinSecondsPerKm, session.PaceMaxSecondsPerKm)</span>@if (session.State == RunningSessionState.Completed) { <span class="running-session-status is-complete">Gennemført</span> } else if (session.State == RunningSessionState.Started) { <span class="running-session-status is-active">I gang</span> }</span>
+                                <span class="running-session-chevron" aria-hidden="true">›</span>
+                            </a>
+                        }
+                    </div>
+                }
+            </section>
+        }
+        else
+        {
+            <section class="strength-empty-compact"><p>Planen har endnu ingen planlagte ture.</p></section>
+        }
+    }
+
+    <ModalDialog IsOpen="@weekPickerOpen" Title="Vælg uge" Description="Vælg den uge i planen, du vil se." InitialFocusSelector="[data-week-selected='true']" OnDismiss="CloseWeekPicker">
+        <div class="running-week-list" aria-label="Planens uger">
+            @for (var index = 0; index < weeks.Count; index++)
+            {
+                var weekIndex = index;
+                var week = weeks[weekIndex];
+                <button class="running-week-option @(weekIndex == selectedWeek ? "is-selected" : null)" type="button" aria-pressed="@(weekIndex == selectedWeek)" data-week-selected="@(weekIndex == selectedWeek ? "true" : null)" @onclick="() => SelectWeek(weekIndex)">
+                    <strong>Uge @(weekIndex + 1)</strong>
+                    <span>@WeekRange(week)</span>
+                </button>
+            }
+        </div>
+    </ModalDialog>
+
+    <StrengthBottomNavigation Active="running" />
+</main>
+
+@code {
+    private RunningPlanResponse? plan;
+    private bool isLoading;
+    private string? error;
+    private int selectedWeek = -1;
+    private bool weekPickerOpen;
+    private List<PlanWeek> weeks = [];
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (isLoading)
+        {
+            return;
+        }
+
+        isLoading = true;
+        error = null;
+        var overview = await Running.GetOverviewAsync();
+        plan = overview.Value?.ActivePlan;
+        error = overview.Error;
+        weeks = plan is null ? [] : BuildWeeks(plan.Sessions);
+        selectedWeek = SelectInitialWeek(weeks);
+        weekPickerOpen = false;
+        isLoading = false;
+    }
+
+    private static List<PlanWeek> BuildWeeks(IReadOnlyList<RunningSessionResponse> sessions) => sessions
+        .GroupBy(session => RunningPresentation.Monday(session.Date))
+        .OrderBy(group => group.Key)
+        .Select(group => new PlanWeek(group.Key, group.Key.AddDays(6), group.OrderBy(session => session.Date).ToArray()))
+        .ToList();
+
+    private static int SelectInitialWeek(IReadOnlyList<PlanWeek> items)
+    {
+        var today = RunningPresentation.CopenhagenToday;
+        for (var index = 0; index < items.Count; index++)
+        {
+            if (items[index].Sessions.Any(session => session.State != RunningSessionState.Completed && session.Date >= today))
+            {
+                return index;
+            }
+        }
+
+        return items.Count == 0 ? -1 : 0;
+    }
+
+    private void OpenWeekPicker() => weekPickerOpen = true;
+
+    private void CloseWeekPicker() => weekPickerOpen = false;
+
+    private void SelectPreviousWeek()
+    {
+        if (selectedWeek > 0)
+        {
+            selectedWeek--;
+        }
+    }
+
+    private void SelectNextWeek()
+    {
+        if (selectedWeek >= 0 && selectedWeek < weeks.Count - 1)
+        {
+            selectedWeek++;
+        }
+    }
+
+    private void SelectWeek(int index)
+    {
+        if (index < 0 || index >= weeks.Count)
+        {
+            return;
+        }
+
+        selectedWeek = index;
+        weekPickerOpen = false;
+    }
+
+    private static int Completed(RunningPlanResponse source) => source.Sessions.Count(session => session.State == RunningSessionState.Completed);
+    private static int Progress(RunningPlanResponse source) => source.Sessions.Count == 0 ? 0 : (int)Math.Round(Completed(source) * 100m / source.Sessions.Count, MidpointRounding.AwayFromZero);
+    private static string ShortDay(DateOnly date) => date.ToString("ddd", System.Globalization.CultureInfo.GetCultureInfo("da-DK"));
+    private static string WeekRange(PlanWeek week)
+    {
+        var culture = System.Globalization.CultureInfo.GetCultureInfo("da-DK");
+        var startFormat = week.Start.Year == week.End.Year ? "ddd d. MMM" : "ddd d. MMM yyyy";
+        var endFormat = "ddd d. MMM yyyy";
+        return $"{week.Start.ToString(startFormat, culture)}–{week.End.ToString(endFormat, culture)}";
+    }
+    private static string LevelName(RunningLevel level) => level switch { RunningLevel.NewToRunning => "Helt ny", RunningLevel.Beginner => "Begynder", RunningLevel.Recreational => "Let øvet", RunningLevel.Trained => "Øvet", _ => "Erfaren" };
+    private static string KindName(RunningSessionKind kind) => kind switch { RunningSessionKind.Easy => "Rolig tur", RunningSessionKind.Tempo => "Tempotur", RunningSessionKind.Intervals => "Intervaller", _ => "Lang tur" };
+
+    private sealed record PlanWeek(DateOnly Start, DateOnly End, IReadOnlyList<RunningSessionResponse> Sessions);
+}

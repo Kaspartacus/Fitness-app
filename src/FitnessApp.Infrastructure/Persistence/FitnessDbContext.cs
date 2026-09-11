@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using FitnessApp.Domain.Running;
 using FitnessApp.Domain.Strength;
 
 namespace FitnessApp.Infrastructure.Persistence;
@@ -16,6 +17,11 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
     public DbSet<ProgramScheduleEntry> ProgramScheduleEntries => Set<ProgramScheduleEntry>();
     public DbSet<CompletedWorkout> CompletedWorkouts => Set<CompletedWorkout>();
     public DbSet<CompletedWorkoutExercise> CompletedWorkoutExercises => Set<CompletedWorkoutExercise>();
+
+    public DbSet<RunningPlan> RunningPlans => Set<RunningPlan>();
+    public DbSet<RunningPlanDay> RunningPlanDays => Set<RunningPlanDay>();
+    public DbSet<RunningSession> RunningSessions => Set<RunningSession>();
+    public DbSet<RunningResult> RunningResults => Set<RunningResult>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -71,6 +77,49 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
             entity.Property(exercise => exercise.Name).HasMaxLength(100).IsRequired();
             entity.Property(exercise => exercise.Weight).HasPrecision(7, 2);
             entity.HasIndex(exercise => new { exercise.CompletedWorkoutId, exercise.Position }).IsUnique();
+        });
+
+        builder.Entity<RunningPlan>(entity =>
+        {
+            entity.HasKey(plan => plan.Id);
+            entity.Property(plan => plan.Version).IsConcurrencyToken();
+            entity.Property(plan => plan.ThirtyMinuteDistanceKm).HasPrecision(5, 2);
+            entity.Property(plan => plan.TargetDistanceKm).HasPrecision(5, 2);
+            entity.HasIndex(plan => new { plan.UserId, plan.CreatedAtUtc });
+            entity.HasIndex(plan => plan.UserId).IsUnique().HasFilter("\"IsActive\" = 1");
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(plan => plan.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(plan => plan.SelectedDays).WithOne().HasForeignKey(day => day.PlanId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(plan => plan.Sessions).WithOne().HasForeignKey(session => session.PlanId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<RunningPlanDay>(entity =>
+        {
+            entity.HasKey(day => day.Id);
+            entity.HasIndex(day => new { day.PlanId, day.DayOfWeek }).IsUnique();
+        });
+        builder.Entity<RunningSession>(entity =>
+        {
+            entity.HasKey(session => session.Id);
+            entity.Property(session => session.PlannedDistanceKm).HasPrecision(5, 2);
+            entity.Property(session => session.Structure).HasMaxLength(RunningRules.MaxStructureLength).IsRequired();
+            entity.HasIndex(session => new { session.PlanId, session.Date }).IsUnique();
+            entity.HasIndex(session => new { session.PlanId, session.Position }).IsUnique();
+        });
+        builder.Entity<RunningResult>(entity =>
+        {
+            entity.HasKey(result => result.Id);
+            entity.Property(result => result.DistanceKm).HasPrecision(5, 2);
+            entity.Property(result => result.Note).HasMaxLength(RunningRules.MaxNoteLength);
+            entity.Property(result => result.Version).IsConcurrencyToken();
+            entity.HasIndex(result => new { result.UserId, result.Date });
+            entity.HasIndex(result => new { result.UserId, result.CompletionId }).IsUnique();
+            entity.HasIndex(result => result.SessionId).IsUnique();
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(result => result.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<RunningSession>().WithOne().HasForeignKey<RunningResult>(result => result.SessionId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<ApplicationUser>(entity =>

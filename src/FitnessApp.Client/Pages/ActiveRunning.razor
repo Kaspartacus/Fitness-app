@@ -1,0 +1,246 @@
+@page "/loeb/plan/{SessionId:guid}/aktiv"
+@attribute [Authorize]
+@implements IDisposable
+@using FitnessApp.Client.Running
+@using FitnessApp.Contracts.Running
+@inject RunningClient Running
+@inject NavigationManager Navigation
+
+<PageTitle>@(session is null ? "Aktivt løb" : KindName(session.Kind))</PageTitle>
+
+<NavigationLock ConfirmExternalNavigation="hasActiveRun" OnBeforeInternalNavigation="ConfirmNavigationAsync" />
+
+<main class="strength-app running-app strength-with-bottom-nav running-active-page" aria-labelledby="active-running-title">
+    <header class="strength-back-header">
+        <a class="strength-icon-button" href="@($"/loeb/plan/{SessionId}")" aria-label="Afbryd løbetur" title="Afbryd løbetur">←</a>
+        <div><h1 id="active-running-title">@(session is null ? "Løbetur" : KindName(session.Kind))</h1><p class="running-active-timer">@Elapsed</p></div>
+        <span class="strength-header-spacer"></span>
+    </header>
+
+    @if (isLoading)
+    {
+        <p class="strength-feedback" role="status">Starter løbetur…</p>
+    }
+    else if (error is not null)
+    {
+        <section class="strength-status-card" role="alert">
+            <p>@error</p>
+            @if (recoveryResultId is { } resultId)
+            {
+                <a class="strength-primary-button strength-card-button" href="@($"/loeb/resultater/{resultId}")">Se resultat</a>
+            }
+            else if (recoverySessionId is { } activeSessionId)
+            {
+                <a class="strength-primary-button strength-card-button" href="@($"/loeb/plan/{activeSessionId}/aktiv")">Fortsæt aktiv løbetur</a>
+            }
+            else
+            {
+                <button class="strength-secondary-button" type="button" @onclick="RetryAsync">Prøv igen</button>
+            }
+        </section>
+    }
+    else if (session is not null)
+    {
+        <section class="running-active-intro">
+            <p class="strength-overline">Planlagt tur</p>
+            <h2>@RunningPresentation.Distance(session.PlannedDistanceKm)</h2>
+            <p>@RunningPresentation.PaceRange(session.PaceMinSecondsPerKm, session.PaceMaxSecondsPerKm) · @RunningPresentation.Date(session.Date)</p>
+        </section>
+        <section class="strength-editor-card">
+            <p class="strength-overline">Undervejs</p>
+            <p class="running-active-notice">Tidstælleren måler kun den tid, der er gået siden starten. Distance og tempo registreres først, når du selv indtaster dem efter løbet.</p>
+        </section>
+        <div class="running-page-actions">
+            <button class="strength-primary-button running-full-action" type="button" @onclick="FinishAsync">Afslut og registrer</button>
+            <button class="strength-quiet-button running-full-action" type="button" @onclick="() => cancelOpen = true">Annullér aktiv tur</button>
+        </div>
+    }
+
+    <ModalDialog IsOpen="@cancelOpen" Title="Annullér aktiv løbetur?" Description="Turen bliver ikke registreret som gennemført, og den gemte starttid slettes." InitialFocusSelector="[data-modal-cancel]" Destructive="true" DismissOnBackdrop="@(!isCancelling)" DismissOnEscape="@(!isCancelling)" ShowCloseButton="@(!isCancelling)" OnDismiss="CloseCancel">
+        <div class="app-modal-actions"><button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseCancel" disabled="@isCancelling">Bliv i løbetur</button><button class="strength-danger-button" type="button" @onclick="CancelAsync" disabled="@isCancelling">@(isCancelling ? "Annullerer…" : "Annullér løbetur")</button></div>
+    </ModalDialog>
+    <ModalDialog IsOpen="@discardOpen" Title="Forlad aktiv løbetur?" Description="Løbeturen fortsætter som aktiv, indtil du afslutter eller annullerer den." InitialFocusSelector="[data-modal-cancel]" OnDismiss="CloseDiscard">
+        <div class="app-modal-actions"><button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseDiscard">Bliv i løbetur</button><button class="strength-outline-button" type="button" @onclick="LeaveWithoutCancelling">Forlad</button></div>
+    </ModalDialog>
+
+    <StrengthBottomNavigation Active="running" />
+</main>
+
+@code {
+    [Parameter] public Guid SessionId { get; set; }
+    private RunningSessionResponse? session;
+    private bool isLoading;
+    private bool hasActiveRun;
+    private bool cancelOpen;
+    private bool discardOpen;
+    private bool isCancelling;
+    private bool retryCancellation;
+    private bool hasParameters;
+    private Guid loadedSessionId;
+    private int startRequestVersion;
+    private string? pendingNavigationUrl;
+    private string? error;
+    private Guid? recoveryResultId;
+    private Guid? recoverySessionId;
+    private Timer? timer;
+
+    private string Elapsed
+    {
+        get
+        {
+            if (session?.StartedAtUtc is not { } started)
+            {
+                return "00:00:00";
+            }
+
+            var elapsed = DateTime.UtcNow - DateTime.SpecifyKind(started, DateTimeKind.Utc);
+            return elapsed < TimeSpan.Zero ? "00:00:00" : elapsed.ToString(@"hh\:mm\:ss");
+        }
+    }
+
+    protected override Task OnParametersSetAsync()
+    {
+        if (hasParameters && loadedSessionId == SessionId)
+        {
+            return Task.CompletedTask;
+        }
+
+        hasParameters = true;
+        loadedSessionId = SessionId;
+        return StartAsync();
+    }
+
+    private async Task StartAsync()
+    {
+        var requestedSessionId = SessionId;
+        var requestVersion = ++startRequestVersion;
+        isLoading = true;
+        error = null;
+        recoveryResultId = null;
+        recoverySessionId = null;
+        retryCancellation = false;
+        hasActiveRun = false;
+        session = null;
+        timer?.Dispose();
+        timer = null;
+        var result = await Running.StartSessionAsync(requestedSessionId);
+        if (requestVersion != startRequestVersion || requestedSessionId != SessionId)
+        {
+            return;
+        }
+
+        session = result.Value;
+        error = result.Error;
+        if (session?.State == RunningSessionState.Started)
+        {
+            hasActiveRun = true;
+            timer?.Dispose();
+            timer = new Timer(_ => InvokeAsync(StateHasChanged), null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+        }
+        else if (session?.State == RunningSessionState.Completed)
+        {
+            error = "Denne løbetur er allerede gennemført.";
+            recoveryResultId = session.Result?.Id;
+        }
+        else if (result.IsConflict && result.CurrentResultId is { } resultId)
+        {
+            error = "Denne løbetur er allerede gennemført i en anden fane.";
+            recoveryResultId = resultId;
+        }
+        else if (result.IsConflict && result.CurrentSessionId is { } activeSessionId && activeSessionId != requestedSessionId)
+        {
+            error = "En anden løbetur er allerede i gang.";
+            recoverySessionId = activeSessionId;
+        }
+
+        isLoading = false;
+    }
+
+    private void FinishAsync()
+    {
+        hasActiveRun = false;
+        Navigation.NavigateTo($"/loeb/plan/{session?.Id ?? SessionId}/registrer");
+    }
+
+    private async Task CancelAsync()
+    {
+        if (isCancelling)
+        {
+            return;
+        }
+
+        var requestedSessionId = session?.Id ?? SessionId;
+        isCancelling = true;
+        retryCancellation = false;
+        var result = await Running.CancelSessionAsync(requestedSessionId);
+        isCancelling = false;
+        if (result.Succeeded)
+        {
+            hasActiveRun = false;
+            cancelOpen = false;
+            Navigation.NavigateTo($"/loeb/plan/{requestedSessionId}");
+            return;
+        }
+
+        error = result.Error;
+        cancelOpen = false;
+        if (result.IsConflict && result.CurrentResultId is { } resultId)
+        {
+            hasActiveRun = false;
+            error = "Løbeturen blev gennemført i en anden fane.";
+            recoveryResultId = resultId;
+            return;
+        }
+
+        if (result.IsConflict && result.CurrentSessionId is { } activeSessionId && activeSessionId != requestedSessionId)
+        {
+            hasActiveRun = false;
+            error = "En anden løbetur er allerede i gang.";
+            recoverySessionId = activeSessionId;
+            return;
+        }
+
+        retryCancellation = true;
+    }
+
+    private Task RetryAsync() => retryCancellation ? CancelAsync() : StartAsync();
+
+    private Task ConfirmNavigationAsync(LocationChangingContext context)
+    {
+        if (!hasActiveRun)
+        {
+            return Task.CompletedTask;
+        }
+
+        context.PreventNavigation();
+        if (!isCancelling)
+        {
+            pendingNavigationUrl = context.TargetLocation;
+            discardOpen = true;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void CloseCancel() => cancelOpen = false;
+    private void CloseDiscard() { discardOpen = false; pendingNavigationUrl = null; }
+
+    private void LeaveWithoutCancelling()
+    {
+        var url = pendingNavigationUrl ?? $"/loeb/plan/{SessionId}";
+        discardOpen = false;
+        pendingNavigationUrl = null;
+        hasActiveRun = false;
+        Navigation.NavigateTo(url);
+    }
+
+    private static string KindName(RunningSessionKind kind) => kind switch
+    {
+        RunningSessionKind.Easy => "Rolig tur",
+        RunningSessionKind.Tempo => "Tempotur",
+        RunningSessionKind.Intervals => "Intervaller",
+        _ => "Lang tur"
+    };
+
+    public void Dispose() => timer?.Dispose();
+}

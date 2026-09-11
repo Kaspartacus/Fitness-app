@@ -1,0 +1,260 @@
+@page "/loeb/planlaeg"
+@attribute [Authorize]
+@using FitnessApp.Client.Running
+@using FitnessApp.Contracts.Running
+@inject RunningClient Running
+@inject NavigationManager Navigation
+
+<PageTitle>Planlæg løbedage</PageTitle>
+
+<main class="strength-app running-app strength-with-bottom-nav" aria-labelledby="running-schedule-title">
+    <header class="strength-back-header">
+        <a class="strength-icon-button" href="/loeb" aria-label="Tilbage til løb" title="Tilbage til løb">←</a>
+        <div><h1 id="running-schedule-title">Planlæg løbedage</h1>@if (plan is not null) { <p>@plan.WeeklyFrequency @(plan.WeeklyFrequency == 1 ? "dag" : "dage") om ugen</p> }</div>
+        <span class="strength-header-spacer"></span>
+    </header>
+
+    @if (isLoading)
+    {
+        <p class="strength-feedback" role="status">Indlæser løbedage…</p>
+    }
+    else if (loadError is not null)
+    {
+        <section class="strength-status-card" role="alert"><p>@loadError</p><button class="strength-secondary-button" type="button" @onclick="LoadAsync">Prøv igen</button></section>
+    }
+    else if (plan is null)
+    {
+        <section class="strength-empty-state">
+            <span class="strength-empty-icon">⌁</span>
+            <h2>Ingen aktiv plan</h2>
+            <p>Opret en løbeplan, før du vælger faste løbedage.</p>
+            <a class="strength-primary-button" href="/loeb/ny">Opret løbeplan</a>
+        </section>
+    }
+    else
+    {
+        <section class="strength-editor-card" aria-labelledby="running-days-title">
+            <p class="strength-overline">Din uge</p>
+            <h2 id="running-days-title">Hvilke dage vil du løbe?</h2>
+            <p>Vælg præcis @plan.WeeklyFrequency @(plan.WeeklyFrequency == 1 ? "dag" : "dage") i ugen, der passer dig bedst.</p>
+            <div class="running-day-choices" role="group" aria-labelledby="running-days-title">
+                @foreach (var day in Days)
+                {
+                    var isSelected = selectedDays.Contains(day);
+                    <button class="running-day-choice @(isSelected ? "is-selected" : null)" type="button" aria-pressed="@isSelected" disabled="@isSaving" @onclick="() => ToggleDay(day)">@RunningPresentation.Weekday(day)</button>
+                }
+            </div>
+            <p aria-live="polite"><strong>@selectedDays.Count af @plan.WeeklyFrequency valgt</strong></p>
+        </section>
+
+        @if (HasActiveRun)
+        {
+            <section class="strength-status-card" role="status"><p>Du har en aktiv løbetur. Afslut eller annullér den, før du ændrer planens løbedage.</p></section>
+        }
+
+        @if (validationError is not null)
+        {
+            <p class="running-inline-error" role="alert">@validationError</p>
+        }
+        @if (saveError is not null && !confirmationOpen)
+        {
+            <p class="running-inline-error" role="alert">@saveError</p>
+        }
+
+        <div class="running-page-actions">
+            <a class="strength-outline-button" href="/loeb/plan">Annuller</a>
+            <button class="strength-primary-button" type="button" @onclick="OpenConfirmationAsync" disabled="@(!CanSave)">Gem løbedage</button>
+        </div>
+    }
+
+    <ModalDialog IsOpen="@confirmationOpen" Title="Opdatér løbedage?" Description="Fremtidige ture flyttes til de valgte ugedage. Tidligere planlagte ture og tilknyttede resultater bevares." InitialFocusSelector="[data-modal-cancel]" DismissOnBackdrop="@(!isSaving)" DismissOnEscape="@(!isSaving)" ShowCloseButton="@(!isSaving)" OnDismiss="CloseConfirmation">
+        @if (plan is not null)
+        {
+            <p>Fremover løber du: <strong>@SelectedDayNames</strong>.</p>
+        }
+        @if (saveError is not null)
+        {
+            <p class="running-inline-error" role="alert">@saveError</p>
+        }
+        <div class="app-modal-actions">
+            <button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseConfirmation" disabled="@isSaving">Behold nuværende plan</button>
+            <button class="strength-primary-button" type="button" @onclick="SaveAsync" disabled="@isSaving">@(isSaving ? "Opdaterer…" : "Opdatér løbedage")</button>
+        </div>
+    </ModalDialog>
+
+    <StrengthBottomNavigation Active="running" />
+</main>
+
+@code {
+    private static readonly DayOfWeek[] Days = [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday];
+
+    private readonly HashSet<DayOfWeek> selectedDays = [];
+    private RunningPlanResponse? plan;
+    private bool hasDraft;
+    private bool isLoading;
+    private bool isSaving;
+    private bool confirmationOpen;
+    private string? loadError;
+    private string? validationError;
+    private string? saveError;
+
+    private bool HasActiveRun => plan?.Sessions.Any(session => session.State == RunningSessionState.Started) == true;
+    private bool HasChanges => plan is not null && !selectedDays.SetEquals(plan.SelectedDays);
+    private bool CanSave => plan is not null && !isSaving && !HasActiveRun && HasChanges && selectedDays.Count == plan.WeeklyFrequency;
+    private string SelectedDayNames => string.Join(" · ", selectedDays.OrderBy(DayOrder).Select(RunningPresentation.Weekday));
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (isLoading)
+        {
+            return;
+        }
+
+        isLoading = true;
+        loadError = null;
+        var result = await Running.GetOverviewAsync();
+        isLoading = false;
+
+        if (!result.Succeeded)
+        {
+            loadError = result.Error ?? "Løbeplanen kunne ikke indlæses. Prøv igen.";
+            return;
+        }
+
+        plan = result.Value?.ActivePlan;
+        if (plan is not null && !hasDraft)
+        {
+            selectedDays.Clear();
+            selectedDays.UnionWith(plan.SelectedDays);
+            hasDraft = true;
+        }
+    }
+
+    private void ToggleDay(DayOfWeek day)
+    {
+        if (plan is null || isSaving)
+        {
+            return;
+        }
+
+        saveError = null;
+        validationError = null;
+        if (!selectedDays.Add(day))
+        {
+            selectedDays.Remove(day);
+            return;
+        }
+
+        if (selectedDays.Count > plan.WeeklyFrequency)
+        {
+            selectedDays.Remove(day);
+            validationError = $"Fravælg først en dag. Planen har præcis {plan.WeeklyFrequency} {(plan.WeeklyFrequency == 1 ? "løbedag" : "løbedage")} om ugen.";
+        }
+    }
+
+    private Task OpenConfirmationAsync()
+    {
+        if (!ValidateSelection() || HasActiveRun || !HasChanges)
+        {
+            return Task.CompletedTask;
+        }
+
+        saveError = null;
+        confirmationOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (plan is null || isSaving || !ValidateSelection() || HasActiveRun)
+        {
+            return;
+        }
+
+        var planToUpdate = plan;
+        isSaving = true;
+        saveError = null;
+        var result = await Running.UpdatePlanScheduleAsync(planToUpdate.Id, new UpdateRunningPlanScheduleRequest
+        {
+            Version = planToUpdate.Version,
+            SelectedDays = selectedDays.OrderBy(DayOrder).ToList()
+        });
+        isSaving = false;
+
+        if (result.Succeeded)
+        {
+            confirmationOpen = false;
+            Navigation.NavigateTo("/loeb/plan");
+            return;
+        }
+
+        if (result.IsConflict)
+        {
+            await RecoverFromConflictAsync(result.Error);
+            return;
+        }
+
+        saveError = result.Error ?? "Løbedagene kunne ikke gemmes. Prøv igen.";
+    }
+
+    private async Task RecoverFromConflictAsync(string? originalError)
+    {
+        var result = await Running.GetOverviewAsync();
+        if (!result.Succeeded)
+        {
+            saveError = result.Error ?? originalError ?? "Planen blev ændret. Prøv igen.";
+            return;
+        }
+
+        plan = result.Value?.ActivePlan;
+        if (plan is null)
+        {
+            confirmationOpen = false;
+            saveError = originalError ?? "Din aktive løbeplan findes ikke længere. Opret en ny plan.";
+            return;
+        }
+
+        if (HasActiveRun)
+        {
+            confirmationOpen = false;
+            saveError = "Den aktuelle plan har en aktiv løbetur. Afslut eller annullér den, før løbedagene ændres.";
+            return;
+        }
+
+        if (!ValidateSelection())
+        {
+            confirmationOpen = false;
+            return;
+        }
+
+        confirmationOpen = true;
+        saveError = "Planen blev ændret et andet sted. Bekræft løbedagene igen.";
+    }
+
+    private bool ValidateSelection()
+    {
+        validationError = null;
+        if (plan is null)
+        {
+            validationError = "Der er ikke længere en aktiv løbeplan.";
+        }
+        else if (selectedDays.Count != plan.WeeklyFrequency)
+        {
+            validationError = $"Vælg præcis {plan.WeeklyFrequency} {(plan.WeeklyFrequency == 1 ? "løbedag" : "løbedage")}.";
+        }
+
+        return validationError is null;
+    }
+
+    private void CloseConfirmation()
+    {
+        if (!isSaving)
+        {
+            confirmationOpen = false;
+        }
+    }
+
+    private static int DayOrder(DayOfWeek day) => ((int)day + 6) % 7;
+}

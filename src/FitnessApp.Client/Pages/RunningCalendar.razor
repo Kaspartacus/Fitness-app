@@ -1,0 +1,172 @@
+@page "/kalender"
+@attribute [Authorize]
+@using System.Globalization
+@using FitnessApp.Client.Running
+@using FitnessApp.Contracts.Running
+@inject RunningClient Running
+
+<PageTitle>Løbekalender</PageTitle>
+
+<main class="strength-app running-app strength-with-bottom-nav" aria-labelledby="calendar-title">
+    <header class="strength-back-header">
+        <a class="strength-icon-button" href="/loeb" aria-label="Tilbage til løb" title="Tilbage til løb">←</a>
+        <h1 id="calendar-title">Løbekalender</h1>
+        <a class="strength-icon-button" href="/loeb/registrer" aria-label="Registrer løb" title="Registrer løb">＋</a>
+    </header>
+
+    <section class="strength-section" aria-label="Kalender">
+        <div class="running-calendar-controls">
+            <button class="running-calendar-control" type="button" @onclick="PreviousMonthAsync" disabled="@isLoading" aria-label="Forrige måned" title="Forrige måned">‹</button>
+            <h2>@RunningPresentation.Month(month)</h2>
+            <button class="running-calendar-control" type="button" @onclick="NextMonthAsync" disabled="@isLoading" aria-label="Næste måned" title="Næste måned">›</button>
+        </div>
+        <div class="running-calendar-weekdays" aria-hidden="true">@foreach (var day in WeekdayLabels) { <span>@day</span> }</div>
+        @if (isLoading)
+        {
+            <p class="strength-feedback" role="status">Indlæser kalender…</p>
+        }
+        else if (error is not null)
+        {
+            <section class="strength-status-card" role="alert"><p>@error</p><button class="strength-secondary-button" type="button" @onclick="LoadAsync">Prøv igen</button></section>
+        }
+        else
+        {
+            <div class="running-calendar-grid">
+                @foreach (var cell in calendarDays)
+                {
+                    if (cell.Date is { } calendarDate)
+                    {
+                        <button class="@CellClass(calendarDate)" type="button" @onclick="() => SelectDate(calendarDate)" aria-label="@DayLabel(calendarDate)"><span>@calendarDate.Day</span>@if (SessionsOn(calendarDate).Count > 0) { <i class="@DotClass(calendarDate)" aria-hidden="true"></i> }</button>
+                    }
+                    else
+                    {
+                        <span class="running-calendar-day" aria-hidden="true"></span>
+                    }
+                }
+            </div>
+            <section class="running-calendar-selected" aria-live="polite">
+                @if (selectedDate is { } selectedCalendarDate)
+                {
+                    <div class="strength-section-row"><div><p class="strength-overline">Valgt dag</p><h2>@RunningPresentation.Date(selectedCalendarDate)</h2></div>@if (selectedCalendarDate >= EarliestResultDate && selectedCalendarDate <= BrowserToday) { <a class="strength-text-action" href="@ManualLogHref(selectedCalendarDate)">Registrer løb</a> }</div>
+                    @if (SessionsOn(selectedCalendarDate).Count == 0)
+                    {
+                        <div class="strength-empty-compact"><p>Ingen planlagt løbetur denne dag.</p>@if (selectedCalendarDate > BrowserToday) { <p>Et manuelt løb kan registreres med en faktisk dato i dag eller tidligere.</p> }</div>
+                    }
+                    else
+                    {
+                        @if (selectedCalendarDate > BrowserToday)
+                        {
+                            <p class="strength-feedback">Åbn den planlagte tur for at registrere resultatet før tid.</p>
+                        }
+                        <div class="running-session-list">@foreach (var session in SessionsOn(selectedCalendarDate)) { <a class="running-session-row" href="@SessionHref(session)"><span class="running-session-date">@ShortDay(session.Date)<br />@session.Date.Day</span><span class="running-session-copy"><strong>@KindName(session.Kind)</strong><span>@RunningPresentation.Distance(session.PlannedDistanceKm) · @RunningPresentation.PaceRange(session.PaceMinSecondsPerKm, session.PaceMaxSecondsPerKm)</span><span class="@StatusClass(session)">@StatusText(session)</span></span><span class="running-session-chevron" aria-hidden="true">›</span></a> }</div>
+                    }
+                }
+                else
+                {
+                    <div class="strength-empty-compact"><p>Vælg en dag for at se dens planlagte løb.</p></div>
+                }
+            </section>
+        }
+    </section>
+
+    <StrengthBottomNavigation Active="calendar" />
+</main>
+
+@code {
+    private static readonly string[] WeekdayLabels = ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"];
+    private DateOnly month = new(RunningPresentation.CopenhagenToday.Year, RunningPresentation.CopenhagenToday.Month, 1);
+    private List<CalendarCell> calendarDays = [];
+    private Dictionary<DateOnly, List<RunningSessionResponse>> sessionsByDate = [];
+    private DateOnly? selectedDate;
+    private bool isLoading;
+    private string? error;
+
+    protected override Task OnInitializedAsync()
+    {
+        BuildCalendarDays();
+        if (month.Year == BrowserToday.Year && month.Month == BrowserToday.Month)
+        {
+            selectedDate = BrowserToday;
+        }
+
+        return LoadAsync();
+    }
+
+    private async Task PreviousMonthAsync()
+    {
+        month = month.AddMonths(-1);
+        selectedDate = null;
+        BuildCalendarDays();
+        await LoadAsync();
+    }
+
+    private async Task NextMonthAsync()
+    {
+        month = month.AddMonths(1);
+        selectedDate = null;
+        BuildCalendarDays();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (isLoading)
+        {
+            return;
+        }
+
+        isLoading = true;
+        error = null;
+        var response = await Running.ListSessionsAsync(month, month.AddMonths(1).AddDays(-1));
+        if (response.Succeeded && response.Value is { } sessions)
+        {
+            sessionsByDate = sessions
+                .GroupBy(session => session.Date)
+                .ToDictionary(group => group.Key, group => group.OrderBy(session => session.Date).ToList());
+        }
+        else
+        {
+            sessionsByDate = [];
+            error = response.Error ?? "Kalenderen kunne ikke indlæses. Prøv igen.";
+        }
+
+        isLoading = false;
+    }
+
+    private void BuildCalendarDays()
+    {
+        var first = new DateOnly(month.Year, month.Month, 1);
+        var leading = ((int)first.DayOfWeek + 6) % 7;
+        var daysInMonth = DateTime.DaysInMonth(month.Year, month.Month);
+        calendarDays = [];
+        for (var index = 0; index < leading; index++)
+        {
+            calendarDays.Add(new CalendarCell(null));
+        }
+
+        for (var day = 1; day <= daysInMonth; day++)
+        {
+            calendarDays.Add(new CalendarCell(new DateOnly(month.Year, month.Month, day)));
+        }
+
+        while (calendarDays.Count % 7 != 0)
+        {
+            calendarDays.Add(new CalendarCell(null));
+        }
+    }
+
+    private IReadOnlyList<RunningSessionResponse> SessionsOn(DateOnly date) => sessionsByDate.GetValueOrDefault(date) ?? [];
+    private void SelectDate(DateOnly date) => selectedDate = date;
+    private string CellClass(DateOnly date) => $"running-calendar-day is-current-month{(date == BrowserToday ? " is-today" : "")}{(date == selectedDate ? " is-selected" : "")}";
+    private string DotClass(DateOnly date) => $"running-calendar-dot{(SessionsOn(date).Any(session => session.State == RunningSessionState.Completed) ? " is-complete" : "")}";
+    private static string DayLabel(DateOnly date) => RunningPresentation.Date(date);
+    private static string ShortDay(DateOnly date) => date.ToString("ddd", CultureInfo.GetCultureInfo("da-DK"));
+    private static string KindName(RunningSessionKind kind) => kind switch { RunningSessionKind.Easy => "Rolig tur", RunningSessionKind.Tempo => "Tempotur", RunningSessionKind.Intervals => "Intervaller", _ => "Lang tur" };
+    private static string StatusText(RunningSessionResponse session) => session.State switch { RunningSessionState.Completed => "Gennemført", RunningSessionState.Started => "I gang", _ => "Planlagt" };
+    private static string StatusClass(RunningSessionResponse session) => $"running-session-status{(session.State == RunningSessionState.Completed ? " is-complete" : session.State == RunningSessionState.Started ? " is-active" : "")}";
+    private static string SessionHref(RunningSessionResponse session) => $"/loeb/plan/{session.Id}";
+    private static string ManualLogHref(DateOnly date) => $"/loeb/registrer?dato={date:yyyy-MM-dd}";
+    private static DateOnly BrowserToday => RunningPresentation.CopenhagenToday;
+    private static DateOnly EarliestResultDate => new(2000, 1, 1);
+    private sealed record CalendarCell(DateOnly? Date);
+}

@@ -1,0 +1,347 @@
+@page "/loeb/ny"
+@attribute [Authorize]
+@using System.Globalization
+@using FitnessApp.Client.Running
+@using FitnessApp.Contracts.Running
+@inject RunningClient Running
+@inject NavigationManager Navigation
+
+<PageTitle>Opret løbeplan</PageTitle>
+
+<NavigationLock ConfirmExternalNavigation="@(isDirty || isSaving)" OnBeforeInternalNavigation="ConfirmNavigationAsync" />
+
+<main class="strength-app running-app running-wizard strength-with-bottom-nav" aria-labelledby="setup-title">
+    <header class="strength-back-header">
+        <a class="strength-icon-button" href="/loeb" aria-label="Afbryd planopsætning" title="Afbryd planopsætning">←</a>
+        <div><p class="strength-overline running-wizard-step">TRIN @(step + 1) AF 7</p><h1 id="setup-title">@(StepHeading)</h1></div>
+        <span class="strength-header-spacer"></span>
+    </header>
+
+    @if (isLoading)
+    {
+        <p class="strength-feedback" role="status">Klargør planopsætning…</p>
+    }
+    else if (loadError is not null)
+    {
+        <section class="strength-status-card" role="alert"><p>@loadError</p><button class="strength-secondary-button" type="button" @onclick="LoadExistingAsync">Prøv igen</button></section>
+    }
+    else
+    {
+        <div class="running-wizard-content">
+            @switch (step)
+            {
+                case 0:
+                    <h2 class="running-wizard-title">Hvad er dit løbeniveau?</h2><p class="running-wizard-copy">Vær ærlig — planen tilpasses dit niveau.</p>
+                    <div class="running-wizard-options">
+                        @foreach (var level in Levels)
+                        {
+                            <button class="running-choice @(draft.Level == level.Value ? "is-selected" : null)" type="button" @onclick="() => SelectLevel(level.Value)"><strong>@level.Name</strong><small>@level.Description</small></button>
+                        }
+                    </div>
+                    break;
+                case 1:
+                    <h2 class="running-wizard-title">Hvor langt kan du løbe på 30 minutter?</h2><p class="running-wizard-copy">Giv et realistisk bud — selv et skøn er nok.</p>
+                    <div class="running-distance-choices">@foreach (var distance in BaselinePresets) { <button class="running-distance-choice @(draft.ThirtyMinuteDistanceText == distance ? "is-selected" : null)" type="button" @onclick="() => SelectBaseline(distance)">@distance</button> }</div>
+                    <label class="strength-input-label running-wizard-custom-input">Eller indtast selv <input class="strength-input" inputmode="decimal" autocomplete="off" placeholder="fx 3,5" @bind="draft.ThirtyMinuteDistanceText" @bind:event="oninput" @bind:after="MarkDirty" /><span>km på 30 minutter</span></label>
+                    break;
+                case 2:
+                    <h2 class="running-wizard-title">Hvor langt vil du kunne løbe?</h2><p class="running-wizard-copy">Vælg den distance, du vil arbejde hen imod.</p>
+                    <div class="running-wizard-options">@foreach (var goal in GoalPresets) { <button class="running-choice @(draft.TargetDistanceText == goal.Value ? "is-selected" : null)" type="button" @onclick="() => SelectGoal(goal.Value)"><strong>@goal.Name</strong></button> }</div>
+                    <label class="strength-input-label running-wizard-custom-input">Anden distance <input class="strength-input" inputmode="decimal" autocomplete="off" placeholder="fx 7,5" @bind="draft.TargetDistanceText" @bind:event="oninput" @bind:after="MarkDirty" /><span>km</span></label>
+                    break;
+                case 3:
+                    <h2 class="running-wizard-title">Hvornår vil du nå målet?</h2><p class="running-wizard-copy">Sæt en realistisk deadline, der motiverer dig. Vi afviser et mål, som ikke kan planlægges ansvarligt.</p>
+                    <RunningDatePicker Id="running-target-date" Label="Måldato" ModalTitle="Vælg måldato" Placeholder="Vælg en måldato" Value="@TargetDate" ValueChanged="SetTargetDateAsync" Min="@MinimumTargetDate" Max="@MaximumTargetDate" />
+                    break;
+                case 4:
+                    <h2 class="running-wizard-title">Hvor mange dage om ugen vil du løbe?</h2><p class="running-wizard-copy">Realistisk og bæredygtig er bedre end ambitiøs og opgivet.</p>
+                    <div class="running-frequency-choices">@foreach (var frequency in Enumerable.Range(1, 7)) { <button class="running-frequency-choice @(draft.WeeklyFrequency == frequency ? "is-selected" : null)" type="button" @onclick="() => SelectFrequency(frequency)">@frequency</button> }</div>
+                    break;
+                case 5:
+                    <h2 class="running-wizard-title">Hvilke dage vil du løbe?</h2><p class="running-wizard-copy">Vælg @draft.WeeklyFrequency @(draft.WeeklyFrequency == 1 ? "dag" : "dage") der passer dig bedst. <strong>@draft.SelectedDays.Count af @draft.WeeklyFrequency valgt</strong></p>
+                    <div class="running-day-choices">@foreach (var day in Days) { <button class="running-day-choice @(draft.SelectedDays.Contains(day) ? "is-selected" : null)" type="button" @onclick="() => ToggleDay(day)">@RunningPresentation.Weekday(day)</button> }</div>
+                    break;
+                default:
+                    <h2 class="running-wizard-title">Din løbeplan</h2><p class="running-wizard-copy">Bekræft oplysningerne, før planen oprettes.</p>
+                    <section class="strength-editor-card running-review">
+                        <div class="running-review-row"><span>Niveau</span><strong>@LevelName(draft.Level)</strong></div>
+                        <div class="running-review-row"><span>Form på 30 min</span><strong>@draft.ThirtyMinuteDistanceText km</strong></div>
+                        <div class="running-review-row"><span>Mål</span><strong>@draft.TargetDistanceText km</strong></div>
+                        <div class="running-review-row"><span>Måldato</span><strong>@FormattedTargetDate</strong></div>
+                        <div class="running-review-row"><span>Frekvens</span><strong>@draft.WeeklyFrequency @(draft.WeeklyFrequency == 1 ? "dag" : "dage") om ugen</strong></div>
+                        <div class="running-review-row"><span>Løbedage</span><strong>@string.Join(" · ", draft.SelectedDays.OrderBy(DayOrder).Select(RunningPresentation.Weekday))</strong></div>
+                    </section>
+                    break;
+            }
+
+            @if (validationError is not null) { <p class="running-inline-error" role="alert">@validationError</p> }
+            @if (saveError is not null) { <p class="running-inline-error" role="alert">@saveError</p> }
+        </div>
+
+        <footer class="running-wizard-footer">
+            @if (step == 0)
+            {
+                <button class="strength-primary-button" type="button" @onclick="NextAsync">Fortsæt</button>
+            }
+            else if (step < 6)
+            {
+                <div class="running-wizard-navigation"><button class="strength-outline-button" type="button" @onclick="Back">Tilbage</button><button class="strength-primary-button" type="button" @onclick="NextAsync">Fortsæt</button></div>
+            }
+            else
+            {
+                <div class="running-wizard-navigation"><button class="strength-outline-button" type="button" @onclick="Back" disabled="@isSaving">Tilbage</button><button class="strength-primary-button" type="button" @onclick="CreateOrAskAsync" disabled="@isSaving">@(isSaving ? "Opretter…" : "Opret løbeplan")</button></div>
+            }
+        </footer>
+    }
+
+    <ModalDialog IsOpen="@replaceOpen" Title="Erstat aktiv løbeplan?" Description="Dine allerede gennemførte løb bevares. Uafsluttede ture fra den nuværende plan arkiveres og erstattes af den nye plan." InitialFocusSelector="[data-modal-cancel]" Destructive="true" DismissOnBackdrop="@(!isSaving)" DismissOnEscape="@(!isSaving)" ShowCloseButton="@(!isSaving)" OnDismiss="CloseReplace">
+        <div class="app-modal-actions"><button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseReplace" disabled="@isSaving">Behold nuværende plan</button><button class="strength-danger-button" type="button" @onclick="() => SavePlanAsync(true)" disabled="@isSaving">@(isSaving ? "Opretter…" : "Erstat plan")</button></div>
+    </ModalDialog>
+    <ModalDialog IsOpen="@discardOpen" Title="Kassér planopsætning?" Description="Dine ikke-gemte valg slettes." InitialFocusSelector="[data-modal-cancel]" Destructive="true" OnDismiss="CloseDiscard">
+        <div class="app-modal-actions"><button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseDiscard">Fortsæt opsætning</button><button class="strength-danger-button" type="button" @onclick="DiscardAndNavigate">Kassér valg</button></div>
+    </ModalDialog>
+
+    <StrengthBottomNavigation Active="running" />
+</main>
+
+@code {
+    private static readonly (RunningLevel Value, string Name, string Description)[] Levels =
+    [
+        (RunningLevel.NewToRunning, "Helt ny", "Jeg løber næsten aldrig."),
+        (RunningLevel.Beginner, "Begynder", "Jeg løber lidt, men uden fast plan."),
+        (RunningLevel.Recreational, "Let øvet", "Jeg løber regelmæssigt."),
+        (RunningLevel.Trained, "Øvet", "Jeg træner målrettet flere gange om ugen."),
+        (RunningLevel.Experienced, "Erfaren", "Jeg har mange års løbeerfaring.")
+    ];
+    private static readonly string[] BaselinePresets = ["2", "3", "4", "5", "7"];
+    private static readonly (string Value, string Name)[] GoalPresets = [("5", "5 km"), ("10", "10 km"), ("21,1", "Halvmaraton"), ("42,2", "Maraton")];
+    private static readonly DayOfWeek[] Days = [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday];
+
+    private readonly SetupDraft draft = new();
+    private RunningPlanResponse? activePlan;
+    private int step;
+    private bool isLoading;
+    private bool isSaving;
+    private bool isDirty;
+    private bool replaceOpen;
+    private bool discardOpen;
+    private string? pendingNavigationUrl;
+    private string? loadError;
+    private string? validationError;
+    private string? saveError;
+
+    private string StepHeading => step switch { 0 => "Dit løbeniveau", 1 => "Nuværende form", 2 => "Dit mål", 3 => "Tidslinje", 4 => "Træningsfrekvens", 5 => "Løbedage", _ => "Klar til at løbe" };
+    private string FormattedTargetDate => TryGetTargetDate(out var date) ? RunningPresentation.Date(date) : draft.TargetDateText;
+
+    protected override Task OnInitializedAsync() => LoadExistingAsync();
+
+    private async Task LoadExistingAsync()
+    {
+        if (isLoading)
+        {
+            return;
+        }
+
+        isLoading = true;
+        loadError = null;
+        var result = await Running.GetOverviewAsync();
+        activePlan = result.Value?.ActivePlan;
+        loadError = result.Error;
+        isLoading = false;
+    }
+
+    private async Task NextAsync()
+    {
+        if (!ValidateStep())
+        {
+            return;
+        }
+
+        if (step < 6)
+        {
+            step++;
+            validationError = null;
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private void Back()
+    {
+        if (step > 0)
+        {
+            step--;
+            validationError = null;
+        }
+    }
+
+    private bool ValidateStep()
+    {
+        validationError = null;
+        if (step == 1 && (!RunningPresentation.TryParseDistance(draft.ThirtyMinuteDistanceText, out var baseline) || baseline is < 0.5m or > 15m))
+        {
+            validationError = "Angiv en afstand mellem 0,5 og 15 km.";
+        }
+        else if (step == 2 && (!RunningPresentation.TryParseDistance(draft.TargetDistanceText, out var target) || target is < 1m or > 100m))
+        {
+            validationError = "Angiv en måldistance mellem 1 og 100 km.";
+        }
+        else if (step == 3 && (!TryGetTargetDate(out var targetDate) || targetDate < RunningPresentation.CopenhagenToday.AddDays(7)))
+        {
+            validationError = "Vælg en måldato mindst syv dage fra i dag.";
+        }
+        else if (step == 5 && draft.SelectedDays.Count != draft.WeeklyFrequency)
+        {
+            validationError = $"Vælg præcis {draft.WeeklyFrequency} {(draft.WeeklyFrequency == 1 ? "dag" : "dage")}.";
+        }
+
+        return validationError is null;
+    }
+
+    private async Task CreateOrAskAsync()
+    {
+        if (!ValidateStep())
+        {
+            return;
+        }
+
+        if (activePlan is not null)
+        {
+            replaceOpen = true;
+            return;
+        }
+
+        await SavePlanAsync(false);
+    }
+
+    private async Task SavePlanAsync(bool replace)
+    {
+        if (isSaving || !TryBuildRequest(out var request))
+        {
+            return;
+        }
+
+        isSaving = true;
+        saveError = null;
+        var result = replace && activePlan is not null
+            ? await Running.ReplacePlanAsync(activePlan.Id, new ReplaceRunningPlanRequest
+            {
+                Version = activePlan.Version,
+                ReplaceActivePlan = true,
+                Level = request.Level,
+                ThirtyMinuteDistanceKm = request.ThirtyMinuteDistanceKm,
+                TargetDistanceKm = request.TargetDistanceKm,
+                TargetDate = request.TargetDate,
+                WeeklyFrequency = request.WeeklyFrequency,
+                SelectedDays = request.SelectedDays
+            })
+            : await Running.CreatePlanAsync(request);
+        isSaving = false;
+        replaceOpen = false;
+        if (result.Succeeded)
+        {
+            isDirty = false;
+            Navigation.NavigateTo("/loeb/plan");
+            return;
+        }
+
+        if (result.IsConflict)
+        {
+            await RecoverFromPlanConflictAsync(result.Error);
+            return;
+        }
+
+        saveError = result.Error;
+    }
+
+    private async Task RecoverFromPlanConflictAsync(string? originalError)
+    {
+        var overview = await Running.GetOverviewAsync();
+        if (!overview.Succeeded)
+        {
+            saveError = overview.Error ?? originalError;
+            return;
+        }
+
+        activePlan = overview.Value?.ActivePlan;
+        if (activePlan is null)
+        {
+            saveError = originalError ?? "Løbeplanen blev ændret. Prøv at oprette planen igen.";
+            return;
+        }
+
+        if (activePlan.Sessions.Any(session => session.State == RunningSessionState.Started))
+        {
+            saveError = "Den aktuelle plan har en aktiv løbetur. Afslut eller annullér den, før planen kan erstattes.";
+            return;
+        }
+
+        // The draft stays intact; the confirmation now uses the refreshed plan version.
+        replaceOpen = true;
+    }
+
+    private bool TryBuildRequest(out RunningPlanRequest request)
+    {
+        request = new RunningPlanRequest();
+        if (!RunningPresentation.TryParseDistance(draft.ThirtyMinuteDistanceText, out var baseline) || !RunningPresentation.TryParseDistance(draft.TargetDistanceText, out var target) || !TryGetTargetDate(out var date))
+        {
+            validationError = "Kontrollér de indtastede oplysninger.";
+            return false;
+        }
+
+        request = new RunningPlanRequest { Level = draft.Level, ThirtyMinuteDistanceKm = baseline, TargetDistanceKm = target, TargetDate = date, WeeklyFrequency = draft.WeeklyFrequency, SelectedDays = draft.SelectedDays.OrderBy(DayOrder).ToList() };
+        return true;
+    }
+
+    private bool TryGetTargetDate(out DateOnly date) => DateOnly.TryParseExact(draft.TargetDateText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
+    private DateOnly? TargetDate => TryGetTargetDate(out var date) ? date : null;
+    private DateOnly MinimumTargetDate => RunningPresentation.CopenhagenToday.AddDays(7);
+    private DateOnly MaximumTargetDate => RunningPresentation.CopenhagenToday.AddDays(365);
+    private Task SetTargetDateAsync(DateOnly? date)
+    {
+        draft.TargetDateText = date?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "";
+        MarkDirty();
+        return Task.CompletedTask;
+    }
+    private void SelectLevel(RunningLevel level) { draft.Level = level; MarkDirty(); }
+    private void SelectBaseline(string value) { draft.ThirtyMinuteDistanceText = value; MarkDirty(); }
+    private void SelectGoal(string value) { draft.TargetDistanceText = value; MarkDirty(); }
+    private void SelectFrequency(int value) { draft.WeeklyFrequency = value; while (draft.SelectedDays.Count > value) draft.SelectedDays.Remove(draft.SelectedDays.OrderByDescending(DayOrder).First()); MarkDirty(); }
+    private void ToggleDay(DayOfWeek day) { if (!draft.SelectedDays.Add(day)) { draft.SelectedDays.Remove(day); } else if (draft.SelectedDays.Count > draft.WeeklyFrequency) { draft.SelectedDays.Remove(day); validationError = $"Vælg højst {draft.WeeklyFrequency} {(draft.WeeklyFrequency == 1 ? "dag" : "dage")}."; } MarkDirty(); }
+    private void MarkDirty() => isDirty = true;
+    private static int DayOrder(DayOfWeek day) => ((int)day + 6) % 7;
+    private static string LevelName(RunningLevel level) => level switch { RunningLevel.NewToRunning => "Helt ny", RunningLevel.Beginner => "Begynder", RunningLevel.Recreational => "Let øvet", RunningLevel.Trained => "Øvet", _ => "Erfaren" };
+
+    private Task ConfirmNavigationAsync(LocationChangingContext context)
+    {
+        if (isSaving)
+        {
+            context.PreventNavigation();
+            return Task.CompletedTask;
+        }
+
+        if (!isDirty)
+        {
+            return Task.CompletedTask;
+        }
+
+        context.PreventNavigation();
+        pendingNavigationUrl = context.TargetLocation;
+        discardOpen = true;
+        return Task.CompletedTask;
+    }
+
+    private void CloseReplace() => replaceOpen = false;
+    private void CloseDiscard() { discardOpen = false; pendingNavigationUrl = null; }
+    private void DiscardAndNavigate() { var url = pendingNavigationUrl ?? "/loeb"; discardOpen = false; pendingNavigationUrl = null; isDirty = false; Navigation.NavigateTo(url); }
+
+    private sealed class SetupDraft
+    {
+        public RunningLevel Level { get; set; } = RunningLevel.Beginner;
+        public string ThirtyMinuteDistanceText { get; set; } = "";
+        public string TargetDistanceText { get; set; } = "";
+        public string TargetDateText { get; set; } = "";
+        public int WeeklyFrequency { get; set; } = 3;
+        public HashSet<DayOfWeek> SelectedDays { get; } = [];
+    }
+}

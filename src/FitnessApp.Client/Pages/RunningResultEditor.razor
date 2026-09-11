@@ -1,0 +1,488 @@
+@page "/loeb/registrer"
+@page "/loeb/plan/{SessionId:guid}/registrer"
+@page "/loeb/resultater/{ResultId:guid}/ret"
+@attribute [Authorize]
+@using System.Globalization
+@using FitnessApp.Client.Running
+@using FitnessApp.Contracts.Running
+@inject RunningClient Running
+@inject NavigationManager Navigation
+
+<PageTitle>@EditorTitle</PageTitle>
+
+<NavigationLock ConfirmExternalNavigation="@(isDirty || isSaving)" OnBeforeInternalNavigation="ConfirmNavigationAsync" />
+
+<main class="strength-app running-app strength-with-bottom-nav" aria-labelledby="result-editor-title">
+    <header class="strength-back-header">
+        <a class="strength-icon-button" href="@BackUrl" aria-label="Tilbage" title="Tilbage">←</a>
+        <div><h1 id="result-editor-title">@EditorTitle</h1>@if (session is not null) { <p>@RunningPresentation.Date(session.Date) · @KindName(session.Kind)</p> }</div>
+        <span class="strength-header-spacer"></span>
+    </header>
+
+    @if (isLoading)
+    {
+        <p class="strength-feedback" role="status">Indlæser resultat…</p>
+    }
+    else if (loadError is not null)
+    {
+        <section class="strength-status-card" role="alert"><p>@loadError</p><button class="strength-secondary-button" type="button" @onclick="LoadAsync">Prøv igen</button></section>
+    }
+    else if (AlreadyCompleted)
+    {
+        <section class="strength-status-card"><p>Denne planlagte tur er allerede registreret.</p><a class="strength-primary-button strength-card-button" href="@($"/loeb/resultater/{session!.Result!.Id}/ret")">Rediger resultat</a></section>
+    }
+    else
+    {
+        @if (session is not null)
+        {
+            <section class="running-result-panel" aria-label="Planlagt resultat">
+                <p class="strength-overline">Planlagt</p>
+                <div class="running-result-values"><div><span>Distance</span><strong>@RunningPresentation.Distance(session.PlannedDistanceKm)</strong></div><div><span>Måltempo</span><strong>@RunningPresentation.PaceRange(session.PaceMinSecondsPerKm, session.PaceMaxSecondsPerKm)</strong></div></div>
+            </section>
+        }
+        else if (Mode == EditorMode.Manual)
+        {
+            <section class="strength-editor-card"><p class="strength-overline">Manuel registrering</p><p>Gem et gennemført løb uden en aktiv plan. Du angiver selv distance og tid.</p></section>
+        }
+
+        <form class="running-result-form" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+            <fieldset class="strength-editor-card" disabled="@isSaving">
+                <p class="strength-overline">Faktisk</p>
+                <RunningDatePicker Id="running-date" Label="Dato" Value="@SelectedDate" ValueChanged="SetDateAsync" Min="@EarliestResultDate" Max="@BrowserToday" Disabled="@isSaving" />
+                <div class="running-result-input-grid">
+                    <label class="strength-input-label" for="running-distance">Distance (km)
+                        <input class="strength-input" id="running-distance" inputmode="decimal" autocomplete="off" placeholder="fx 5,2" @bind="distanceText" @bind:event="oninput" @bind:after="MarkDirty" />
+                    </label>
+                    <RunningDurationFields IdPrefix="running-duration" Label="Tid" Minutes="@durationMinutesText" MinutesChanged="SetDurationMinutesAsync" Seconds="@durationSecondsText" SecondsChanged="SetDurationSecondsAsync" OnInput="MarkDirty" Disabled="@isSaving" />
+                </div>
+                <label class="strength-input-label" for="running-heart-rate">Gennemsnitlig puls (valgfri)
+                    <input class="strength-input" id="running-heart-rate" inputmode="numeric" autocomplete="off" placeholder="fx 152" @bind="heartRateText" @bind:event="oninput" @bind:after="MarkDirty" />
+                </label>
+                <label class="strength-input-label" for="running-note">Note (valgfri)
+                    <textarea class="strength-textarea" id="running-note" maxlength="500" rows="4" placeholder="Hvordan føltes turen?" @bind="note" @bind:event="oninput" @bind:after="MarkDirty"></textarea>
+                </label>
+                @if (fieldError is not null) { <p class="strength-field-error" role="alert">@fieldError</p> }
+                @if (saveError is not null) { <p class="strength-field-error" role="alert">@saveError</p> }
+                @if (conflictedResultId is { } conflictId) { <a class="strength-outline-button strength-card-button" href="@($"/loeb/resultater/{conflictId}")">Se gemt resultat</a> }
+            </fieldset>
+            <div class="running-page-actions">
+                <button class="strength-primary-button" type="submit" disabled="@isSaving">@(isSaving ? "Gemmer…" : SaveLabel)</button>
+                @if (Mode == EditorMode.Session)
+                {
+                    <button class="strength-outline-button" type="button" @onclick="RequestCompleteWithoutDetailsAsync" disabled="@isSaving">Fuldfør uden detaljer</button>
+                }
+            </div>
+        </form>
+    }
+
+    <ModalDialog IsOpen="@withoutDetailsOpen" Title="Fuldfør uden detaljer?" Description="De indtastede målinger og noter gemmes ikke. Du kan senere kun tilføje dem ved at redigere resultatet." InitialFocusSelector="[data-modal-cancel]" Destructive="true" DismissOnBackdrop="@(!isSaving)" DismissOnEscape="@(!isSaving)" ShowCloseButton="@(!isSaving)" OnDismiss="CloseWithoutDetails">
+        <div class="app-modal-actions"><button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseWithoutDetails" disabled="@isSaving">Tilbage</button><button class="strength-danger-button" type="button" @onclick="CompleteWithoutDetailsAsync" disabled="@isSaving">Fuldfør uden detaljer</button></div>
+    </ModalDialog>
+    <ModalDialog IsOpen="@discardOpen" Title="Forlad uden at gemme?" Description="Dine indtastede resultatoplysninger bliver ikke gemt." InitialFocusSelector="[data-modal-cancel]" Destructive="true" OnDismiss="CloseDiscard">
+        <div class="app-modal-actions"><button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseDiscard">Bliv på siden</button><button class="strength-danger-button" type="button" @onclick="DiscardAndNavigate">Forlad uden at gemme</button></div>
+    </ModalDialog>
+
+    <StrengthBottomNavigation Active="running" />
+</main>
+
+@code {
+    [Parameter] public Guid? SessionId { get; set; }
+    [Parameter] public Guid? ResultId { get; set; }
+    [SupplyParameterFromQuery(Name = "dato")] public string? RequestedDate { get; set; }
+
+    private RunningSessionResponse? session;
+    private RunningResultResponse? result;
+    private Guid? loadedSessionId;
+    private Guid? loadedResultId;
+    private string? loadedRequestedDate;
+    private int loadRequestVersion;
+    private Guid completionId = Guid.NewGuid();
+    private string dateText = "";
+    private string distanceText = "";
+    private string durationMinutesText = "";
+    private string durationSecondsText = "";
+    private string heartRateText = "";
+    private string note = "";
+    private bool hasLoaded;
+    private bool isLoading;
+    private bool isSaving;
+    private bool isDirty;
+    private bool withoutDetailsOpen;
+    private bool discardOpen;
+    private string? pendingNavigationUrl;
+    private string? loadError;
+    private string? fieldError;
+    private string? saveError;
+    private Guid? conflictedResultId;
+
+    private EditorMode Mode => ResultId is not null ? EditorMode.Edit : SessionId is not null ? EditorMode.Session : EditorMode.Manual;
+    private string EditorTitle => Mode switch { EditorMode.Edit => "Ret løberesultat", EditorMode.Session => "Registrer løbetur", _ => "Registrer løb" };
+    private string SaveLabel => Mode == EditorMode.Edit ? "Gem rettelser" : "Gem resultat";
+    private string BackUrl => Mode switch { EditorMode.Edit when ResultId is { } id => $"/loeb/resultater/{id}", EditorMode.Session when SessionId is { } id => $"/loeb/plan/{id}", _ => "/loeb" };
+    private bool AlreadyCompleted => Mode == EditorMode.Session && session?.State == RunningSessionState.Completed && session.Result is not null;
+    private static DateOnly BrowserToday => RunningPresentation.CopenhagenToday;
+    private static DateOnly EarliestResultDate => new(2000, 1, 1);
+    private string TodayInput => BrowserToday.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    private DateOnly? SelectedDate => DateOnly.TryParseExact(dateText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
+
+    protected override Task OnParametersSetAsync()
+    {
+        if (hasLoaded && loadedSessionId == SessionId && loadedResultId == ResultId && loadedRequestedDate == RequestedDate)
+        {
+            return Task.CompletedTask;
+        }
+
+        hasLoaded = true;
+        loadedSessionId = SessionId;
+        loadedResultId = ResultId;
+        loadedRequestedDate = RequestedDate;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (isSaving)
+        {
+            return;
+        }
+
+        var requestedSessionId = SessionId;
+        var requestedResultId = ResultId;
+        var requestedDate = RequestedDate;
+        var requestedMode = requestedResultId is not null ? EditorMode.Edit : requestedSessionId is not null ? EditorMode.Session : EditorMode.Manual;
+        var requestVersion = ++loadRequestVersion;
+        isLoading = true;
+        loadError = null;
+        fieldError = null;
+        saveError = null;
+        conflictedResultId = null;
+        session = null;
+        result = null;
+        var nextCompletionId = Guid.NewGuid();
+        RunningSessionResponse? loadedSession = null;
+        RunningResultResponse? loadedResult = null;
+        string? loadedError = null;
+        var nextDateText = "";
+        var nextDistanceText = "";
+        var nextDurationMinutesText = "";
+        var nextDurationSecondsText = "";
+        var nextHeartRateText = "";
+        var nextNote = "";
+
+        if (requestedMode == EditorMode.Session && requestedSessionId is { } plannedSessionId)
+        {
+            var response = await Running.GetSessionAsync(plannedSessionId);
+            loadedSession = response.Value;
+            loadedError = response.Error ?? (loadedSession is null ? "Den planlagte løbetur blev ikke fundet." : null);
+            if (loadedSession is not null)
+            {
+                nextDateText = TodayInput;
+            }
+        }
+        else if (requestedMode == EditorMode.Edit && requestedResultId is { } resultId)
+        {
+            var response = await Running.GetResultAsync(resultId);
+            loadedResult = response.Value;
+            loadedError = response.Error ?? (loadedResult is null ? "Resultatet blev ikke fundet." : null);
+            if (loadedResult is not null)
+            {
+                nextDateText = loadedResult.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                nextDistanceText = loadedResult.DistanceKm?.ToString("0.##", CultureInfo.GetCultureInfo("da-DK")) ?? "";
+                nextDurationMinutesText = DurationMinutesInput(loadedResult.DurationSeconds);
+                nextDurationSecondsText = DurationSecondsInput(loadedResult.DurationSeconds);
+                nextHeartRateText = loadedResult.AverageHeartRate?.ToString(CultureInfo.InvariantCulture) ?? "";
+                nextNote = loadedResult.Note ?? "";
+                if (loadedResult.SessionId is { } resultSessionId)
+                {
+                    var sessionResponse = await Running.GetSessionAsync(resultSessionId);
+                    loadedSession = sessionResponse.Value;
+                }
+            }
+        }
+        else
+        {
+            nextDateText = DateOnly.TryParseExact(requestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedRequestedDate) &&
+                parsedRequestedDate >= EarliestResultDate && parsedRequestedDate <= BrowserToday
+                ? parsedRequestedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                : TodayInput;
+        }
+
+        if (!IsCurrentLoad(requestVersion, requestedSessionId, requestedResultId, requestedDate))
+        {
+            return;
+        }
+
+        session = loadedSession;
+        result = loadedResult;
+        completionId = nextCompletionId;
+        dateText = nextDateText;
+        distanceText = nextDistanceText;
+        durationMinutesText = nextDurationMinutesText;
+        durationSecondsText = nextDurationSecondsText;
+        heartRateText = nextHeartRateText;
+        note = nextNote;
+        loadError = loadedError;
+        isDirty = false;
+        isLoading = false;
+    }
+
+    private bool IsCurrentLoad(int requestVersion, Guid? requestedSessionId, Guid? requestedResultId, string? requestedDate) =>
+        requestVersion == loadRequestVersion &&
+        requestedSessionId == SessionId &&
+        requestedResultId == ResultId &&
+        requestedDate == RequestedDate;
+
+    private async Task SaveAsync() => await SubmitAsync(allowNoMeasurements: Mode == EditorMode.Edit && result?.SessionId is not null);
+
+    private Task RequestCompleteWithoutDetailsAsync()
+    {
+        if (isSaving)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (HasEnteredDetails)
+        {
+            withoutDetailsOpen = true;
+            return Task.CompletedTask;
+        }
+
+        return CompleteWithoutDetailsAsync();
+    }
+
+    private async Task CompleteWithoutDetailsAsync()
+    {
+        withoutDetailsOpen = false;
+        await SubmitAsync(allowNoMeasurements: true, omitMeasurements: true);
+    }
+
+    private async Task SubmitAsync(bool allowNoMeasurements, bool omitMeasurements = false)
+    {
+        if (isSaving || !TryReadValues(allowNoMeasurements, omitMeasurements, out var values))
+        {
+            return;
+        }
+
+        isSaving = true;
+        saveError = null;
+        conflictedResultId = null;
+        RunningClientResult<RunningResultResponse> response;
+        if (Mode == EditorMode.Manual)
+        {
+            response = await Running.CreateManualResultAsync(new ManualRunningResultRequest
+            {
+                CompletionId = completionId,
+                Date = values.Date,
+                DistanceKm = values.DistanceKm,
+                DurationSeconds = values.DurationSeconds,
+                AverageHeartRate = values.AverageHeartRate,
+                Note = values.Note
+            });
+        }
+        else if (Mode == EditorMode.Session && SessionId is { } sessionId)
+        {
+            response = await Running.CompleteSessionAsync(sessionId, new CompleteRunningSessionRequest
+            {
+                CompletionId = completionId,
+                Date = values.Date,
+                DistanceKm = values.DistanceKm,
+                DurationSeconds = values.DurationSeconds,
+                AverageHeartRate = values.AverageHeartRate,
+                Note = values.Note
+            });
+        }
+        else if (Mode == EditorMode.Edit && ResultId is { } resultId && result is not null)
+        {
+            response = await Running.UpdateResultAsync(resultId, new UpdateRunningResultRequest
+            {
+                Version = result.Version,
+                Date = values.Date,
+                DistanceKm = values.DistanceKm,
+                DurationSeconds = values.DurationSeconds,
+                AverageHeartRate = values.AverageHeartRate,
+                Note = values.Note
+            });
+        }
+        else
+        {
+            isSaving = false;
+            saveError = "Resultatet kunne ikke gemmes. Genindlæs siden, og prøv igen.";
+            return;
+        }
+
+        isSaving = false;
+        if (response.Succeeded && response.Value is { } saved)
+        {
+            isDirty = false;
+            Navigation.NavigateTo($"/loeb/resultater/{saved.Id}");
+            return;
+        }
+
+        if (response.IsConflict)
+        {
+            conflictedResultId = response.CurrentResultId ?? ResultId;
+            saveError = "Resultatet er allerede ændret eller gemt. Se den seneste gemte version, før du prøver igen.";
+            return;
+        }
+
+        saveError = response.Error ?? "Resultatet kunne ikke gemmes. Prøv igen.";
+    }
+
+    private bool TryReadValues(bool allowNoMeasurements, bool omitMeasurements, out ResultValues values)
+    {
+        values = default;
+        fieldError = null;
+        if (!DateOnly.TryParseExact(dateText, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ||
+            date < EarliestResultDate || date > BrowserToday)
+        {
+            fieldError = "Vælg en gyldig dato fra 1. januar 2000 til i dag.";
+            return false;
+        }
+
+        decimal? distance = null;
+        int? duration = null;
+        int? heartRate = null;
+        string? resultNote = null;
+        if (!omitMeasurements)
+        {
+            var hasDistance = !string.IsNullOrWhiteSpace(distanceText);
+            var hasDuration = !string.IsNullOrWhiteSpace(durationMinutesText) || !string.IsNullOrWhiteSpace(durationSecondsText);
+            if (hasDistance != hasDuration)
+            {
+                fieldError = "Angiv både distance og tid, eller lad begge felter stå tomme.";
+                return false;
+            }
+
+            if (!hasDistance && !allowNoMeasurements)
+            {
+                fieldError = "Angiv distance og tid for at gemme løbet.";
+                return false;
+            }
+
+            if (hasDistance)
+            {
+                if (!RunningPresentation.TryParseDistance(distanceText, out var parsedDistance) || parsedDistance is < 0.1m or > 200m)
+                {
+                    fieldError = "Angiv en distance mellem 0,1 og 200 km.";
+                    return false;
+                }
+
+                if (!TryParseDurationFields(out var parsedDuration))
+                {
+                    fieldError = "Angiv minutter og sekunder (0–59 sekunder), højst 24 timer.";
+                    return false;
+                }
+
+                distance = parsedDistance;
+                duration = parsedDuration;
+            }
+
+            if (!string.IsNullOrWhiteSpace(heartRateText))
+            {
+                if (!int.TryParse(heartRateText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedHeartRate) || parsedHeartRate is < 20 or > 260)
+                {
+                    fieldError = "Angiv en gennemsnitspuls mellem 20 og 260.";
+                    return false;
+                }
+
+                heartRate = parsedHeartRate;
+            }
+
+            resultNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+            if (resultNote?.Length > 500)
+            {
+                fieldError = "Noten må højst være 500 tegn.";
+                return false;
+            }
+        }
+
+        values = new ResultValues(date, distance, duration, heartRate, resultNote);
+        return true;
+    }
+
+    private Task SetDateAsync(DateOnly? date)
+    {
+        dateText = date?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "";
+        MarkDirty();
+        return Task.CompletedTask;
+    }
+
+    private Task SetDurationMinutesAsync(string? value)
+    {
+        durationMinutesText = value ?? "";
+        return Task.CompletedTask;
+    }
+
+    private Task SetDurationSecondsAsync(string? value)
+    {
+        durationSecondsText = value ?? "";
+        return Task.CompletedTask;
+    }
+
+    private bool HasEnteredDetails => !string.IsNullOrWhiteSpace(distanceText) || !string.IsNullOrWhiteSpace(durationMinutesText) || !string.IsNullOrWhiteSpace(durationSecondsText) || !string.IsNullOrWhiteSpace(heartRateText) || !string.IsNullOrWhiteSpace(note);
+
+    private bool TryParseDurationFields(out int seconds)
+    {
+        seconds = 0;
+        var hasMinutes = !string.IsNullOrWhiteSpace(durationMinutesText);
+        var hasSeconds = !string.IsNullOrWhiteSpace(durationSecondsText);
+        var parsedMinutes = 0;
+        var parsedSeconds = 0;
+        if ((!hasMinutes && !hasSeconds) ||
+            (hasMinutes && (!int.TryParse(durationMinutesText, NumberStyles.None, CultureInfo.InvariantCulture, out parsedMinutes) || parsedMinutes < 0)) ||
+            (hasSeconds && (!int.TryParse(durationSecondsText, NumberStyles.None, CultureInfo.InvariantCulture, out parsedSeconds) || parsedSeconds is < 0 or > 59)))
+        {
+            return false;
+        }
+
+        var totalSeconds = (long)parsedMinutes * 60 + parsedSeconds;
+        if (totalSeconds is < 1 or > 86_400)
+        {
+            return false;
+        }
+
+        seconds = (int)totalSeconds;
+        return true;
+    }
+
+    private static string DurationMinutesInput(int? durationSeconds) => durationSeconds is { } value && value > 0
+        ? (value / 60).ToString(CultureInfo.InvariantCulture)
+        : "";
+
+    private static string DurationSecondsInput(int? durationSeconds) => durationSeconds is { } value && value > 0
+        ? (value % 60).ToString(CultureInfo.InvariantCulture)
+        : "";
+    private void MarkDirty() { if (!isSaving) { isDirty = true; fieldError = null; saveError = null; conflictedResultId = null; } }
+    private void CloseWithoutDetails() => withoutDetailsOpen = false;
+    private void CloseDiscard() { discardOpen = false; pendingNavigationUrl = null; }
+    private void DiscardAndNavigate() { var destination = pendingNavigationUrl ?? BackUrl; discardOpen = false; pendingNavigationUrl = null; isDirty = false; Navigation.NavigateTo(destination); }
+
+    private Task ConfirmNavigationAsync(LocationChangingContext context)
+    {
+        if (isSaving)
+        {
+            context.PreventNavigation();
+            return Task.CompletedTask;
+        }
+
+        if (isDirty)
+        {
+            context.PreventNavigation();
+            pendingNavigationUrl = context.TargetLocation;
+            discardOpen = true;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static string KindName(RunningSessionKind kind) => kind switch
+    {
+        RunningSessionKind.Easy => "Rolig tur",
+        RunningSessionKind.Tempo => "Tempotur",
+        RunningSessionKind.Intervals => "Intervaller",
+        _ => "Lang tur"
+    };
+
+    private enum EditorMode { Manual, Session, Edit }
+    private readonly record struct ResultValues(DateOnly Date, decimal? DistanceKm, int? DurationSeconds, int? AverageHeartRate, string? Note);
+}

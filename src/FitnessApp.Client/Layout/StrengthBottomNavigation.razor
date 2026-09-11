@@ -11,22 +11,26 @@
         </span>
         <span class="strength-bottom-nav-label">Kost</span>
     </button>
-    <a class="strength-bottom-nav-item is-active" href="/styrke" aria-current="page" aria-label="Træning" title="Træning">
+    <a class="strength-bottom-nav-item @(Active == "strength" ? "is-active" : null)" href="/styrke" aria-current="@(Active == "strength" ? "page" : null)" aria-label="Træning" title="Træning">
         <span class="strength-bottom-nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M3.5 9v6M6.5 7v10M9.5 10.5h5M14.5 7v10M17.5 9v6M3.5 12h17" /></svg>
         </span>
         <span class="strength-bottom-nav-label">Træning</span>
     </a>
-    <button class="strength-bottom-nav-item" type="button" disabled aria-label="Løb kommer snart" title="Løb kommer snart">
+    <a class="strength-bottom-nav-item @(Active == "running" ? "is-active" : null)" href="/loeb" aria-current="@(Active == "running" ? "page" : null)" aria-label="Løb" title="Løb">
         <span class="strength-bottom-nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><circle cx="14.5" cy="4.5" r="1.75" /><path d="m10.75 10.25 2.5-3 2.5 1.5 2.5.5M12.25 12.25l3.25 1.5 1.5 4.25M12.25 12.25 9 17.5M10.75 10.25l-3.5 1.75" /></svg>
         </span>
         <span class="strength-bottom-nav-label">Løb</span>
-    </button>
-    <button class="strength-bottom-nav-item" type="button" disabled aria-label="Kalender kommer snart" title="Kalender kommer snart">
+    </a>
+    <a class="strength-bottom-nav-item @(Active == "calendar" ? "is-active" : null)" href="/kalender" aria-current="@(Active == "calendar" ? "page" : null)" aria-label="Kalender" title="Kalender">
         <span class="strength-bottom-nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="15" rx="1.75" /><path d="M7.5 3.5v4M16.5 3.5v4M3.5 10h17M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01" /></svg>
         </span>
         <span class="strength-bottom-nav-label">Kalender</span>
-    </button>
+    </a>
 </nav>
+
+@code {
+    [Parameter] public string Active { get; set; } = "strength";
+}
