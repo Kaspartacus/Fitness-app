@@ -40,6 +40,12 @@ public sealed class ReplaceRunningPlanRequest : RunningPlanRequest
     public bool ReplaceActivePlan { get; set; }
 }
 
+public sealed class UpdateRunningPlanScheduleRequest
+{
+    public Guid Version { get; set; }
+    public List<DayOfWeek>? SelectedDays { get; set; } = [];
+}
+
 public sealed class ManualRunningResultRequest
 {
     public Guid CompletionId { get; set; }

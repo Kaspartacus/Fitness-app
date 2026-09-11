@@ -31,7 +31,7 @@
             <p>Fortæl om dit niveau og mål, så opretter vi en plan med datoer, der passer til din uge.</p>
             <a class="strength-primary-button running-empty-action" href="/loeb/ny">Opret løbeplan</a>
             <a class="strength-text-action" href="/loeb/registrer">Registrer et løb uden plan</a>
-            <a class="strength-text-action" href="/loeb/resultater">Se resultathistorik</a>
+            <a class="strength-text-action running-result-history-link" href="/loeb/resultater">Se resultathistorik</a>
         </section>
     }
     else
@@ -62,7 +62,7 @@
         <section class="strength-section" aria-labelledby="running-upcoming-title">
             <div class="strength-section-row strength-programs-heading">
                 <p class="strength-overline" id="running-upcoming-title">Kommende løb</p>
-                <a class="strength-text-action" href="/kalender">Kalender</a>
+                <a class="strength-text-action" href="/loeb/planlaeg">Planlæg</a>
             </div>
             @if (overview.UpcomingSessions.Count == 0)
             {
@@ -81,7 +81,7 @@
                     }
                 </div>
             }
-            <a class="strength-text-action" href="/loeb/resultater">Se resultathistorik</a>
+            <a class="strength-text-action running-result-history-link" href="/loeb/resultater">Se resultathistorik</a>
         </section>
     }
 

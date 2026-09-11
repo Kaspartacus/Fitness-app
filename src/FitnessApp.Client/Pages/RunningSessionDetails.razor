@@ -62,10 +62,9 @@
         }
         else if (session.Date > BrowserToday)
         {
-            <section class="strength-status-card">
-                <p>Du kan registrere et resultat allerede nu. Aktiv løbestart er tilgængelig på den planlagte dag.</p>
-                <a class="strength-outline-button strength-card-button" href="@($"/loeb/plan/{session.Id}/registrer")">Registrer resultat</a>
-            </section>
+            <div class="running-page-actions">
+                <a class="strength-primary-button running-full-action" href="@($"/loeb/plan/{session.Id}/registrer")">Registrer resultat</a>
+            </div>
         }
         else
         {

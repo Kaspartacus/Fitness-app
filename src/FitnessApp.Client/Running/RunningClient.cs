@@ -46,6 +46,13 @@ public sealed class RunningClient(IHttpClientFactory httpClientFactory)
         CancellationToken cancellationToken = default) =>
         SendAsync<RunningPlanResponse>(HttpMethod.Put, $"api/running/plans/{activePlanId}", request, cancellationToken);
 
+    public Task<RunningClientResult<RunningPlanResponse>> UpdatePlanScheduleAsync(
+        Guid planId,
+        UpdateRunningPlanScheduleRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<RunningPlanResponse>(HttpMethod.Put, $"api/running/plans/{planId}/schedule", request,
+            cancellationToken);
+
     public Task<RunningClientResult<List<RunningSessionResponse>>> ListSessionsAsync(
         DateOnly from,
         DateOnly to,

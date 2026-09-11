@@ -17,6 +17,7 @@ internal static class RunningEndpoints
         group.MapGet("/overview", GetOverviewAsync);
         group.MapGet("/plans/{planId:guid}", GetPlanAsync);
         group.MapPost("/plans", CreatePlanAsync);
+        group.MapPut("/plans/{planId:guid}/schedule", UpdatePlanScheduleAsync);
         group.MapPut("/plans/{activePlanId:guid}", ReplacePlanAsync);
         group.MapGet("/sessions", ListSessionsAsync);
         group.MapGet("/sessions/{sessionId:guid}", GetSessionAsync);
@@ -79,6 +80,28 @@ internal static class RunningEndpoints
             Owner(user),
             activePlanId,
             new RunningPlanReplacementInput(request.Version, request.ReplaceActivePlan, ToInput(request)),
+            cancellationToken);
+        return result.Status is RunningStatus.Saved && result.Plan is { } plan
+            ? Results.Ok(Map(plan))
+            : PlanStatus(result.Status);
+    }
+
+    private static async Task<IResult> UpdatePlanScheduleAsync(
+        Guid planId,
+        UpdateRunningPlanScheduleRequest? request,
+        ClaimsPrincipal user,
+        IRunningService service,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+        {
+            return Validation("Plan", "Angiv planens løbedage, og prøv igen.");
+        }
+
+        var result = await service.UpdatePlanScheduleAsync(
+            Owner(user),
+            planId,
+            new UpdateRunningPlanScheduleInput(request.Version, request.SelectedDays?.ToArray()),
             cancellationToken);
         return result.Status is RunningStatus.Saved && result.Plan is { } plan
             ? Results.Ok(Map(plan))

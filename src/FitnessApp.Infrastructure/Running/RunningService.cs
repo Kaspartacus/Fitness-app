@@ -151,6 +151,129 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
         }
     }
 
+    public async Task<RunningPlanResult> UpdatePlanScheduleAsync(string userId, Guid planId,
+        UpdateRunningPlanScheduleInput input, CancellationToken cancellationToken)
+    {
+        if (input is null || input.Version == Guid.Empty || string.IsNullOrWhiteSpace(userId))
+        {
+            return new RunningPlanResult(RunningStatus.Invalid);
+        }
+
+        var plan = await QueryPlans().SingleOrDefaultAsync(candidate => candidate.Id == planId && candidate.UserId == userId,
+            cancellationToken);
+        if (plan is null)
+        {
+            return new RunningPlanResult(RunningStatus.NotFound);
+        }
+
+        if (!plan.IsActive || plan.Version != input.Version)
+        {
+            return new RunningPlanResult(RunningStatus.Conflict);
+        }
+
+        if (!IsValidSelectedDays(input.SelectedDays, plan.WeeklyFrequency))
+        {
+            return new RunningPlanResult(RunningStatus.Invalid);
+        }
+
+        var today = Today();
+        var planStartDate = CopenhagenDate(plan.CreatedAtUtc);
+        var regeneratedSchedule = new RunningPlanGenerator().Generate(userId, new RunningPlanInput(
+            plan.Level,
+            plan.ThirtyMinuteDistanceKm,
+            plan.TargetDistanceKm,
+            plan.TargetDate,
+            plan.WeeklyFrequency,
+            input.SelectedDays), planStartDate, UtcNow());
+        if (regeneratedSchedule is null)
+        {
+            return new RunningPlanResult(RunningStatus.Infeasible);
+        }
+
+        var nextVersion = Guid.NewGuid();
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+        // Updating the version obtains the same SQLite write lock that session start, completion and plan replacement
+        // use. The predicate makes a stale edit, replacement, or currently active run a clean conflict.
+        var lockedPlan = await db.RunningPlans.Where(candidate => candidate.Id == planId && candidate.UserId == userId &&
+                candidate.IsActive && candidate.Version == input.Version &&
+                !db.RunningSessions.Any(session => session.PlanId == candidate.Id && session.StartedAtUtc != null &&
+                    !db.RunningResults.Any(result => result.SessionId == session.Id)))
+            .ExecuteUpdateAsync(updates => updates.SetProperty(candidate => candidate.Version, nextVersion), cancellationToken);
+        if (lockedPlan == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return new RunningPlanResult(RunningStatus.Conflict);
+        }
+
+        var currentSessions = await db.RunningSessions.AsNoTracking().Where(session => session.PlanId == planId)
+            .Select(session => new
+            {
+                session.Date,
+                session.Position,
+                session.StartedAtUtc,
+                HasResult = db.RunningResults.Any(result => result.SessionId == session.Id)
+            })
+            .ToListAsync(cancellationToken);
+
+        // A scheduled date is immutable once it has arrived, a run was started, or a result was associated with it.
+        // In particular, an early result can live on a future scheduled date and must never be detached or deleted.
+        var preservedSessions = currentSessions.Where(session => session.Date <= today || session.StartedAtUtc is not null ||
+                session.HasResult)
+            .ToArray();
+        var preservedDates = preservedSessions.Select(session => session.Date).ToHashSet();
+
+        await db.RunningSessions.Where(session => session.PlanId == planId && session.Date > today &&
+                session.StartedAtUtc == null && !db.RunningResults.Any(result => result.SessionId == session.Id))
+            .ExecuteDeleteAsync(cancellationToken);
+        await db.RunningPlanDays.Where(day => day.PlanId == planId).ExecuteDeleteAsync(cancellationToken);
+
+        var selectedDays = input.SelectedDays!.OrderBy(day => Array.IndexOf(WeekdayOrder, day)).ToArray();
+        db.RunningPlanDays.AddRange(selectedDays.Select(day => new RunningPlanDay
+        {
+            Id = Guid.NewGuid(),
+            PlanId = planId,
+            DayOfWeek = day
+        }));
+
+        // Keep the positions of preserved history untouched. Newly generated sessions receive positions after that
+        // history, which also avoids unique (PlanId, Position) collisions after a partial regeneration.
+        var nextPosition = preservedSessions.Length == 0 ? 0 : preservedSessions.Max(session => session.Position) + 1;
+        foreach (var generatedSession in regeneratedSchedule.Sessions.Where(session => session.Date > today &&
+                     !preservedDates.Contains(session.Date)).OrderBy(session => session.Date).ThenBy(session => session.Position))
+        {
+            db.RunningSessions.Add(new RunningSession
+            {
+                Id = Guid.NewGuid(),
+                PlanId = planId,
+                Date = generatedSession.Date,
+                Position = nextPosition++,
+                Kind = generatedSession.Kind,
+                PlannedDistanceKm = generatedSession.PlannedDistanceKm,
+                PaceMinSecondsPerKm = generatedSession.PaceMinSecondsPerKm,
+                PaceMaxSecondsPerKm = generatedSession.PaceMaxSecondsPerKm,
+                Structure = generatedSession.Structure
+            });
+        }
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            db.ChangeTracker.Clear();
+            return new RunningPlanResult(RunningStatus.Conflict);
+        }
+
+        var updatedPlan = await GetPlanAsync(userId, planId, cancellationToken);
+        return updatedPlan is null
+            ? new RunningPlanResult(RunningStatus.Conflict)
+            : new RunningPlanResult(RunningStatus.Saved, updatedPlan);
+    }
+
     public async Task<RunningSessionListResult> ListSessionsAsync(string userId, DateOnly from, DateOnly to,
         CancellationToken cancellationToken)
     {
@@ -560,16 +683,19 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
             !RunningRules.IsValidThirtyMinuteDistance(input.ThirtyMinuteDistanceKm) ||
             !RunningRules.IsValidTargetDistance(input.TargetDistanceKm) || input.WeeklyFrequency is < 1 or > 7 ||
             input.TargetDate < today.AddDays(RunningRules.MinPlanLengthDays) ||
-            input.TargetDate > today.AddDays(RunningRules.MaxPlanLengthDays) || input.SelectedDays is null ||
-            input.SelectedDays.Count != input.WeeklyFrequency ||
-            input.SelectedDays.Distinct().Count() != input.SelectedDays.Count ||
-            input.SelectedDays.Any(day => day is < DayOfWeek.Sunday or > DayOfWeek.Saturday))
+            input.TargetDate > today.AddDays(RunningRules.MaxPlanLengthDays) ||
+            !IsValidSelectedDays(input.SelectedDays, input.WeeklyFrequency))
         {
             return false;
         }
 
         return true;
     }
+
+    private static bool IsValidSelectedDays(IReadOnlyList<DayOfWeek>? selectedDays, int weeklyFrequency) =>
+        weeklyFrequency is >= 1 and <= 7 && selectedDays is not null && selectedDays.Count == weeklyFrequency &&
+        selectedDays.Distinct().Count() == selectedDays.Count &&
+        selectedDays.All(day => day is >= DayOfWeek.Sunday and <= DayOfWeek.Saturday);
 
     private bool IsValidResult(DateOnly date, decimal? distanceKm, int? durationSeconds, int? averageHeartRate,
         string? note, bool requireDistanceAndDuration)
@@ -583,6 +709,9 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
     }
 
     private DateOnly Today() => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), CopenhagenTimeZone).DateTime);
+
+    private static DateOnly CopenhagenDate(DateTime utc) => DateOnly.FromDateTime(
+        TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), CopenhagenTimeZone));
 
     private static TimeZoneInfo FindCopenhagenTimeZone()
     {

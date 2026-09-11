@@ -15,6 +15,10 @@ public sealed record RunningPlanReplacementInput(
     bool ReplaceActivePlan,
     RunningPlanInput Plan);
 
+public sealed record UpdateRunningPlanScheduleInput(
+    Guid Version,
+    IReadOnlyList<DayOfWeek>? SelectedDays);
+
 public sealed record ManualRunningResultInput(
     Guid CompletionId,
     DateOnly Date,
@@ -112,6 +116,8 @@ public interface IRunningService
     Task<RunningPlanData?> GetPlanAsync(string userId, Guid planId, CancellationToken cancellationToken);
     Task<RunningPlanResult> CreatePlanAsync(string userId, RunningPlanInput input, CancellationToken cancellationToken);
     Task<RunningPlanResult> ReplacePlanAsync(string userId, Guid activePlanId, RunningPlanReplacementInput input,
+        CancellationToken cancellationToken);
+    Task<RunningPlanResult> UpdatePlanScheduleAsync(string userId, Guid planId, UpdateRunningPlanScheduleInput input,
         CancellationToken cancellationToken);
     Task<RunningSessionListResult> ListSessionsAsync(string userId, DateOnly from, DateOnly to,
         CancellationToken cancellationToken);

@@ -847,6 +847,7 @@ a:focus-visible {
 .running-session-status.is-complete { background: #1d4f49; color: #b9e4da !important; }
 .running-session-status.is-active { background: #5a461f; color: #ffe5a0 !important; }
 .running-empty-action { margin-top: 1rem; }
+.running-result-history-link { display: inline-flex; margin-top: 1.15rem; }
 .running-page-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; margin-top: 1.3rem; }
 .running-page-actions > * { width: 100%; }
 .running-page-actions .running-full-action { grid-column: 1 / -1; }
