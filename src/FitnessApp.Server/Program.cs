@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using FitnessApp.Server.Calendar;
 using FitnessApp.Server.Running;
 using FitnessApp.Server.Strength;
 using FitnessApp.Application.Authentication;
@@ -190,7 +191,8 @@ app.Use(async (context, next) =>
         context.Request.Path.StartsWithSegments("/api/registrations") ||
         context.Request.Path.StartsWithSegments("/api/admin") ||
         context.Request.Path.StartsWithSegments("/api/strength") ||
-        context.Request.Path.StartsWithSegments("/api/running"))
+        context.Request.Path.StartsWithSegments("/api/running") ||
+        context.Request.Path.StartsWithSegments("/api/calendar"))
     {
         AuthenticationHttpResponses.SetNoStore(context.Response);
     }
@@ -212,6 +214,7 @@ app.MapRegistrationEndpoints();
 app.MapUserAdministrationEndpoints();
 app.MapStrengthProgramEndpoints();
 app.MapRunningEndpoints();
+app.MapCalendarEndpoints();
 app.MapStaticAssets();
 app.UseEndpoints(_ => { });
 

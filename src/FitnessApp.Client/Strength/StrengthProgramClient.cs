@@ -41,6 +41,9 @@ public sealed class StrengthProgramClient(IHttpClientFactory factory)
     public Task<ProgramClientResult<object>> CompleteWorkoutAsync(Guid programId, Guid workoutId, CompleteWorkoutRequest request) =>
         Send<object>(HttpMethod.Post, $"api/strength/programs/{programId}/workouts/{workoutId}/complete", request);
 
+    public Task<ProgramClientResult<CompletedWorkoutResponse>> GetCompletedWorkoutAsync(Guid completionId) =>
+        Send<CompletedWorkoutResponse>(HttpMethod.Get, $"api/strength/completions/{completionId}");
+
     private async Task<ProgramClientResult<T>> Send<T>(HttpMethod method, string url, object? body = null)
     {
         try

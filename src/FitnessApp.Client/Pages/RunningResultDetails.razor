@@ -1,5 +1,6 @@
 @page "/loeb/resultater/{ResultId:guid}"
 @attribute [Authorize]
+@using FitnessApp.Client.Calendar
 @using FitnessApp.Client.Running
 @using FitnessApp.Contracts.Running
 @inject RunningClient Running
@@ -8,7 +9,7 @@
 
 <main class="strength-app running-app strength-with-bottom-nav" aria-labelledby="result-title">
     <header class="strength-back-header">
-        <a class="strength-icon-button" href="/loeb" aria-label="Tilbage til løb" title="Tilbage til løb">←</a>
+        <a class="strength-icon-button" href="@BackUrl" aria-label="Tilbage til løb" title="Tilbage til løb">←</a>
         <div><h1 id="result-title">Løberesultat</h1>@if (result is not null) { <p>@RunningPresentation.Date(result.Date)</p> }</div>
         <span class="strength-header-spacer"></span>
     </header>
@@ -46,20 +47,24 @@
                 @if (!string.IsNullOrWhiteSpace(result.Note)) { <p class="running-result-note">@result.Note</p> }
             </section>
         </div>
-        <div class="running-page-actions"><a class="strength-primary-button running-full-action" href="@($"/loeb/resultater/{result.Id}/ret")">Ret resultat</a></div>
+        <div class="running-page-actions"><a class="strength-primary-button running-full-action" href="@WithCalendarState($"/loeb/resultater/{result.Id}/ret")">Ret resultat</a></div>
     }
 
-    <StrengthBottomNavigation Active="running" />
+    <StrengthBottomNavigation Active="running" CalendarHref="@CalendarHref" />
 </main>
 
 @code {
     [Parameter] public Guid ResultId { get; set; }
+    [SupplyParameterFromQuery(Name = "maaned")] public string? RequestedMonth { get; set; }
+    [SupplyParameterFromQuery(Name = "dato")] public string? RequestedDate { get; set; }
     private Guid loadedResultId;
     private RunningResultResponse? result;
     private RunningSessionResponse? session;
     private bool isLoading;
     private string? error;
     private int loadRequestVersion;
+    private string BackUrl => CalendarRoute.BackPath(RequestedMonth, RequestedDate, "/loeb");
+    private string CalendarHref => CalendarRoute.BackPath(RequestedMonth, RequestedDate, "/kalender");
 
     protected override Task OnParametersSetAsync()
     {
@@ -109,4 +114,9 @@
         RunningSessionKind.Intervals => "Intervaller",
         _ => "Lang tur"
     };
+
+    private string WithCalendarState(string path) => CalendarRoute.TryParseState(RequestedMonth, RequestedDate,
+        out var month, out var selectedDate)
+        ? CalendarRoute.AppendState(path, month, selectedDate)
+        : path;
 }

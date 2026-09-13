@@ -920,6 +920,54 @@ a:focus-visible {
 .running-calendar-selected { margin-top: 1.25rem; }
 .running-inline-error { margin: .8rem 0 0 !important; color: #ffb2ba !important; font-size: .82rem; }
 
+/* Shared calendar — running and strength activities use the established dark mobile shell. */
+.calendar-month-controls { display: grid; grid-template-columns: 2.35rem minmax(0, 1fr) 2.35rem; align-items: center; gap: .6rem; margin-bottom: 1rem; }
+.calendar-month-controls > div { display: grid; justify-items: center; gap: .2rem; min-width: 0; }
+.calendar-month-controls h2 { max-width: 100%; overflow: hidden; margin: 0; text-align: center; text-overflow: ellipsis; text-transform: capitalize; white-space: nowrap; }
+.calendar-today-button { border: 0; padding: .18rem .45rem; background: transparent; color: var(--strength-accent); font: inherit; font-size: .72rem; font-weight: 780; cursor: pointer; }
+.calendar-today-button:disabled { color: var(--strength-muted); cursor: default; }
+.calendar-today-button:focus-visible, .calendar-activity-row:focus-visible, .calendar-relationship-row:focus-visible, .calendar-grid .running-calendar-day:focus-visible { outline: 2px solid #8ec2f6; outline-offset: 2px; }
+.calendar-grid { gap: .3rem; }
+.calendar-grid .running-calendar-day { min-height: 3.6rem; padding: .42rem; }
+.calendar-grid .running-calendar-day.is-selected { border-color: #72a8e4; background: #1d5b94; color: #f2f8ff; }
+.calendar-grid .running-calendar-day.is-today:not(.is-selected) { border-color: #5781ae; box-shadow: inset 0 0 0 1px rgb(155 197 244 / 13%); }
+.calendar-day-indicators { position: absolute; right: .3rem; bottom: .34rem; display: flex; max-width: calc(100% - .6rem); align-items: center; justify-content: flex-end; gap: .14rem; }
+.calendar-day-indicator { display: block; width: .38rem; height: .38rem; flex: 0 0 .38rem; border-radius: 50%; background: #81a5cb; }
+.calendar-day-indicator.is-running { background: #9bc5f4; }
+.calendar-day-indicator.is-running.is-started { background: #f1c96a; }
+.calendar-day-indicator.is-strength { border-radius: .1rem; background: #c89cef; }
+.calendar-day-indicator.is-completed { background: #63b7a6; }
+.calendar-day-indicator.is-related { width: .3rem; height: .3rem; flex-basis: .3rem; border: 1px solid #b5cadf; background: transparent; }
+.calendar-selected { margin-top: 1.35rem; }
+.calendar-selected-heading { align-items: flex-start; margin-bottom: .85rem; }
+.calendar-selected-heading .strength-overline { margin-bottom: .45rem !important; }
+.calendar-activity-count { margin: .15rem 0 0 !important; color: var(--strength-muted); font-size: .76rem; }
+.calendar-activity-list { display: grid; gap: .65rem; }
+.calendar-activity-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .7rem; min-height: 4.45rem; border: 1px solid var(--strength-border); border-radius: .85rem; padding: .75rem; background: var(--strength-surface); color: var(--strength-text); text-decoration: none; }
+.calendar-activity-row:hover { border-color: #5781ae; background: #182534; }
+.calendar-activity-row.is-completed { border-color: #386d67; }
+.calendar-activity-row.is-started { border-color: #806832; }
+.calendar-activity-kind { display: grid; min-width: 2.85rem; min-height: 2.6rem; place-items: center; border-radius: .65rem; background: #1d4672; color: #d7e9ff; font-size: .64rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.calendar-activity-row.is-strength .calendar-activity-kind { background: #4d3665; color: #eedfff; }
+.calendar-activity-copy { display: grid; min-width: 0; gap: .14rem; }
+.calendar-activity-copy strong, .calendar-activity-copy > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-activity-copy strong { font-size: .9rem; }
+.calendar-activity-copy > span { color: var(--strength-muted); font-size: .75rem; }
+.calendar-activity-status { width: fit-content; padding: .12rem .38rem; border-radius: 99px; background: #1d4672; color: #c8e0fb !important; font-size: .62rem !important; font-weight: 750; }
+.calendar-activity-status.is-completed { background: #1d4f49; color: #b9e4da !important; }
+.calendar-activity-status.is-started { background: #5a461f; color: #ffe5a0 !important; }
+.calendar-relationships { display: grid; gap: .55rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgb(255 255 255 / 10%); }
+.calendar-relationships .strength-overline { margin-bottom: 0 !important; }
+.calendar-relationship-row { display: flex; align-items: center; justify-content: space-between; gap: .7rem; border: 1px dashed #58718b; border-radius: .75rem; padding: .68rem .75rem; color: var(--strength-text); text-decoration: none; }
+.calendar-relationship-row:hover { border-color: #8fbce8; background: #162434; }
+.calendar-relationship-row strong, .calendar-relationship-row small { display: block; }
+.calendar-relationship-row strong { font-size: .83rem; }
+.calendar-relationship-row small { margin-top: .15rem; color: var(--strength-muted); font-size: .72rem; }
+.completed-strength-exercise .strength-exercise-card-main { cursor: default; }
+.completed-strength-status { width: fit-content; margin-top: .25rem; padding: .12rem .38rem; border-radius: 99px; font-size: .62rem; font-weight: 750; }
+.completed-strength-status.is-completed { background: #1d4f49; color: #b9e4da; }
+.completed-strength-status.is-skipped { background: #433f42; color: #d6c6cc; }
+
 
 @media (max-width: 23rem) {
     .strength-app { padding-inline: 1rem; }
@@ -941,6 +989,7 @@ a:focus-visible {
     .strength-bottom-nav { display: none; }
     .strength-program-grid, .strength-workout-list { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
     .strength-finish-button { bottom: 2rem; width: min(26rem, calc(100% - 3rem)); }
+    .strength-app.calendar-app, .strength-app.calendar-detail-page { width: min(calc(100% - 3rem), 52rem); }
 }
 
 /* Running refinements: compact selectors and a balanced desktop plan setup. */

@@ -5,15 +5,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FitnessApp.Infrastructure.Strength;
 
-public sealed class StrengthProgramService(FitnessDbContext db) : IStrengthProgramService
+public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider timeProvider) : IStrengthProgramService
 {
+    private static readonly TimeZoneInfo CopenhagenTimeZone = FindCopenhagenTimeZone();
+
     public async Task<StrengthOverviewData> GetOverviewAsync(string userId, CancellationToken cancellationToken)
     {
         var programs = await QueryPrograms().Where(program => program.UserId == userId)
             .OrderBy(program => program.CreatedAt).ThenBy(program => program.Id)
             .ToListAsync(cancellationToken);
         var today = programs.SelectMany(program => program.Schedule
-                .Where(entry => entry.DayOfWeek == DateTime.Today.DayOfWeek && entry.WorkoutId is not null)
+                .Where(entry => entry.DayOfWeek == Today().DayOfWeek && entry.WorkoutId is not null)
                 .Select(entry => new { Program = program, Entry = entry }))
             .Select(item => item.Entry.WorkoutId is { } workoutId
                 ? item.Program.Workouts.FirstOrDefault(workout => workout.Id == workoutId) is { } workout
@@ -93,7 +95,7 @@ public sealed class StrengthProgramService(FitnessDbContext db) : IStrengthProgr
                 UserId = userId,
                 Name = input.Name!.Trim(),
                 Version = nextVersion,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = UtcNow()
             });
         }
         else
@@ -265,7 +267,7 @@ public sealed class StrengthProgramService(FitnessDbContext db) : IStrengthProgr
             ProgramId = programId,
             WorkoutId = workoutId,
             WorkoutName = planned.WorkoutName,
-            CompletedAt = DateTime.UtcNow,
+            CompletedAt = UtcNow(),
             Exercises = input.Exercises.Select((exercise, position) => new CompletedWorkoutExercise
             {
                 Id = Guid.NewGuid(),
@@ -292,6 +294,24 @@ public sealed class StrengthProgramService(FitnessDbContext db) : IStrengthProgr
                 ? ProgramStatus.Saved
                 : ProgramStatus.Conflict;
         }
+    }
+
+    public async Task<CompletedWorkoutData?> GetCompletedWorkoutAsync(string userId, Guid completionId,
+        CancellationToken cancellationToken)
+    {
+        var completed = await db.CompletedWorkouts.AsNoTracking()
+            .Include(workout => workout.Exercises)
+            .SingleOrDefaultAsync(workout => workout.Id == completionId && workout.UserId == userId, cancellationToken);
+        return completed is null
+            ? null
+            : new CompletedWorkoutData(
+                completed.Id,
+                CopenhagenDate(completed.CompletedAt),
+                completed.WorkoutName,
+                completed.Exercises.OrderBy(exercise => exercise.Position)
+                    .Select(exercise => new CompletedWorkoutExerciseData(exercise.Name, exercise.Weight, exercise.Sets,
+                        exercise.Repetitions, exercise.IsCompleted))
+                    .ToArray());
     }
 
     private IQueryable<StrengthProgram> QueryPrograms() => db.StrengthPrograms.AsNoTracking()
@@ -352,6 +372,30 @@ public sealed class StrengthProgramService(FitnessDbContext db) : IStrengthProgr
     private Task<CompletedWorkout?> FindCompletionAsync(string userId, Guid completionId, CancellationToken cancellationToken) =>
         db.CompletedWorkouts.AsNoTracking().Include(workout => workout.Exercises).SingleOrDefaultAsync(
             workout => workout.UserId == userId && workout.CompletionId == completionId, cancellationToken);
+
+    private DateOnly Today() => DateOnly.FromDateTime(
+        TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), CopenhagenTimeZone).DateTime);
+
+    private DateTime UtcNow() => timeProvider.GetUtcNow().UtcDateTime;
+
+    private static DateOnly CopenhagenDate(DateTime utc) => DateOnly.FromDateTime(
+        TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), CopenhagenTimeZone));
+
+    private static TimeZoneInfo FindCopenhagenTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Europe/Copenhagen");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Central European Standard Time");
+        }
+        catch (InvalidTimeZoneException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Central European Standard Time");
+        }
+    }
 
     private static bool MatchesCompletion(CompletedWorkout completed, Guid programId, Guid workoutId, CompletionInput input) =>
         completed.ProgramId == programId && completed.WorkoutId == workoutId && input.Exercises is { } exercises &&
