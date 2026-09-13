@@ -19,9 +19,17 @@ Complete the existing `/kalender` route as the private shared running and streng
 - Used `TimeProvider` and `Europe/Copenhagen` for the new strength calendar-facing dates and completion timestamps. No persistence schema change was necessary.
 - Updated project/progress documentation. Figma’s prior source inventory included the calendar screen; the integration was unavailable after interruption, so no fresh exact-frame or runtime visual verification is claimed.
 
+## Calendar refinement (committed locally)
+
+- Reworked the existing `/kalender` route from a month grid to a Monday-first, seven-day weekly view. Previous/next, today, date selection, indicators, loading/error/retry handling, keyboard focus, and the bounded calendar API request now operate on the selected week.
+- Made the `Uge NN` label open the existing centered date-picker component, extended with a compact trigger and an in-picker today action. Picking a date selects that date and its containing week.
+- Replaced direct activity links with centered action dialogs. Planned runs offer result registration, the existing recurring running-plan editor, and details; planned strength workouts offer start, the existing weekly strength plan editor, and program details; completed activities offer their existing result/detail flows. A started run can be genuinely aborted through the existing owner-scoped API. One-off move/cancel is deliberately not represented as a fake action because the persisted models only support recurring schedules.
+- Added a calendar entry point to the desktop dashboard and scoped responsive calendar styling. Bottom navigation remains mobile-only. Calendar state now survives through the recurring running/strength schedule and strength-program detail flows.
+
 ## Verification
 
 - `git diff --check` passes.
+- The refinement short serial build succeeded: `DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1 MSBUILDDISABLENODEREUSE=1 dotnet build FitnessApp.slnx --no-restore --disable-build-servers --verbosity minimal -m:1 -p:BuildInParallel=false` completed with 0 warnings and 0 errors. No tests were run.
 - The replacement short serial build, `dotnet build FitnessApp.slnx --no-restore --disable-build-servers --verbosity minimal -m:1 -p:BuildInParallel=false`, succeeded with 0 errors. It emitted one `NU1900` warning because this environment could not resolve NuGet's advisory endpoint. The first sandboxed attempt failed only at the known WebAssembly task-host boundary (`MSB4216`); the identical approved non-sandboxed build completed successfully.
 - Per owner instruction: no tests, app run, browser automation, audit, or full verification script.
 
@@ -32,8 +40,9 @@ Complete the existing `/kalender` route as the private shared running and streng
 ## Delivery
 
 - Commit `baa036dd1159f97a860207d93b200b5847fc94af` (`feat: complete shared calendar`) is pushed on `feature/calendar`.
+- The local `feat: refine weekly calendar interactions` commit contains the weekly/calendar-action refinement and is ready to push.
 - Pull request [#11](https://github.com/Kaspartacus/Fitness-app/pull/11) targets `main`, is open, and has not been merged or deployed.
 
 ## Exact next action
 
-- Owner manual checks may cover month/date navigation, planned and completed running/strength activities, retained history, and a planned-versus-actual date mismatch. Do not merge or deploy from this checkpoint.
+- Push `feature/calendar` without force, confirm the existing PR #11 reflects the current `feature/calendar` HEAD, and do not merge or deploy.

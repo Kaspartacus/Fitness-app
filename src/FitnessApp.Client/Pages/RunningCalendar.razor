@@ -7,43 +7,29 @@
 @using FitnessApp.Contracts.Calendar
 @using FitnessApp.Contracts.Running
 @inject CalendarClient Calendar
+@inject RunningClient Running
 @inject NavigationManager Navigation
 @inject IJSRuntime JavaScript
 
 <PageTitle>Kalender</PageTitle>
 
 <main class="strength-app running-app strength-with-bottom-nav calendar-app" aria-labelledby="calendar-title">
-    <header class="strength-back-header">
+    <header class="strength-back-header calendar-page-header">
         <a class="strength-icon-button" href="/" aria-label="Tilbage til hjem" title="Tilbage til hjem">←</a>
         <h1 id="calendar-title">Kalender</h1>
-        @if (CanRegisterRun)
-        {
-            <a class="strength-icon-button" href="@ManualLogHref()" aria-label="Registrer løb på den valgte dato" title="Registrer løb">＋</a>
-        }
-        else
-        {
-            <span class="strength-header-spacer" aria-hidden="true"></span>
-        }
+        <button class="calendar-header-today" type="button" @onclick="TodayAsync" disabled="@IsShowingToday"
+                aria-label="Gå til i dag">I dag</button>
     </header>
 
-    <section class="strength-section" aria-label="Delt kalender for løb og styrketræning">
-        <div class="calendar-month-controls">
-            <button class="running-calendar-control" type="button" @onclick="PreviousMonthAsync" disabled="@isLoading"
-                    aria-label="Forrige måned" title="Forrige måned">‹</button>
-            <div>
-                <h2 id="calendar-month-title">@RunningPresentation.Month(month)</h2>
-                <button class="calendar-today-button" type="button" @onclick="TodayAsync" disabled="@(isLoading || IsShowingToday)"
-                        aria-label="Gå til i dag">I dag</button>
-            </div>
-            <button class="running-calendar-control" type="button" @onclick="NextMonthAsync" disabled="@isLoading"
-                    aria-label="Næste måned" title="Næste måned">›</button>
-        </div>
-
-        <div class="running-calendar-weekdays" aria-hidden="true">
-            @foreach (var day in WeekdayLabels)
-            {
-                <span>@day</span>
-            }
+    <section class="strength-section calendar-week-section" aria-label="Delt kalender for løb og styrketræning">
+        <div class="calendar-week-controls">
+            <button class="running-calendar-control" type="button" @onclick="PreviousWeekAsync" disabled="@isLoading"
+                    aria-label="Forrige uge" title="Forrige uge">‹</button>
+            <RunningDatePicker Id="calendar-week-picker" Label="Vælg uge eller dato" ModalTitle="Vælg uge"
+                               Value="@selectedDate" ValueChanged="SelectDateFromPickerAsync" Disabled="@isLoading"
+                               TriggerText="@WeekLabel" TriggerClass="calendar-week-trigger" CompactNavigation="true" ShowTodayAction="true" />
+            <button class="running-calendar-control" type="button" @onclick="NextWeekAsync" disabled="@isLoading"
+                    aria-label="Næste uge" title="Næste uge">›</button>
         </div>
 
         @if (isLoading)
@@ -59,31 +45,24 @@
         }
         else
         {
-            <div class="running-calendar-grid calendar-grid" @ref="calendarGrid" aria-labelledby="calendar-month-title">
-                @foreach (var cell in calendarDays)
+            <div class="calendar-week-grid" @ref="calendarGrid" aria-label="@WeekLabel">
+                @foreach (var calendarDate in WeekDates)
                 {
-                    if (cell.Date is { } calendarDate)
-                    {
-                        <button @key="calendarDate" class="@CellClass(calendarDate)" type="button" data-calendar-day
-                                @ref="dayButtons[calendarDate]"
-                                @onclick="() => SelectDateAsync(calendarDate)"
-                                @onkeydown="args => HandleDayKeyDownAsync(args, calendarDate)"
-                                aria-pressed="@(calendarDate == selectedDate)" aria-current="@(calendarDate == BrowserToday ? "date" : null)"
-                                tabindex="@(FocusDate == calendarDate ? "0" : "-1")"
-                                aria-label="@DayLabel(calendarDate)">
-                            <span>@calendarDate.Day</span>
-                            <span class="calendar-day-indicators" aria-hidden="true">
-                                @foreach (var indicator in IndicatorsOn(calendarDate))
-                                {
-                                    <i class="@indicator"></i>
-                                }
-                            </span>
-                        </button>
-                    }
-                    else
-                    {
-                        <span class="running-calendar-day" role="presentation" aria-hidden="true"></span>
-                    }
+                    <button @key="calendarDate" class="@CellClass(calendarDate)" type="button" data-calendar-day
+                            @ref="dayButtons[calendarDate]"
+                            @onclick="() => SelectDateAsync(calendarDate)"
+                            @onkeydown="args => HandleDayKeyDownAsync(args, calendarDate)"
+                            aria-pressed="@(calendarDate == selectedDate)" aria-current="@(calendarDate == BrowserToday ? "date" : null)"
+                            tabindex="@(FocusDate == calendarDate ? "0" : "-1")" aria-label="@DayLabel(calendarDate)">
+                        <span class="calendar-weekday-label">@ShortWeekday(calendarDate)</span>
+                        <strong class="calendar-weekday-number">@calendarDate.Day</strong>
+                        <span class="calendar-day-indicators" aria-hidden="true">
+                            @foreach (var indicator in IndicatorsOn(calendarDate))
+                            {
+                                <i class="@indicator"></i>
+                            }
+                        </span>
+                    </button>
                 }
             </div>
 
@@ -117,30 +96,16 @@
                         <div class="calendar-activity-list">
                             @foreach (var activity in ActivitiesOn(selectedDate))
                             {
-                                var href = ActivityHref(activity);
-                                @if (href is not null)
-                                {
-                                    <a class="@ActivityClass(activity)" href="@href" @key="ActivityKey(activity)">
-                                        <span class="calendar-activity-kind">@ActivityTypeText(activity)</span>
-                                        <span class="calendar-activity-copy">
-                                            <strong>@ActivityTitle(activity)</strong>
-                                            <span>@ActivityDetail(activity)</span>
-                                            <span class="@ActivityStatusClass(activity)">@ActivityStatusText(activity)</span>
-                                        </span>
-                                        <span class="running-session-chevron" aria-hidden="true">›</span>
-                                    </a>
-                                }
-                                else
-                                {
-                                    <article class="@ActivityClass(activity)" @key="ActivityKey(activity)">
-                                        <span class="calendar-activity-kind">@ActivityTypeText(activity)</span>
-                                        <span class="calendar-activity-copy">
-                                            <strong>@ActivityTitle(activity)</strong>
-                                            <span>@ActivityDetail(activity)</span>
-                                            <span class="@ActivityStatusClass(activity)">@ActivityStatusText(activity)</span>
-                                        </span>
-                                    </article>
-                                }
+                                <button class="@ActivityClass(activity)" type="button" @key="ActivityKey(activity)"
+                                        @onclick="() => OpenActivityActions(activity)" aria-label="@ActivityActionLabel(activity)">
+                                    <span class="calendar-activity-kind">@ActivityTypeText(activity)</span>
+                                    <span class="calendar-activity-copy">
+                                        <strong>@ActivityTitle(activity)</strong>
+                                        <span>@ActivityDetail(activity)</span>
+                                        <span class="@ActivityStatusClass(activity)">@ActivityStatusText(activity)</span>
+                                    </span>
+                                    <span class="running-session-chevron" aria-hidden="true">›</span>
+                                </button>
                             }
                         </div>
                     }
@@ -151,10 +116,11 @@
                             <p class="strength-overline">Oprindeligt planlagt</p>
                             @foreach (var completed in RelationshipsOn(selectedDate))
                             {
-                                <a href="@ActivityHref(completed)" class="calendar-relationship-row" @key="ActivityKey(completed)">
+                                <button class="calendar-relationship-row" type="button" @key="ActivityKey(completed)"
+                                        @onclick="() => OpenActivityActions(completed)" aria-label="@ActivityActionLabel(completed)">
                                     <span><strong>@ActivityTitle(completed)</strong><small>Gennemført @RunningPresentation.ShortDate(completed.Date)</small></span>
                                     <span class="running-session-chevron" aria-hidden="true">›</span>
-                                </a>
+                                </button>
                             }
                         </section>
                     }
@@ -163,14 +129,67 @@
         }
     </section>
 
-    <StrengthBottomNavigation Active="calendar" />
+    <ModalDialog IsOpen="@(actionActivity is not null)" Title="@ActionTitle" Description="@ActionDescription"
+                 InitialFocusSelector="[data-calendar-primary]" DismissOnBackdrop="@(!isCancellingStartedRun)"
+                 DismissOnEscape="@(!isCancellingStartedRun)" ShowCloseButton="@(!isCancellingStartedRun)" OnDismiss="CloseActivityActions">
+        @if (actionActivity is { } activity)
+        {
+            <div class="calendar-action-summary">
+                <p class="strength-overline">@ActivityStatusText(activity)</p>
+                <strong>@ActivityTitle(activity)</strong>
+                <span>@ActivityDetail(activity)</span>
+            </div>
+
+            @if (actionError is not null)
+            {
+                <p class="strength-field-error" role="alert">@actionError</p>
+            }
+
+            <div class="calendar-action-list">
+                @if (IsPlannedRunning(activity))
+                {
+                    <a class="strength-primary-button" data-calendar-primary href="@RunningRegistrationHref(activity)">Registrer løbetur</a>
+                    <a class="strength-outline-button" href="@RunningScheduleHref()">Flyt kommende løbedage</a>
+                    <a class="strength-outline-button" href="@ActivityDetailHref(activity)">Se detaljer</a>
+                }
+                else if (IsStartedRunning(activity))
+                {
+                    @if (!isCancellingStartedRun)
+                    {
+                        <a class="strength-primary-button" data-calendar-primary href="@RunningActiveHref(activity)">Fortsæt løbetur</a>
+                        <a class="strength-outline-button" href="@ActivityDetailHref(activity)">Se detaljer</a>
+                    }
+                    <button class="strength-danger-button" type="button" @onclick="CancelStartedRunAsync" disabled="@isCancellingStartedRun">
+                        @(isCancellingStartedRun ? "Afbryder…" : "Afbryd løbetur")
+                    </button>
+                }
+                else if (IsPlannedStrength(activity))
+                {
+                    <a class="strength-primary-button" data-calendar-primary href="@StrengthActiveHref(activity)">Start træning</a>
+                    <a class="strength-outline-button" href="@StrengthScheduleHref(activity)">Flyt kommende træninger</a>
+                    <a class="strength-outline-button" href="@ActivityDetailHref(activity)">Se detaljer</a>
+                }
+                else if (activity.State == CalendarActivityState.Completed)
+                {
+                    <a class="strength-primary-button" data-calendar-primary href="@ActivityDetailHref(activity)">
+                        @(activity.Type == CalendarActivityType.Running ? "Se resultat" : "Se detaljer")
+                    </a>
+                    @if (activity.Type == CalendarActivityType.Running && activity.RunningResultId is { } resultId)
+                    {
+                        <a class="strength-outline-button" href="@WithCalendarState($"/loeb/resultater/{resultId}/ret")">Ret resultat</a>
+                    }
+                }
+            </div>
+        }
+    </ModalDialog>
+
+    <StrengthBottomNavigation Active="calendar" CalendarHref="@CalendarHref" />
 </main>
 
 @code {
     private static readonly string[] WeekdayLabels = ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"];
-    private DateOnly month = MonthStart(BrowserToday);
+    private DateOnly weekStart = RunningPresentation.Monday(BrowserToday);
     private DateOnly selectedDate = BrowserToday;
-    private List<CalendarCell> calendarDays = [];
     private Dictionary<DateOnly, List<CalendarActivityResponse>> activitiesByDate = [];
     private Dictionary<DateOnly, List<CalendarActivityResponse>> relationshipsByDate = [];
     private readonly Dictionary<DateOnly, ElementReference> dayButtons = [];
@@ -182,15 +201,35 @@
     private string? error;
     private DateOnly? keyboardFocusDate;
     private DateOnly? pendingFocusDate;
+    private CalendarActivityResponse? actionActivity;
+    private string? actionError;
+    private bool isCancellingStartedRun;
 
     [SupplyParameterFromQuery(Name = "maaned")] public string? RequestedMonth { get; set; }
     [SupplyParameterFromQuery(Name = "dato")] public string? RequestedDate { get; set; }
 
+    private IEnumerable<DateOnly> WeekDates
+    {
+        get
+        {
+            for (var offset = 0; offset < 7; offset++)
+            {
+                yield return weekStart.AddDays(offset);
+            }
+        }
+    }
+
     private bool CanRegisterRun => selectedDate >= EarliestResultDate && selectedDate <= BrowserToday;
-    private bool IsShowingToday => month == MonthStart(BrowserToday) && selectedDate == BrowserToday;
-    private DateOnly FocusDate => keyboardFocusDate is { } focused && MonthStart(focused) == month
-        ? focused
-        : selectedDate;
+    private bool IsShowingToday => selectedDate == BrowserToday;
+    private bool IsInWeek(DateOnly date) => date >= weekStart && date <= weekStart.AddDays(6);
+    private DateOnly FocusDate => keyboardFocusDate is { } focused && IsInWeek(focused) ? focused : selectedDate;
+    private string WeekLabel => $"Uge {ISOWeek.GetWeekOfYear(selectedDate.ToDateTime(TimeOnly.MinValue))}";
+    private string CalendarHref => CalendarRoute.Path(MonthStart(selectedDate), selectedDate);
+    private string ActionTitle => actionActivity is { } activity ? ActivityTitle(activity) : "Aktivitet";
+    private string? ActionDescription => actionActivity is { } activity
+        ? $"{RunningPresentation.Date(activity.Date)} · {ActivityStatusText(activity)}"
+        : null;
+
     private string ActivityCountText
     {
         get
@@ -213,51 +252,49 @@
 
     protected override Task OnParametersSetAsync()
     {
-        var nextMonth = MonthStart(BrowserToday);
         var nextSelectedDate = BrowserToday;
-        if (CalendarRoute.TryParseState(RequestedMonth, RequestedDate, out var requestedMonth, out var requestedDate))
+        if (CalendarRoute.TryParseState(RequestedMonth, RequestedDate, out _, out var requestedDate))
         {
-            nextMonth = requestedMonth;
             nextSelectedDate = requestedDate;
         }
 
-        if (hasRouteState && nextMonth == month && nextSelectedDate == selectedDate)
+        if (hasRouteState && nextSelectedDate == selectedDate)
         {
             return Task.CompletedTask;
         }
 
         hasRouteState = true;
-        month = nextMonth;
         selectedDate = nextSelectedDate;
+        weekStart = RunningPresentation.Monday(nextSelectedDate);
         keyboardFocusDate = nextSelectedDate;
-        BuildCalendarDays();
+        dayButtons.Clear();
         return LoadAsync();
     }
 
-    private Task PreviousMonthAsync() => ChangeMonthAsync(month.AddMonths(-1));
+    private Task PreviousWeekAsync() => SetCalendarStateAsync(selectedDate.AddDays(-7));
 
-    private Task NextMonthAsync() => ChangeMonthAsync(month.AddMonths(1));
+    private Task NextWeekAsync() => SetCalendarStateAsync(selectedDate.AddDays(7));
 
-    private Task TodayAsync() => SetCalendarStateAsync(MonthStart(BrowserToday), BrowserToday,
-        reload: month != MonthStart(BrowserToday));
+    private Task TodayAsync() => SetCalendarStateAsync(BrowserToday);
 
-    private Task SelectDateAsync(DateOnly date) => SetCalendarStateAsync(month, date, reload: false);
+    private Task SelectDateAsync(DateOnly date) => SetCalendarStateAsync(date);
 
-    private async Task ChangeMonthAsync(DateOnly nextMonth)
+    private Task SelectDateFromPickerAsync(DateOnly? date) => date is { } selected
+        ? SetCalendarStateAsync(selected)
+        : Task.CompletedTask;
+
+    private async Task SetCalendarStateAsync(DateOnly nextSelectedDate)
     {
-        nextMonth = MonthStart(nextMonth);
-        await SetCalendarStateAsync(nextMonth, new DateOnly(nextMonth.Year, nextMonth.Month, 1), reload: true);
-    }
-
-    private async Task SetCalendarStateAsync(DateOnly nextMonth, DateOnly nextSelectedDate, bool reload)
-    {
-        var rangeChanged = nextMonth != month;
-        month = MonthStart(nextMonth);
+        var nextWeekStart = RunningPresentation.Monday(nextSelectedDate);
+        var rangeChanged = nextWeekStart != weekStart;
         selectedDate = nextSelectedDate;
+        weekStart = nextWeekStart;
         keyboardFocusDate = nextSelectedDate;
-        BuildCalendarDays();
-        Navigation.NavigateTo(CalendarRoute.Path(month, selectedDate), replace: true);
-        if (reload && rangeChanged)
+        pendingFocusDate = nextSelectedDate;
+        dayButtons.Clear();
+        CloseActivityActions();
+        Navigation.NavigateTo(CalendarRoute.Path(MonthStart(selectedDate), selectedDate), replace: true);
+        if (rangeChanged)
         {
             await LoadAsync();
         }
@@ -271,8 +308,8 @@
             "ArrowRight" => date.AddDays(1),
             "ArrowUp" => date.AddDays(-7),
             "ArrowDown" => date.AddDays(7),
-            "Home" => date.AddDays(-((int)date.DayOfWeek + 6) % 7),
-            "End" => date.AddDays(6 - ((int)date.DayOfWeek + 6) % 7),
+            "Home" => weekStart,
+            "End" => weekStart.AddDays(6),
             _ => default
         };
         if (nextDate == default)
@@ -280,39 +317,34 @@
             return;
         }
 
-        var nextMonth = MonthStart(nextDate);
-        keyboardFocusDate = nextDate;
-        pendingFocusDate = nextDate;
-        await SetCalendarStateAsync(nextMonth, nextDate, reload: nextMonth != month);
+        await SetCalendarStateAsync(nextDate);
     }
 
     private async Task LoadAsync()
     {
-        var requestedMonth = month;
+        var requestedWeekStart = weekStart;
         var requestVersion = ++loadRequestVersion;
         loadCancellation?.Cancel();
         loadCancellation?.Dispose();
         loadCancellation = new CancellationTokenSource();
         isLoading = true;
         error = null;
-        var response = await Calendar.GetRangeAsync(requestedMonth, requestedMonth.AddMonths(1).AddDays(-1),
-            loadCancellation.Token);
-        if (requestVersion != loadRequestVersion || requestedMonth != month)
+        var response = await Calendar.GetRangeAsync(requestedWeekStart, requestedWeekStart.AddDays(6), loadCancellation.Token);
+        if (requestVersion != loadRequestVersion || requestedWeekStart != weekStart)
         {
             return;
         }
 
         if (response.Succeeded && response.Value is { } range)
         {
-            var start = requestedMonth;
-            var end = requestedMonth.AddMonths(1).AddDays(-1);
+            var end = requestedWeekStart.AddDays(6);
             activitiesByDate = range.Activities
-                .Where(activity => activity.Date >= start && activity.Date <= end)
+                .Where(activity => activity.Date >= requestedWeekStart && activity.Date <= end)
                 .GroupBy(activity => activity.Date)
                 .ToDictionary(group => group.Key, group => group.ToList());
             relationshipsByDate = range.Activities
                 .Where(activity => activity.PlannedDate is { } plannedDate && plannedDate != activity.Date &&
-                                   plannedDate >= start && plannedDate <= end)
+                                   plannedDate >= requestedWeekStart && plannedDate <= end)
                 .GroupBy(activity => activity.PlannedDate!.Value)
                 .ToDictionary(group => group.Key, group => group.ToList());
         }
@@ -324,28 +356,6 @@
         }
 
         isLoading = false;
-    }
-
-    private void BuildCalendarDays()
-    {
-        var leading = ((int)month.DayOfWeek + 6) % 7;
-        var daysInMonth = DateTime.DaysInMonth(month.Year, month.Month);
-        calendarDays = [];
-        dayButtons.Clear();
-        for (var index = 0; index < leading; index++)
-        {
-            calendarDays.Add(new CalendarCell(null));
-        }
-
-        for (var day = 1; day <= daysInMonth; day++)
-        {
-            calendarDays.Add(new CalendarCell(new DateOnly(month.Year, month.Month, day)));
-        }
-
-        while (calendarDays.Count % 7 != 0)
-        {
-            calendarDays.Add(new CalendarCell(null));
-        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -402,7 +412,7 @@
         return indicators;
     }
 
-    private string CellClass(DateOnly date) => $"running-calendar-day is-current-month{(date == BrowserToday ? " is-today" : "")}{(date == selectedDate ? " is-selected" : "")}";
+    private string CellClass(DateOnly date) => $"calendar-weekday{(date == BrowserToday ? " is-today" : "")}{(date == selectedDate ? " is-selected" : "")}";
 
     private string DayLabel(DateOnly date)
     {
@@ -424,32 +434,102 @@
         return $"{RunningPresentation.Date(date)}: {description}";
     }
 
-    private string? ActivityHref(CalendarActivityResponse activity)
+    private void OpenActivityActions(CalendarActivityResponse activity)
+    {
+        actionActivity = activity;
+        actionError = null;
+    }
+
+    private void CloseActivityActions()
+    {
+        if (isCancellingStartedRun)
+        {
+            return;
+        }
+
+        actionActivity = null;
+        actionError = null;
+    }
+
+    private async Task CancelStartedRunAsync()
+    {
+        if (isCancellingStartedRun || actionActivity?.RunningSessionId is not { } sessionId)
+        {
+            return;
+        }
+
+        isCancellingStartedRun = true;
+        actionError = null;
+        var response = await Running.CancelSessionAsync(sessionId);
+        isCancellingStartedRun = false;
+        if (!response.Succeeded)
+        {
+            actionError = response.Error ?? "Løbeturen kunne ikke afbrydes. Prøv igen.";
+            return;
+        }
+
+        pendingFocusDate = selectedDate;
+        CloseActivityActions();
+        await LoadAsync();
+    }
+
+    private string? ActivityDetailHref(CalendarActivityResponse activity)
     {
         if (activity.RunningResultId is { } resultId)
         {
-            return CalendarRoute.AppendState($"/loeb/resultater/{resultId}", month, selectedDate);
+            return WithCalendarState($"/loeb/resultater/{resultId}");
         }
 
         if (activity.RunningSessionId is { } sessionId)
         {
-            return CalendarRoute.AppendState($"/loeb/plan/{sessionId}", month, selectedDate);
+            return WithCalendarState($"/loeb/plan/{sessionId}");
         }
 
         if (activity.StrengthCompletionId is { } completionId)
         {
-            return CalendarRoute.AppendState($"/styrke/resultater/{completionId}", month, selectedDate);
+            return WithCalendarState($"/styrke/resultater/{completionId}");
         }
 
-        if (activity.StrengthProgramId is { } programId && activity.StrengthWorkoutId is { } workoutId)
+        if (activity.StrengthProgramId is { } programId)
         {
-            return CalendarRoute.AppendState($"/styrke/{programId}/træninger/{workoutId}/aktiv", month, selectedDate);
+            return WithCalendarState($"/styrke/{programId}");
         }
 
-        return null;
+        return CalendarHref;
     }
 
-    private string ManualLogHref() => CalendarRoute.ManualRunningPath(month, selectedDate);
+    private string RunningRegistrationHref(CalendarActivityResponse activity) => activity.RunningSessionId is { } sessionId
+        ? WithCalendarState($"/loeb/plan/{sessionId}/registrer")
+        : ManualLogHref();
+
+    private string RunningActiveHref(CalendarActivityResponse activity) => activity.RunningSessionId is { } sessionId
+        ? WithCalendarState($"/loeb/plan/{sessionId}/aktiv")
+        : CalendarHref;
+
+    private string StrengthActiveHref(CalendarActivityResponse activity) =>
+        activity.StrengthProgramId is { } programId && activity.StrengthWorkoutId is { } workoutId
+            ? WithCalendarState($"/styrke/{programId}/træninger/{workoutId}/aktiv")
+            : CalendarHref;
+
+    private string StrengthScheduleHref(CalendarActivityResponse activity) => activity.StrengthProgramId is { } programId
+        ? WithCalendarState($"/styrke/{programId}/plan")
+        : CalendarHref;
+
+    private string RunningScheduleHref() => WithCalendarState("/loeb/planlaeg");
+
+    private string ManualLogHref() => CalendarRoute.ManualRunningPath(MonthStart(selectedDate), selectedDate);
+
+    private string WithCalendarState(string path) => CalendarRoute.AppendState(path, MonthStart(selectedDate), selectedDate);
+
+    private static bool IsPlannedRunning(CalendarActivityResponse activity) =>
+        activity.Type == CalendarActivityType.Running && activity.State == CalendarActivityState.Planned && activity.RunningSessionId is not null;
+
+    private static bool IsStartedRunning(CalendarActivityResponse activity) =>
+        activity.Type == CalendarActivityType.Running && activity.State == CalendarActivityState.Started && activity.RunningSessionId is not null;
+
+    private static bool IsPlannedStrength(CalendarActivityResponse activity) =>
+        activity.Type == CalendarActivityType.Strength && activity.State == CalendarActivityState.Planned &&
+        activity.StrengthProgramId is not null && activity.StrengthWorkoutId is not null;
 
     private static string ActivityKey(CalendarActivityResponse activity) =>
         $"{activity.Date:yyyy-MM-dd}-{activity.Type}-{activity.State}-{activity.Id}";
@@ -505,6 +585,12 @@
         _ => "Planlagt"
     };
 
+    private static string ActivityActionLabel(CalendarActivityResponse activity) =>
+        $"Åbn muligheder for {ActivityTypeText(activity)} {ActivityTitle(activity)}, {ActivityDetail(activity)}, " +
+        $"{ActivityStatusText(activity)}, {RunningPresentation.Date(activity.Date)}";
+
+    private static string ShortWeekday(DateOnly date) => WeekdayLabels[((int)date.DayOfWeek + 6) % 7];
+
     private static string KindName(RunningSessionKind kind) => kind switch
     {
         RunningSessionKind.Easy => "Rolig tur",
@@ -522,6 +608,4 @@
         loadCancellation?.Cancel();
         loadCancellation?.Dispose();
     }
-
-    private sealed record CalendarCell(DateOnly? Date);
 }
