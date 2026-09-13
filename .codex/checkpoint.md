@@ -29,6 +29,11 @@ Complete the existing `/kalender` route as the private shared running and streng
 
 - The interrupted build left untracked literal directories `src/FitnessApp.Infrastructure/bin\\Debug/` and `src/FitnessApp.Server/bin\\Debug/`. They are not staged, changed, or removed.
 
+## Delivery
+
+- Commit `baa036dd1159f97a860207d93b200b5847fc94af` (`feat: complete shared calendar`) is pushed on `feature/calendar`.
+- Pull request [#11](https://github.com/Kaspartacus/Fitness-app/pull/11) targets `main`, is open, and has not been merged or deployed.
+
 ## Exact next action
 
-- Stage only the calendar task files, inspect the staged diff, commit, push `feature/calendar` without force, and open or update a PR targeting `main`. Do not merge or deploy.
+- Owner manual checks may cover month/date navigation, planned and completed running/strength activities, retained history, and a planned-versus-actual date mismatch. Do not merge or deploy from this checkpoint.
