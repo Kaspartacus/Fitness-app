@@ -33,3 +33,7 @@ public sealed record CalendarActivityResponse(
     Guid? StrengthCompletionId);
 
 public sealed record CalendarRangeResponse(IReadOnlyList<CalendarActivityResponse> Activities);
+
+public sealed record MoveCalendarOccurrenceRequest(
+    DateOnly OriginalDate,
+    DateOnly TargetDate);

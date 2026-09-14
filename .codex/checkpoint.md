@@ -4,45 +4,36 @@ Updated: 2026-09-14
 
 ## Objective
 
-Complete the existing `/kalender` route as the private shared running and strength calendar, retaining the existing single .NET/Blazor solution and its established flows.
+Extend the existing `/kalender` route with one-off, persisted moves for a specific planned running or strength occurrence; keep the recurring plan unchanged. Keep run registration scoped to a selected run activity, and show the shared mobile bottom navigation on the authenticated home page.
 
 ## Branch and worktree
 
-- Branch: `feature/calendar`, based on `origin/main` at `ed99839`; worktree: `/Users/kaspartacuzz/Desktop/Fitness app/Fitness-app`.
-- No new solution, host, competing calendar route, migration, test run, application run, browser check, audit, deployment, or CI change was made.
+- Branch: `feature/calendar`; worktree: `/Users/kaspartacuzz/Desktop/Fitness app/Fitness-app`.
+- Existing open PR: [#11](https://github.com/Kaspartacus/Fitness-app/pull/11) targeting `main`. It has not been merged or deployed.
 
 ## Completed work (uncommitted)
 
-- Added an owner-scoped, inclusive, maximum-93-day calendar API and client. It queries active planned running sessions, actual running results (including manual and retired-plan history), current/future strength schedule occurrences, and actual completed strength snapshots without one request per day.
-- Kept planned and actual dates separate. Running results render on their actual date; when it differs, the scheduled date displays a non-counting relationship to the single result. Strength’s weekly model is projected only from Copenhagen-local today forward, so it never invents historical scheduled occurrences.
-- Replaced the existing running-only calendar UI in place with month navigation, Monday-first grid, today and selected-day states, accessible keyboard selection, activity indicators, loading/empty/error/retry states, and state-preserving links to existing running/strength flows. A read-only owned completed-strength detail route was added because an active workout route would imply a new session.
-- Used `TimeProvider` and `Europe/Copenhagen` for the new strength calendar-facing dates and completion timestamps. No persistence schema change was necessary.
-- Updated project/progress documentation. Figma’s prior source inventory included the calendar screen; the integration was unavailable after interruption, so no fresh exact-frame or runtime visual verification is claimed.
-
-## Calendar refinement (pushed)
-
-- Reworked the existing `/kalender` route from a month grid to a Monday-first, seven-day weekly view. Previous/next, today, date selection, indicators, loading/error/retry handling, keyboard focus, and the bounded calendar API request now operate on the selected week.
-- Made the `Uge NN` label open the existing centered date-picker component, extended with a compact trigger and an in-picker today action. Picking a date selects that date and its containing week.
-- Replaced direct activity links with centered action dialogs. Planned runs offer result registration, the existing recurring running-plan editor, and details; planned strength workouts offer start, the existing weekly strength plan editor, and program details; completed activities offer their existing result/detail flows. A started run can be genuinely aborted through the existing owner-scoped API. One-off move/cancel is deliberately not represented as a fake action because the persisted models only support recurring schedules.
-- Added a calendar entry point to the desktop dashboard and scoped responsive calendar styling. Bottom navigation remains mobile-only. Calendar state now survives through the recurring running/strength schedule and strength-program detail flows.
+- Added an owner-scoped `CalendarOccurrenceMove` persistence model and EF migration. A move retains the original scheduled date and overlays a target date, so it does not rewrite the running or strength recurring plan.
+- Added owner-scoped calendar move endpoints and client calls. Running moves only apply to active, unstarted, result-free sessions in the plan period; strength moves validate the owned program, workout, and scheduled source day.
+- Locked a running move with the same SQLite plan-write lock used by schedule regeneration. A moved source is preserved during running schedule edits, and a session start rechecks its effective target date after taking that lock.
+- Updated the bounded calendar projection to suppress a source occurrence and render it once on its move target, with the original date displayed as context. Actual results stay on their actual dates; completed-result relationships use the moved planned date.
+- Propagated a moved running occurrence’s effective date through plan, overview, list, detail, registration, active-session, start, and cancel mappings while retaining the stored source date for the schedule.
+- Removed the generic selected-day `Registrer løb` action. Registration is only available from the selected planned run’s action dialog. Planned activities now open an action dialog with the specific run/strength move action, existing registration/start flow, and details.
+- Reused the existing centered date picker as an accessible controlled move dialog, including validation, retryable server errors, cancellation handling, focus return, and calendar-state preservation.
+- Added the existing shared bottom navigation to the authenticated home dashboard on mobile, with an active Hjem state; desktop keeps its existing desktop layout and hides the mobile navigation.
+- Used the user-provided screenshots and the existing documented design reference. Fresh Figma integration access was unavailable, so no exact Figma-frame verification is claimed.
 
 ## Verification
 
 - `git diff --check` passes.
-- The refinement short serial build succeeded: `DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1 MSBUILDDISABLENODEREUSE=1 dotnet build FitnessApp.slnx --no-restore --disable-build-servers --verbosity minimal -m:1 -p:BuildInParallel=false` completed with 0 warnings and 0 errors. No tests were run.
-- The replacement short serial build, `dotnet build FitnessApp.slnx --no-restore --disable-build-servers --verbosity minimal -m:1 -p:BuildInParallel=false`, succeeded with 0 errors. It emitted one `NU1900` warning because this environment could not resolve NuGet's advisory endpoint. The first sandboxed attempt failed only at the known WebAssembly task-host boundary (`MSB4216`); the identical approved non-sandboxed build completed successfully.
-- Per owner instruction: no tests, app run, browser automation, audit, or full verification script.
+- Short serial build passed with 0 warnings and 0 errors: `DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1 MSBUILDDISABLENODEREUSE=1 dotnet build FitnessApp.slnx --no-restore --disable-build-servers --verbosity minimal -m:1 -p:BuildInParallel=false`.
+- No tests, app run, browser automation, audit, full verify script, database update, deployment, or CI change was performed.
 
-## Preserved unrelated files
+## Preserved unrelated files and processes
 
-- The interrupted build left untracked literal directories `src/FitnessApp.Infrastructure/bin\\Debug/` and `src/FitnessApp.Server/bin\\Debug/`. They are not staged, changed, or removed.
-
-## Delivery
-
-- Commit `baa036dd1159f97a860207d93b200b5847fc94af` (`feat: complete shared calendar`) is pushed on `feature/calendar`.
-- Commit `9fca31a` (`feat: refine weekly calendar interactions`) contains the weekly/calendar-action refinement and is pushed on `feature/calendar`.
-- Pull request [#11](https://github.com/Kaspartacus/Fitness-app/pull/11) targets `main`, is open, and has not been merged or deployed.
+- The untracked literal directories `src/FitnessApp.Infrastructure/bin\\Debug/` and `src/FitnessApp.Server/bin\\Debug/` are preserved and must not be staged or removed.
+- A user-owned `dotnet run --project src/FitnessApp.Server --launch-profile https` process was detected and left untouched.
 
 ## Exact next action
 
-- No further implementation is pending. User manual checks may cover weekly navigation, date selection through `Uge NN`, activity action dialogs, running/strength flows, historic results, and planned versus actual dates. Do not merge or deploy.
+Stage only the task-owned source, migration, and checkpoint files; commit; push `feature/calendar` without force; then update/confirm PR #11. Do not merge or deploy.

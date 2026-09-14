@@ -34,8 +34,26 @@ public sealed record CalendarActivityData(
 
 public sealed record CalendarRangeData(IReadOnlyList<CalendarActivityData> Activities);
 
+public enum CalendarMoveStatus
+{
+    Saved,
+    NotFound,
+    Invalid,
+    Conflict
+}
+
+public sealed record MoveCalendarOccurrenceInput(DateOnly OriginalDate, DateOnly TargetDate);
+
+public sealed record CalendarMoveResult(CalendarMoveStatus Status);
+
 public interface ICalendarService
 {
     Task<CalendarRangeData> GetRangeAsync(string userId, DateOnly from, DateOnly to,
         CancellationToken cancellationToken);
+
+    Task<CalendarMoveResult> MoveRunningOccurrenceAsync(string userId, Guid sessionId,
+        MoveCalendarOccurrenceInput input, CancellationToken cancellationToken);
+
+    Task<CalendarMoveResult> MoveStrengthOccurrenceAsync(string userId, Guid programId, Guid workoutId,
+        MoveCalendarOccurrenceInput input, CancellationToken cancellationToken);
 }

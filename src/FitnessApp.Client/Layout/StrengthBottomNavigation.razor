@@ -1,5 +1,5 @@
 <nav class="strength-bottom-nav" aria-label="Hovednavigation">
-    <a class="strength-bottom-nav-item" href="/" aria-label="Hjem" title="Hjem">
+    <a class="strength-bottom-nav-item @(Active == "home" ? "is-active" : null)" href="/" aria-current="@(Active == "home" ? "page" : null)" aria-label="Hjem" title="Hjem">
         <span class="strength-bottom-nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="m3.5 10.5 8.5-7 8.5 7v9.25a1.25 1.25 0 0 1-1.25 1.25H4.75a1.25 1.25 0 0 1-1.25-1.25z" /><path d="M9.25 21v-6h5.5v6" /></svg>
         </span>

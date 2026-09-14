@@ -54,4 +54,54 @@ public sealed class CalendarClient(IHttpClientFactory httpClientFactory)
             return new(default, "Kunne ikke kontakte serveren. Kontrollér forbindelsen, og prøv igen.");
         }
     }
+
+    public Task<CalendarClientResult<bool>> MoveRunningOccurrenceAsync(Guid sessionId, DateOnly originalDate,
+        DateOnly targetDate, CancellationToken cancellationToken = default) =>
+        MoveOccurrenceAsync($"api/calendar/running/{sessionId}/move", originalDate, targetDate, cancellationToken);
+
+    public Task<CalendarClientResult<bool>> MoveStrengthOccurrenceAsync(Guid programId, Guid workoutId,
+        DateOnly originalDate, DateOnly targetDate, CancellationToken cancellationToken = default) =>
+        MoveOccurrenceAsync($"api/calendar/strength/{programId}/workouts/{workoutId}/move", originalDate, targetDate,
+            cancellationToken);
+
+    private async Task<CalendarClientResult<bool>> MoveOccurrenceAsync(string path, DateOnly originalDate,
+        DateOnly targetDate, CancellationToken cancellationToken)
+    {
+        if (originalDate == default || targetDate == default || originalDate == targetDate)
+        {
+            return new(default, "Vælg en anden dato for træningen.");
+        }
+
+        try
+        {
+            using var response = await httpClientFactory.CreateClient(AuthenticationClient.ClientName)
+                .PutAsJsonAsync(path, new MoveCalendarOccurrenceRequest(originalDate, targetDate), JsonOptions,
+                    cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return new(true);
+            }
+
+            return response.StatusCode switch
+            {
+                HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => new(default,
+                    "Du skal være logget ind med en godkendt konto."),
+                HttpStatusCode.NotFound => new(default,
+                    "Aktiviteten findes ikke længere. Opdatér kalenderen, og prøv igen."),
+                HttpStatusCode.Conflict => new(default,
+                    "Aktiviteten er ændret. Opdatér kalenderen, og prøv igen."),
+                HttpStatusCode.BadRequest => new(default,
+                    "Vælg en anden dato i dag eller senere."),
+                _ => new(default, "Træningen kunne ikke flyttes. Prøv igen.")
+            };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new(default, "Anmodningen blev annulleret.", true);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException)
+        {
+            return new(default, "Kunne ikke kontakte serveren. Kontrollér forbindelsen, og prøv igen.");
+        }
+    }
 }

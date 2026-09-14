@@ -765,6 +765,7 @@ a:focus-visible {
 .strength-bottom-nav-item:hover:not(:disabled) { color: #c4ddf8; }
 .strength-bottom-nav-item:focus-visible { outline: 2px solid #8ec2f6; outline-offset: -2px; }
 .strength-bottom-nav button:disabled { color: #6f8195; opacity: 1; cursor: default; }
+.dashboard-page.dashboard-with-bottom-nav { padding-bottom: calc(5.75rem + env(safe-area-inset-bottom)); }
 .strength-form-page { padding-top: 1.35rem; }
 .strength-editor-card { display: grid; gap: 0.8rem; padding: 1.2rem; }
 .strength-editor-card > p:not(.strength-overline) { margin-bottom: 0.55rem; }
@@ -986,6 +987,7 @@ a:focus-visible {
     }
 
     .strength-app.strength-with-bottom-nav { padding-bottom: 3rem; }
+    .dashboard-page.dashboard-with-bottom-nav { padding-bottom: 3rem; }
     .strength-bottom-nav { display: none; }
     .strength-program-grid, .strength-workout-list { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
     .strength-finish-button { bottom: 2rem; width: min(26rem, calc(100% - 3rem)); }

@@ -15,6 +15,8 @@ internal static class CalendarEndpoints
     {
         var group = app.MapGroup("/api/calendar").RequireAuthorization();
         group.MapGet("", GetRangeAsync);
+        group.MapPut("/running/{sessionId:guid}/move", MoveRunningOccurrenceAsync);
+        group.MapPut("/strength/{programId:guid}/workouts/{workoutId:guid}/move", MoveStrengthOccurrenceAsync);
     }
 
     private static async Task<IResult> GetRangeAsync(
@@ -33,6 +35,31 @@ internal static class CalendarEndpoints
         return Results.Ok(new CalendarRangeResponse(range.Activities.Select(Map).ToArray()));
     }
 
+    private static async Task<IResult> MoveRunningOccurrenceAsync(
+        Guid sessionId,
+        MoveCalendarOccurrenceRequest request,
+        ClaimsPrincipal user,
+        ICalendarService service,
+        CancellationToken cancellationToken)
+    {
+        var result = await service.MoveRunningOccurrenceAsync(Owner(user), sessionId,
+            new MoveCalendarOccurrenceInput(request.OriginalDate, request.TargetDate), cancellationToken);
+        return MoveResult(result);
+    }
+
+    private static async Task<IResult> MoveStrengthOccurrenceAsync(
+        Guid programId,
+        Guid workoutId,
+        MoveCalendarOccurrenceRequest request,
+        ClaimsPrincipal user,
+        ICalendarService service,
+        CancellationToken cancellationToken)
+    {
+        var result = await service.MoveStrengthOccurrenceAsync(Owner(user), programId, workoutId,
+            new MoveCalendarOccurrenceInput(request.OriginalDate, request.TargetDate), cancellationToken);
+        return MoveResult(result);
+    }
+
     private static CalendarActivityResponse Map(CalendarActivityData activity) => new(
         activity.Id,
         (CalendarContractActivityType)(int)activity.Type,
@@ -49,6 +76,20 @@ internal static class CalendarEndpoints
         activity.StrengthProgramId,
         activity.StrengthWorkoutId,
         activity.StrengthCompletionId);
+
+    private static IResult MoveResult(CalendarMoveResult result) => result.Status switch
+    {
+        CalendarMoveStatus.Saved => Results.NoContent(),
+        CalendarMoveStatus.NotFound => Results.NotFound(),
+        CalendarMoveStatus.Invalid => Results.ValidationProblem(
+            new Dictionary<string, string[]>
+            {
+                ["targetDate"] = ["Vælg en anden dato i dag eller senere."]
+            },
+            title: "Træningen kan ikke flyttes."),
+        CalendarMoveStatus.Conflict => Results.Conflict(),
+        _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError)
+    };
 
     private static bool TryReadDateRange(
         string? from,

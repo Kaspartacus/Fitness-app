@@ -4,7 +4,7 @@
 
 <PageTitle>Hjem</PageTitle>
 
-<main class="dashboard-page" aria-labelledby="home-title">
+<main class="dashboard-page dashboard-with-bottom-nav" aria-labelledby="home-title">
     @if (isLoading)
     {
         <section class="state-panel">
@@ -64,6 +64,8 @@
                 </article>
             }
         </section>
+
+        <StrengthBottomNavigation Active="home" />
     }
     else if (errorMessage is not null)
     {
