@@ -11,7 +11,7 @@ Extend the existing `/kalender` route with one-off, persisted moves for a specif
 - Branch: `feature/calendar`; worktree: `/Users/kaspartacuzz/Desktop/Fitness app/Fitness-app`.
 - Existing open PR: [#11](https://github.com/Kaspartacus/Fitness-app/pull/11) targeting `main`. It has not been merged or deployed.
 
-## Completed work (uncommitted)
+## Completed work (pushed)
 
 - Added an owner-scoped `CalendarOccurrenceMove` persistence model and EF migration. A move retains the original scheduled date and overlays a target date, so it does not rewrite the running or strength recurring plan.
 - Added owner-scoped calendar move endpoints and client calls. Running moves only apply to active, unstarted, result-free sessions in the plan period; strength moves validate the owned program, workout, and scheduled source day.
@@ -34,6 +34,11 @@ Extend the existing `/kalender` route with one-off, persisted moves for a specif
 - The untracked literal directories `src/FitnessApp.Infrastructure/bin\\Debug/` and `src/FitnessApp.Server/bin\\Debug/` are preserved and must not be staged or removed.
 - A user-owned `dotnet run --project src/FitnessApp.Server --launch-profile https` process was detected and left untouched.
 
+## Delivery
+
+- Commit `97a8559` (`feat: move individual calendar activities`) is pushed on `feature/calendar`.
+- PR [#11](https://github.com/Kaspartacus/Fitness-app/pull/11) is open from `feature/calendar` to `main`. It has not been merged or deployed.
+
 ## Exact next action
 
-Stage only the task-owned source, migration, and checkpoint files; commit; push `feature/calendar` without force; then update/confirm PR #11. Do not merge or deploy.
+No code action remains. The next action is user manual verification of activity moves, run registration from an activity, and the mobile home navigation. Do not merge or deploy.
