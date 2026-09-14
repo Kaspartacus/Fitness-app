@@ -1,6 +1,6 @@
 # Calendar feature checkpoint
 
-Updated: 2026-09-13
+Updated: 2026-09-14
 
 ## Objective
 
@@ -19,7 +19,7 @@ Complete the existing `/kalender` route as the private shared running and streng
 - Used `TimeProvider` and `Europe/Copenhagen` for the new strength calendar-facing dates and completion timestamps. No persistence schema change was necessary.
 - Updated project/progress documentation. Figma’s prior source inventory included the calendar screen; the integration was unavailable after interruption, so no fresh exact-frame or runtime visual verification is claimed.
 
-## Calendar refinement (committed locally)
+## Calendar refinement (pushed)
 
 - Reworked the existing `/kalender` route from a month grid to a Monday-first, seven-day weekly view. Previous/next, today, date selection, indicators, loading/error/retry handling, keyboard focus, and the bounded calendar API request now operate on the selected week.
 - Made the `Uge NN` label open the existing centered date-picker component, extended with a compact trigger and an in-picker today action. Picking a date selects that date and its containing week.
@@ -40,9 +40,9 @@ Complete the existing `/kalender` route as the private shared running and streng
 ## Delivery
 
 - Commit `baa036dd1159f97a860207d93b200b5847fc94af` (`feat: complete shared calendar`) is pushed on `feature/calendar`.
-- The local `feat: refine weekly calendar interactions` commit contains the weekly/calendar-action refinement and is ready to push.
+- Commit `9fca31a` (`feat: refine weekly calendar interactions`) contains the weekly/calendar-action refinement and is pushed on `feature/calendar`.
 - Pull request [#11](https://github.com/Kaspartacus/Fitness-app/pull/11) targets `main`, is open, and has not been merged or deployed.
 
 ## Exact next action
 
-- Push `feature/calendar` without force, confirm the existing PR #11 reflects the current `feature/calendar` HEAD, and do not merge or deploy.
+- No further implementation is pending. User manual checks may cover weekly navigation, date selection through `Uge NN`, activity action dialogs, running/strength flows, historic results, and planned versus actual dates. Do not merge or deploy.
