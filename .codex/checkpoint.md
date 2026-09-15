@@ -38,8 +38,9 @@ Extend the existing `/kalender` route with one-off, persisted moves for a specif
 ## Delivery
 
 - Commit `97a8559` (`feat: move individual calendar activities`) is pushed on `feature/calendar`.
+- Commit `e10e77c` (`fix: align calendar mobile header`) is pushed on `feature/calendar`.
 - PR [#11](https://github.com/Kaspartacus/Fitness-app/pull/11) is open from `feature/calendar` to `main`. It has not been merged or deployed.
 
 ## Exact next action
 
-Stage only the calendar-header source, stylesheet, and this checkpoint; commit; push `feature/calendar` without force; then confirm PR #11. Do not merge or deploy.
+No code action remains. The next action is user manual verification of the mobile calendar header, activity moves, registration from an activity, and planned versus actual dates. Do not merge or deploy.
