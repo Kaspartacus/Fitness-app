@@ -11,7 +11,7 @@ Extend the existing `/kalender` route with one-off, persisted moves for a specif
 - Branch: `feature/calendar`; worktree: `/Users/kaspartacuzz/Desktop/Fitness app/Fitness-app`.
 - Existing open PR: [#11](https://github.com/Kaspartacus/Fitness-app/pull/11) targeting `main`. It has not been merged or deployed.
 
-## Completed work (pushed)
+## Completed work
 
 - Added an owner-scoped `CalendarOccurrenceMove` persistence model and EF migration. A move retains the original scheduled date and overlays a target date, so it does not rewrite the running or strength recurring plan.
 - Added owner-scoped calendar move endpoints and client calls. Running moves only apply to active, unstarted, result-free sessions in the plan period; strength moves validate the owned program, workout, and scheduled source day.
@@ -23,13 +23,15 @@ Extend the existing `/kalender` route with one-off, persisted moves for a specif
 - Added the existing shared bottom navigation to the authenticated home dashboard on mobile, with an active Hjem state; desktop keeps its existing desktop layout and hides the mobile navigation.
 - Updated the calendar header: mobile hides its redundant back arrow, retains the working I dag action, and adds the existing home icon at the far right. Desktop keeps the back arrow.
 - Corrected the calendar header action group so it no longer inherits the generic flexible header width; the home icon now aligns to the same right edge as on Løb.
+- Updated the empty-database migration integration test for `AddCalendarOccurrenceMoves`, including its applied-migration list and the persisted `CalendarOccurrenceMoves.TargetDate` column.
 - Used the user-provided screenshots and the existing documented design reference. Fresh Figma integration access was unavailable, so no exact Figma-frame verification is claimed.
 
 ## Verification
 
 - `git diff --check` passes.
 - The latest short serial build passed with 0 errors: `DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1 MSBUILDDISABLENODEREUSE=1 dotnet build FitnessApp.slnx --no-restore --disable-build-servers --verbosity minimal -m:1 -p:BuildInParallel=false`. It emitted one `MSB3026` static-web-assets retry warning from the active local server build path.
-- No tests, app run, browser automation, audit, full verify script, database update, deployment, or CI change was performed.
+- The previously failing focused migration test now passes: `dotnet test tests/FitnessApp.IntegrationTests/FitnessApp.IntegrationTests.csproj --no-restore --disable-build-servers --verbosity minimal -m:1 -p:BuildInParallel=false --filter 'FullyQualifiedName=FitnessApp.IntegrationTests.RegistrationMigrationTests.LatestMigrationAppliesToEmptyDatabase'` (1 passed, 0 failed).
+- No app run, browser automation, audit, full verify script, database update, deployment, or CI change was performed. No full test suite was run.
 
 ## Preserved unrelated files and processes
 
@@ -44,4 +46,4 @@ Extend the existing `/kalender` route with one-off, persisted moves for a specif
 
 ## Exact next action
 
-No code action remains. The next action is user manual verification that the calendar home icon aligns with Løb on mobile, alongside the existing calendar flows. Do not merge or deploy.
+Stage only `tests/FitnessApp.IntegrationTests/RegistrationMigrationTests.cs` and this checkpoint; commit the migration-test update, push `feature/calendar` without force, and confirm that PR #11 still targets `main`. Do not merge or deploy.
