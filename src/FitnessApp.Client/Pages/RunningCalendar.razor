@@ -15,10 +15,13 @@
 
 <main class="strength-app running-app strength-with-bottom-nav calendar-app" aria-labelledby="calendar-title">
     <header class="strength-back-header calendar-page-header">
-        <a class="strength-icon-button" href="/" aria-label="Tilbage til hjem" title="Tilbage til hjem">←</a>
+        <a class="strength-icon-button calendar-desktop-back" href="/" aria-label="Tilbage til hjem" title="Tilbage til hjem">←</a>
         <h1 id="calendar-title">Kalender</h1>
-        <button class="calendar-header-today" type="button" @onclick="TodayAsync" disabled="@IsShowingToday"
-                aria-label="Gå til i dag">I dag</button>
+        <div class="calendar-header-actions">
+            <button class="calendar-header-today" type="button" @onclick="TodayAsync" disabled="@IsShowingToday"
+                    aria-label="Gå til i dag">I dag</button>
+            <a class="strength-profile-button" href="/" aria-label="Tilbage til hjem" title="Tilbage til hjem">⌂</a>
+        </div>
     </header>
 
     <section class="strength-section calendar-week-section" aria-label="Delt kalender for løb og styrketræning">

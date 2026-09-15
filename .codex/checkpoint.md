@@ -1,6 +1,6 @@
 # Calendar feature checkpoint
 
-Updated: 2026-09-14
+Updated: 2026-09-15
 
 ## Objective
 
@@ -21,12 +21,13 @@ Extend the existing `/kalender` route with one-off, persisted moves for a specif
 - Removed the generic selected-day `Registrer løb` action. Registration is only available from the selected planned run’s action dialog. Planned activities now open an action dialog with the specific run/strength move action, existing registration/start flow, and details.
 - Reused the existing centered date picker as an accessible controlled move dialog, including validation, retryable server errors, cancellation handling, focus return, and calendar-state preservation.
 - Added the existing shared bottom navigation to the authenticated home dashboard on mobile, with an active Hjem state; desktop keeps its existing desktop layout and hides the mobile navigation.
+- Updated the calendar header: mobile hides its redundant back arrow, retains the working I dag action, and adds the existing home icon at the far right. Desktop keeps the back arrow.
 - Used the user-provided screenshots and the existing documented design reference. Fresh Figma integration access was unavailable, so no exact Figma-frame verification is claimed.
 
 ## Verification
 
 - `git diff --check` passes.
-- Short serial build passed with 0 warnings and 0 errors: `DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1 MSBUILDDISABLENODEREUSE=1 dotnet build FitnessApp.slnx --no-restore --disable-build-servers --verbosity minimal -m:1 -p:BuildInParallel=false`.
+- The latest short serial build passed with 0 warnings and 0 errors: `DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1 MSBUILDDISABLENODEREUSE=1 dotnet build FitnessApp.slnx --no-restore --disable-build-servers --verbosity minimal -m:1 -p:BuildInParallel=false`.
 - No tests, app run, browser automation, audit, full verify script, database update, deployment, or CI change was performed.
 
 ## Preserved unrelated files and processes
@@ -41,4 +42,4 @@ Extend the existing `/kalender` route with one-off, persisted moves for a specif
 
 ## Exact next action
 
-No code action remains. The next action is user manual verification of activity moves, run registration from an activity, and the mobile home navigation. Do not merge or deploy.
+Stage only the calendar-header source, stylesheet, and this checkpoint; commit; push `feature/calendar` without force; then confirm PR #11. Do not merge or deploy.

@@ -1036,9 +1036,15 @@ a:focus-visible {
 
 /* Weekly calendar — a single Monday-first week stays readable in the shared desktop and mobile shell. */
 .calendar-page-header { align-items: center; }
+.calendar-header-actions { display: flex; align-items: center; gap: .5rem; }
 .calendar-header-today { display: inline-flex; min-height: 2.35rem; align-items: center; justify-content: center; border: 1px solid #477db4; border-radius: .65rem; padding: .45rem .75rem; background: #1d4f7f; color: #e8f3ff; font: inherit; font-size: .78rem; font-weight: 780; cursor: pointer; }
 .calendar-header-today:hover:not(:disabled) { background: #286199; }
 .calendar-header-today:disabled { border-color: var(--strength-border); background: var(--strength-raised); color: var(--strength-muted); cursor: default; }
+
+@media (max-width: 47.99rem) {
+    .calendar-page-header .calendar-desktop-back { display: none; }
+}
+
 .calendar-week-section { min-width: 0; }
 .calendar-week-controls { display: grid; grid-template-columns: 2.6rem minmax(0, 1fr) 2.6rem; align-items: center; gap: .75rem; margin-bottom: 1rem; }
 .calendar-week-controls .running-calendar-control { width: 2.6rem; height: 2.6rem; border-radius: .75rem; font-size: 1.35rem; }
