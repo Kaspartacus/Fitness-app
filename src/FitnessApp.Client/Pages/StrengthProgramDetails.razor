@@ -1,5 +1,6 @@
 @page "/styrke/{Id:guid}"
 @attribute [Authorize]
+@using FitnessApp.Client.Calendar
 @using FitnessApp.Contracts.Strength
 @using FitnessApp.Client.Strength
 @inject StrengthProgramClient Programs
@@ -9,11 +10,11 @@
 
 <main class="strength-app strength-detail-page strength-with-bottom-nav" aria-labelledby="program-title">
     <header class="strength-back-header">
-        <a class="strength-icon-button" href="/styrke" aria-label="Tilbage til styrketræning" title="Tilbage til styrketræning">←</a>
+        <a class="strength-icon-button" href="@BackUrl" aria-label="Tilbage" title="Tilbage">←</a>
         <h1 id="program-title">@(program?.Name ?? "Program")</h1>
         @if (program is not null)
         {
-            <a class="strength-small-button" href="@($"/styrke/{Id}/plan")">Planlæg</a>
+            <a class="strength-small-button" href="@WithCalendarState($"/styrke/{Id}/plan")">Planlæg</a>
         }
         else
         {
@@ -48,7 +49,7 @@
                                 <p>@workout.Exercises.Count øvelser</p>
                             </div>
                             <div class="strength-workout-actions">
-                                <a class="strength-text-action" href="@($"/styrke/{Id}/træninger/{workout.Id}/rediger")">Rediger</a>
+                                <a class="strength-text-action" href="@WithCalendarState($"/styrke/{Id}/træninger/{workout.Id}/rediger")">Rediger</a>
                                 <button class="strength-icon-action is-danger" type="button" @onclick="() => OpenWorkoutDelete(workout.Id)" @onclick:stopPropagation="true" aria-label="Slet træningen @workout.Name" title="Slet træning">🗑</button>
                             </div>
                         </div>
@@ -64,14 +65,14 @@
                             <p class="strength-more-exercises">+ @(workout.Exercises.Count - 3) øvelser til</p>
                         }
                     </div>
-                    <a class="strength-primary-button strength-card-button" href="@($"/styrke/{Id}/træninger/{workout.Id}/aktiv")">Start træning</a>
+                    <a class="strength-primary-button strength-card-button" href="@WithCalendarState($"/styrke/{Id}/træninger/{workout.Id}/aktiv")">Start træning</a>
                 </article>
             }
         </div>
 
-        <a class="strength-outline-button strength-add-workout" href="@($"/styrke/{Id}/træninger/opret")">＋ Tilføj træning</a>
+        <a class="strength-outline-button strength-add-workout" href="@WithCalendarState($"/styrke/{Id}/træninger/opret")">＋ Tilføj træning</a>
         <div class="strength-program-actions">
-            <a class="strength-text-action" href="@($"/styrke/{Id}/rediger")">Rediger programnavn</a>
+            <a class="strength-text-action" href="@WithCalendarState($"/styrke/{Id}/rediger")">Rediger programnavn</a>
             <button class="strength-danger-link" @onclick="OpenProgramDelete">Slet program</button>
             @if (actionError is not null)
             {
@@ -80,7 +81,7 @@
         </div>
     }
 
-    <StrengthBottomNavigation />
+    <StrengthBottomNavigation Active="strength" CalendarHref="@CalendarHref" />
 
     <ModalDialog IsOpen="@programDeleteOpen" Title="Slet program" Description="@ProgramDeleteDescription" InitialFocusSelector="[data-modal-cancel]" Destructive="true" DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CloseProgramDelete">
         <div class="app-modal-actions">
@@ -99,6 +100,8 @@
 
 @code {
     [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery(Name = "maaned")] public string? RequestedMonth { get; set; }
+    [SupplyParameterFromQuery(Name = "dato")] public string? RequestedDate { get; set; }
 
     private ProgramResponse? program;
     private bool loading;
@@ -117,6 +120,8 @@
     private WorkoutResponse? WorkoutToDelete => workoutToDelete is { } workoutId
         ? program?.Workouts.SingleOrDefault(workout => workout.Id == workoutId)
         : null;
+    private string BackUrl => CalendarRoute.BackPath(RequestedMonth, RequestedDate, "/styrke");
+    private string CalendarHref => CalendarRoute.BackPath(RequestedMonth, RequestedDate, "/kalender");
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 
@@ -218,4 +223,9 @@
             Note = exercise.Note
         }).ToList()
     };
+
+    private string WithCalendarState(string path) => CalendarRoute.TryParseState(RequestedMonth, RequestedDate,
+        out var month, out var selectedDate)
+        ? CalendarRoute.AppendState(path, month, selectedDate)
+        : path;
 }

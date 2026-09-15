@@ -1,0 +1,99 @@
+@page "/styrke/resultater/{CompletionId:guid}"
+@attribute [Authorize]
+@using System.Globalization
+@using FitnessApp.Client.Calendar
+@using FitnessApp.Client.Strength
+@using FitnessApp.Contracts.Strength
+@inject StrengthProgramClient Programs
+
+<PageTitle>@(completed?.WorkoutName ?? "Gennemført træning")</PageTitle>
+
+<main class="strength-app strength-with-bottom-nav calendar-detail-page" aria-labelledby="completed-workout-title">
+    <header class="strength-back-header">
+        <a class="strength-icon-button" href="@BackUrl" aria-label="Tilbage til kalenderen" title="Tilbage til kalenderen">←</a>
+        <div><h1 id="completed-workout-title">@(completed?.WorkoutName ?? "Gennemført træning")</h1>@if (completed is not null) { <p>@DateText(completed.Date)</p> }</div>
+        <span class="strength-header-spacer"></span>
+    </header>
+
+    @if (isLoading)
+    {
+        <p class="strength-feedback" role="status">Indlæser gennemført træning…</p>
+    }
+    else if (error is not null)
+    {
+        <section class="strength-status-card" role="alert"><p>@error</p><button class="strength-secondary-button" type="button" @onclick="LoadAsync">Prøv igen</button></section>
+    }
+    else if (completed is not null)
+    {
+        <section class="strength-editor-card" aria-label="Gennemført træning">
+            <p class="strength-overline">Faktisk</p>
+            <h2>@completed.WorkoutName</h2>
+            <p>Gemte værdier fra den gennemførte træning.</p>
+        </section>
+
+        <section class="strength-section" aria-labelledby="completed-exercises-title">
+            <p class="strength-overline" id="completed-exercises-title">Øvelser</p>
+            <div class="strength-exercise-rows">
+                @foreach (var exercise in completed.Exercises)
+                {
+                    <article class="strength-exercise-card completed-strength-exercise">
+                        <div class="strength-exercise-card-main">
+                            <strong class="strength-exercise-card-title">@exercise.Name</strong>
+                            <span class="strength-exercise-card-values">@FormatWeight(exercise.Weight) kg · @exercise.Sets × @exercise.Repetitions</span>
+                            <span class="completed-strength-status @(exercise.IsCompleted ? "is-completed" : "is-skipped")">@(exercise.IsCompleted ? "Gennemført" : "Ikke markeret som færdig")</span>
+                        </div>
+                    </article>
+                }
+            </div>
+        </section>
+    }
+
+    <StrengthBottomNavigation Active="calendar" CalendarHref="@CalendarHref" />
+</main>
+
+@code {
+    [Parameter] public Guid CompletionId { get; set; }
+    [SupplyParameterFromQuery(Name = "maaned")] public string? RequestedMonth { get; set; }
+    [SupplyParameterFromQuery(Name = "dato")] public string? RequestedDate { get; set; }
+
+    private CompletedWorkoutResponse? completed;
+    private bool isLoading;
+    private string? error;
+    private Guid loadedCompletionId;
+    private int loadRequestVersion;
+
+    private string BackUrl => CalendarRoute.BackPath(RequestedMonth, RequestedDate, "/styrke");
+    private string CalendarHref => CalendarRoute.BackPath(RequestedMonth, RequestedDate, "/kalender");
+
+    protected override Task OnParametersSetAsync()
+    {
+        if (loadedCompletionId == CompletionId && (completed is not null || error is not null || isLoading))
+        {
+            return Task.CompletedTask;
+        }
+
+        loadedCompletionId = CompletionId;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var requestedCompletionId = CompletionId;
+        var requestVersion = ++loadRequestVersion;
+        isLoading = true;
+        error = null;
+        completed = null;
+        var response = await Programs.GetCompletedWorkoutAsync(requestedCompletionId);
+        if (requestVersion != loadRequestVersion || requestedCompletionId != CompletionId)
+        {
+            return;
+        }
+
+        completed = response.Value;
+        error = response.Error ?? (completed is null ? "Den gennemførte træning blev ikke fundet." : null);
+        isLoading = false;
+    }
+
+    private static string DateText(DateOnly date) => date.ToString("dddd d. MMMM", CultureInfo.GetCultureInfo("da-DK"));
+    private static string FormatWeight(decimal weight) => weight.ToString("0.##", CultureInfo.GetCultureInfo("da-DK"));
+}

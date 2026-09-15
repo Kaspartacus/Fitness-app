@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using FitnessApp.Domain.Calendar;
 using FitnessApp.Domain.Running;
 using FitnessApp.Domain.Strength;
 
@@ -22,6 +23,7 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
     public DbSet<RunningPlanDay> RunningPlanDays => Set<RunningPlanDay>();
     public DbSet<RunningSession> RunningSessions => Set<RunningSession>();
     public DbSet<RunningResult> RunningResults => Set<RunningResult>();
+    public DbSet<CalendarOccurrenceMove> CalendarOccurrenceMoves => Set<CalendarOccurrenceMove>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -120,6 +122,24 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<RunningSession>().WithOne().HasForeignKey<RunningResult>(result => result.SessionId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+        builder.Entity<CalendarOccurrenceMove>(entity =>
+        {
+            entity.HasKey(move => move.Id);
+            entity.Property(move => move.UserId).HasMaxLength(450).IsRequired();
+            entity.Property(move => move.Kind).HasConversion<int>();
+            entity.HasIndex(move => new
+            {
+                move.UserId,
+                move.Kind,
+                move.ScopeId,
+                move.SourceId,
+                move.OriginalDate
+            }).IsUnique();
+            entity.HasIndex(move => new { move.UserId, move.Kind, move.OriginalDate });
+            entity.HasIndex(move => new { move.UserId, move.Kind, move.TargetDate });
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(move => move.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<ApplicationUser>(entity =>

@@ -46,6 +46,11 @@ internal static class StrengthProgramEndpoints
                 new CompletionInput(request.CompletionId, request.Exercises?.Select(exercise => exercise is null ? null! : new CompletedExerciseInput(
                     exercise.ProgramExerciseId, exercise.Name, exercise.Weight, exercise.Sets, exercise.Repetitions,
                     exercise.IsCompleted)).ToArray()), ct)));
+        group.MapGet("/completions/{completionId:guid}", async Task<Results<Ok<CompletedWorkoutResponse>, NotFound<object>>>
+            (Guid completionId, ClaimsPrincipal user, IStrengthProgramService service, CancellationToken ct) =>
+            (await service.GetCompletedWorkoutAsync(Owner(user), completionId, ct)) is { } completed
+                ? TypedResults.Ok(Map(completed))
+                : TypedResults.NotFound(MissingCompletion()));
     }
 
     private static async Task<IResult> Save(Guid? id, SaveProgramRequest request, ClaimsPrincipal user,
@@ -76,6 +81,8 @@ internal static class StrengthProgramEndpoints
 
     private static object Missing() => new { title = "Programmet eller træningen blev ikke fundet." };
 
+    private static object MissingCompletion() => new { title = "Den gennemførte træning blev ikke fundet." };
+
     private static string Owner(ClaimsPrincipal user) => user.FindFirstValue(JwtRegisteredClaimNames.Sub)!;
 
     private static StrengthOverviewResponse Map(StrengthOverviewData overview) => new(overview.Programs.Select(Map).ToArray(),
@@ -96,4 +103,8 @@ internal static class StrengthProgramEndpoints
     private static ActiveExerciseResponse Map(ActiveExerciseData exercise) => new(exercise.Id, exercise.Name, exercise.Weight,
         exercise.Sets, exercise.Repetitions, exercise.Note, exercise.PreviousWeight, exercise.PreviousSets,
         exercise.PreviousRepetitions);
+
+    private static CompletedWorkoutResponse Map(CompletedWorkoutData workout) => new(workout.Id, workout.Date,
+        workout.WorkoutName, workout.Exercises.Select(exercise => new CompletedWorkoutExerciseResponse(exercise.Name,
+            exercise.Weight, exercise.Sets, exercise.Repetitions, exercise.IsCompleted)).ToArray());
 }

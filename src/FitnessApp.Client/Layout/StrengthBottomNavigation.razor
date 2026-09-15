@@ -1,5 +1,5 @@
 <nav class="strength-bottom-nav" aria-label="Hovednavigation">
-    <a class="strength-bottom-nav-item" href="/" aria-label="Hjem" title="Hjem">
+    <a class="strength-bottom-nav-item @(Active == "home" ? "is-active" : null)" href="/" aria-current="@(Active == "home" ? "page" : null)" aria-label="Hjem" title="Hjem">
         <span class="strength-bottom-nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="m3.5 10.5 8.5-7 8.5 7v9.25a1.25 1.25 0 0 1-1.25 1.25H4.75a1.25 1.25 0 0 1-1.25-1.25z" /><path d="M9.25 21v-6h5.5v6" /></svg>
         </span>
@@ -23,7 +23,7 @@
         </span>
         <span class="strength-bottom-nav-label">Løb</span>
     </a>
-    <a class="strength-bottom-nav-item @(Active == "calendar" ? "is-active" : null)" href="/kalender" aria-current="@(Active == "calendar" ? "page" : null)" aria-label="Kalender" title="Kalender">
+    <a class="strength-bottom-nav-item @(Active == "calendar" ? "is-active" : null)" href="@CalendarHref" aria-current="@(Active == "calendar" ? "page" : null)" aria-label="Kalender" title="Kalender">
         <span class="strength-bottom-nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="15" rx="1.75" /><path d="M7.5 3.5v4M16.5 3.5v4M3.5 10h17M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01" /></svg>
         </span>
@@ -33,4 +33,5 @@
 
 @code {
     [Parameter] public string Active { get; set; } = "strength";
+    [Parameter] public string CalendarHref { get; set; } = "/kalender";
 }

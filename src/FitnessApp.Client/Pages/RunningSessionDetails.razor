@@ -1,5 +1,6 @@
 @page "/loeb/plan/{SessionId:guid}"
 @attribute [Authorize]
+@using FitnessApp.Client.Calendar
 @using FitnessApp.Client.Running
 @using FitnessApp.Contracts.Running
 @inject RunningClient Running
@@ -8,7 +9,7 @@
 
 <main class="strength-app running-app strength-with-bottom-nav" aria-labelledby="session-title">
     <header class="strength-back-header">
-        <a class="strength-icon-button" href="/loeb/plan" aria-label="Tilbage til planen" title="Tilbage til planen">←</a>
+        <a class="strength-icon-button" href="@BackUrl" aria-label="Tilbage til planen" title="Tilbage til planen">←</a>
         <div><h1 id="session-title">@(session is null ? "Planlagt løb" : KindName(session.Kind))</h1>@if (session is not null) { <p>@RunningPresentation.Date(session.Date)</p> }</div>
         <span class="strength-header-spacer"></span>
     </header>
@@ -53,38 +54,42 @@
                 {
                     <div class="running-result-values"><div><span>Distance</span><strong>@RunningPresentation.Distance(completed.DistanceKm)</strong></div><div><span>Tid</span><strong>@RunningPresentation.Duration(completed.DurationSeconds)</strong></div><div><span>Tempo</span><strong>@RunningPresentation.Pace(completed.PaceSecondsPerKm)</strong></div></div>
                 }
-                <a class="strength-outline-button strength-card-button" href="@($"/loeb/resultater/{completed.Id}/ret")">Rediger resultat</a>
+                <a class="strength-outline-button strength-card-button" href="@WithCalendarState($"/loeb/resultater/{completed.Id}/ret")">Rediger resultat</a>
             </section>
         }
         else if (session.State == RunningSessionState.Started)
         {
-            <section class="strength-status-card"><p>Løbeturen er i gang. Den viste tid beregnes fra det starttidspunkt, der er gemt på serveren.</p><a class="strength-primary-button strength-card-button" href="@($"/loeb/plan/{session.Id}/aktiv")">Fortsæt løbetur</a></section>
+            <section class="strength-status-card"><p>Løbeturen er i gang. Den viste tid beregnes fra det starttidspunkt, der er gemt på serveren.</p><a class="strength-primary-button strength-card-button" href="@WithCalendarState($"/loeb/plan/{session.Id}/aktiv")">Fortsæt løbetur</a></section>
         }
         else if (session.Date > BrowserToday)
         {
             <div class="running-page-actions">
-                <a class="strength-primary-button running-full-action" href="@($"/loeb/plan/{session.Id}/registrer")">Registrer resultat</a>
+                <a class="strength-primary-button running-full-action" href="@WithCalendarState($"/loeb/plan/{session.Id}/registrer")">Registrer resultat</a>
             </div>
         }
         else
         {
             <div class="running-page-actions">
-                <a class="strength-primary-button" href="@($"/loeb/plan/{session.Id}/aktiv")">Start løbetur</a>
-                <a class="strength-outline-button" href="@($"/loeb/plan/{session.Id}/registrer")">Registrer resultat</a>
+                <a class="strength-primary-button" href="@WithCalendarState($"/loeb/plan/{session.Id}/aktiv")">Start løbetur</a>
+                <a class="strength-outline-button" href="@WithCalendarState($"/loeb/plan/{session.Id}/registrer")">Registrer resultat</a>
             </div>
         }
     }
 
-    <StrengthBottomNavigation Active="running" />
+    <StrengthBottomNavigation Active="running" CalendarHref="@CalendarHref" />
 </main>
 
 @code {
     [Parameter] public Guid SessionId { get; set; }
+    [SupplyParameterFromQuery(Name = "maaned")] public string? RequestedMonth { get; set; }
+    [SupplyParameterFromQuery(Name = "dato")] public string? RequestedDate { get; set; }
     private RunningSessionResponse? session;
     private bool isLoading;
     private string? error;
     private int loadRequestVersion;
     private static DateOnly BrowserToday => RunningPresentation.CopenhagenToday;
+    private string BackUrl => CalendarRoute.BackPath(RequestedMonth, RequestedDate, "/loeb/plan");
+    private string CalendarHref => CalendarRoute.BackPath(RequestedMonth, RequestedDate, "/kalender");
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 
@@ -130,4 +135,9 @@
         var separator = step.IndexOf(':');
         return separator > 0 && separator < step.Length - 1 ? step[(separator + 1)..].Trim() : "";
     }
+
+    private string WithCalendarState(string path) => CalendarRoute.TryParseState(RequestedMonth, RequestedDate,
+        out var month, out var selectedDate)
+        ? CalendarRoute.AppendState(path, month, selectedDate)
+        : path;
 }

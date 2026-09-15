@@ -1,6 +1,7 @@
 @page "/loeb/plan/{SessionId:guid}/aktiv"
 @attribute [Authorize]
 @implements IDisposable
+@using FitnessApp.Client.Calendar
 @using FitnessApp.Client.Running
 @using FitnessApp.Contracts.Running
 @inject RunningClient Running
@@ -12,7 +13,7 @@
 
 <main class="strength-app running-app strength-with-bottom-nav running-active-page" aria-labelledby="active-running-title">
     <header class="strength-back-header">
-        <a class="strength-icon-button" href="@($"/loeb/plan/{SessionId}")" aria-label="Afbryd løbetur" title="Afbryd løbetur">←</a>
+        <a class="strength-icon-button" href="@WithCalendarState($"/loeb/plan/{SessionId}")" aria-label="Afbryd løbetur" title="Afbryd løbetur">←</a>
         <div><h1 id="active-running-title">@(session is null ? "Løbetur" : KindName(session.Kind))</h1><p class="running-active-timer">@Elapsed</p></div>
         <span class="strength-header-spacer"></span>
     </header>
@@ -27,11 +28,11 @@
             <p>@error</p>
             @if (recoveryResultId is { } resultId)
             {
-                <a class="strength-primary-button strength-card-button" href="@($"/loeb/resultater/{resultId}")">Se resultat</a>
+                <a class="strength-primary-button strength-card-button" href="@WithCalendarState($"/loeb/resultater/{resultId}")">Se resultat</a>
             }
             else if (recoverySessionId is { } activeSessionId)
             {
-                <a class="strength-primary-button strength-card-button" href="@($"/loeb/plan/{activeSessionId}/aktiv")">Fortsæt aktiv løbetur</a>
+                <a class="strength-primary-button strength-card-button" href="@WithCalendarState($"/loeb/plan/{activeSessionId}/aktiv")">Fortsæt aktiv løbetur</a>
             }
             else
             {
@@ -63,11 +64,13 @@
         <div class="app-modal-actions"><button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseDiscard">Bliv i løbetur</button><button class="strength-outline-button" type="button" @onclick="LeaveWithoutCancelling">Forlad</button></div>
     </ModalDialog>
 
-    <StrengthBottomNavigation Active="running" />
+    <StrengthBottomNavigation Active="running" CalendarHref="@CalendarHref" />
 </main>
 
 @code {
     [Parameter] public Guid SessionId { get; set; }
+    [SupplyParameterFromQuery(Name = "maaned")] public string? RequestedMonth { get; set; }
+    [SupplyParameterFromQuery(Name = "dato")] public string? RequestedDate { get; set; }
     private RunningSessionResponse? session;
     private bool isLoading;
     private bool hasActiveRun;
@@ -159,7 +162,7 @@
     private void FinishAsync()
     {
         hasActiveRun = false;
-        Navigation.NavigateTo($"/loeb/plan/{session?.Id ?? SessionId}/registrer");
+        Navigation.NavigateTo(WithCalendarState($"/loeb/plan/{session?.Id ?? SessionId}/registrer"));
     }
 
     private async Task CancelAsync()
@@ -178,7 +181,7 @@
         {
             hasActiveRun = false;
             cancelOpen = false;
-            Navigation.NavigateTo($"/loeb/plan/{requestedSessionId}");
+            Navigation.NavigateTo(WithCalendarState($"/loeb/plan/{requestedSessionId}"));
             return;
         }
 
@@ -227,7 +230,7 @@
 
     private void LeaveWithoutCancelling()
     {
-        var url = pendingNavigationUrl ?? $"/loeb/plan/{SessionId}";
+        var url = pendingNavigationUrl ?? WithCalendarState($"/loeb/plan/{SessionId}");
         discardOpen = false;
         pendingNavigationUrl = null;
         hasActiveRun = false;
@@ -241,6 +244,13 @@
         RunningSessionKind.Intervals => "Intervaller",
         _ => "Lang tur"
     };
+
+    private string WithCalendarState(string path) => CalendarRoute.TryParseState(RequestedMonth, RequestedDate,
+        out var month, out var selectedDate)
+        ? CalendarRoute.AppendState(path, month, selectedDate)
+        : path;
+
+    private string CalendarHref => CalendarRoute.BackPath(RequestedMonth, RequestedDate, "/kalender");
 
     public void Dispose() => timer?.Dispose();
 }

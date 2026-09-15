@@ -3,27 +3,49 @@
 @namespace FitnessApp.Client.Running
 @inject IJSRuntime JavaScript
 
-<div class="running-date-picker-field">
-    <label class="running-date-picker-label" for="@InputId">@Label</label>
-    <button id="@InputId" class="running-date-picker-trigger" type="button" disabled="@Disabled"
-            aria-haspopup="dialog" aria-expanded="@isOpen" @onclick="Open">
-        <span>@DisplayValue</span>
-        <span class="running-date-picker-trigger-icon" aria-hidden="true">▣</span>
-    </button>
-</div>
+@if (!HideTrigger)
+{
+    @if (string.IsNullOrWhiteSpace(TriggerText))
+    {
+        <div class="running-date-picker-field">
+            <label class="running-date-picker-label" for="@InputId">@Label</label>
+            <button id="@InputId" class="running-date-picker-trigger" type="button" disabled="@Disabled"
+                    aria-haspopup="dialog" aria-expanded="@IsDialogOpen" @onclick="OpenAsync">
+                <span>@DisplayValue</span>
+                <span class="running-date-picker-trigger-icon" aria-hidden="true">▣</span>
+            </button>
+        </div>
+    }
+    else
+    {
+        <button id="@InputId" class="@TriggerButtonClass" type="button" disabled="@Disabled"
+                aria-haspopup="dialog" aria-expanded="@IsDialogOpen" aria-label="@TriggerAriaLabel" @onclick="OpenAsync">
+            <span>@TriggerText</span>
+            <span class="running-date-picker-trigger-icon" aria-hidden="true">⌄</span>
+        </button>
+    }
+}
 
-<ModalDialog IsOpen="@isOpen" Title="@ModalTitle" InitialFocusSelector="[data-date-picker-focus]" OnDismiss="Close">
+<ModalDialog IsOpen="@IsDialogOpen" Title="@ModalTitle" Description="@ModalDescription"
+             InitialFocusSelector="[data-date-picker-focus]" DismissOnBackdrop="@(!Disabled)"
+             DismissOnEscape="@(!Disabled)" ShowCloseButton="@(!Disabled)" OnDismiss="CloseAsync">
     <div class="running-date-picker" aria-label="Datovælger">
-        <div class="running-date-picker-navigation" aria-label="Skift måned eller år">
-            <button class="running-date-picker-navigation-button" type="button" @onclick="PreviousYear"
-                    disabled="@(!CanNavigateYears(-1))" aria-label="Forrige år" title="Forrige år">«</button>
+        <div class="running-date-picker-navigation @(CompactNavigation ? "is-compact" : null)" aria-label="Skift måned eller år">
+            @if (!CompactNavigation)
+            {
+                <button class="running-date-picker-navigation-button" type="button" @onclick="PreviousYear"
+                        disabled="@(!CanNavigateYears(-1) || Disabled)" aria-label="Forrige år" title="Forrige år">«</button>
+            }
             <button class="running-date-picker-navigation-button" type="button" @onclick="PreviousMonth"
-                    disabled="@(!CanNavigateMonths(-1))" aria-label="Forrige måned" title="Forrige måned">‹</button>
+                    disabled="@(!CanNavigateMonths(-1) || Disabled)" aria-label="Forrige måned" title="Forrige måned">‹</button>
             <strong class="running-date-picker-month" aria-live="polite">@MonthName</strong>
             <button class="running-date-picker-navigation-button" type="button" @onclick="NextMonth"
-                    disabled="@(!CanNavigateMonths(1))" aria-label="Næste måned" title="Næste måned">›</button>
-            <button class="running-date-picker-navigation-button" type="button" @onclick="NextYear"
-                    disabled="@(!CanNavigateYears(1))" aria-label="Næste år" title="Næste år">»</button>
+                    disabled="@(!CanNavigateMonths(1) || Disabled)" aria-label="Næste måned" title="Næste måned">›</button>
+            @if (!CompactNavigation)
+            {
+                <button class="running-date-picker-navigation-button" type="button" @onclick="NextYear"
+                        disabled="@(!CanNavigateYears(1) || Disabled)" aria-label="Næste år" title="Næste år">»</button>
+            }
         </div>
 
         <div class="running-date-picker-weekdays" aria-hidden="true">
@@ -39,7 +61,7 @@
                 var isSelected = Value == day;
                 var isToday = day == Today;
                 var isCurrentMonth = day.Month == displayedMonth.Month;
-                var isDisabled = !IsSelectable(day);
+                var isDisabled = Disabled || !IsSelectable(day);
                 var isFocusTarget = FocusDate == day;
                 <button @key="day" class="@DayClass(isSelected, isToday, isCurrentMonth)" type="button"
                         disabled="@isDisabled" aria-pressed="@isSelected" aria-current="@(isToday ? "date" : null)"
@@ -48,6 +70,14 @@
                         @onclick="() => SelectAsync(day)">@day.Day</button>
             }
         </div>
+        @if (ShowTodayAction && IsSelectable(Today))
+        {
+            <button class="running-date-picker-today" type="button" @onclick="SelectTodayAsync" disabled="@Disabled">I dag</button>
+        }
+        @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+        {
+            <p class="strength-field-error" role="alert">@ErrorMessage</p>
+        }
     </div>
 </ModalDialog>
 
@@ -60,23 +90,49 @@
     private DateOnly? keyboardFocusDate;
     private DateOnly? pendingFocusDate;
     private bool isOpen;
+    private bool wasControlledOpen;
 
     [Parameter, EditorRequired] public string Label { get; set; } = "Dato";
     [Parameter] public string? Id { get; set; }
     [Parameter] public string ModalTitle { get; set; } = "Vælg dato";
+    [Parameter] public string? ModalDescription { get; set; }
     [Parameter] public string Placeholder { get; set; } = "Vælg dato";
+    [Parameter] public string? TriggerText { get; set; }
+    [Parameter] public string? TriggerClass { get; set; }
     [Parameter] public DateOnly? Value { get; set; }
     [Parameter] public EventCallback<DateOnly?> ValueChanged { get; set; }
     [Parameter] public DateOnly? Min { get; set; }
     [Parameter] public DateOnly? Max { get; set; }
     [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool CompactNavigation { get; set; }
+    [Parameter] public bool ShowTodayAction { get; set; }
+    [Parameter] public bool HideTrigger { get; set; }
+    [Parameter] public bool CloseOnSelection { get; set; } = true;
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
 
     private string InputId => string.IsNullOrWhiteSpace(Id) ? generatedId : Id;
+    private string TriggerButtonClass => string.Join(" ", new[] { "running-date-picker-trigger", TriggerClass }
+        .Where(className => !string.IsNullOrWhiteSpace(className)));
+    private string TriggerAriaLabel => string.IsNullOrWhiteSpace(TriggerText) ? Label : $"{Label}: {TriggerText}";
     private DateOnly Today => RunningPresentation.CopenhagenToday;
     private string DisplayValue => Value is { } value
         ? value.ToString("d. MMMM yyyy", DanishCulture)
         : Placeholder;
     private string MonthName => displayedMonth.ToString("MMMM yyyy", DanishCulture);
+    private bool IsControlled => IsOpenChanged.HasDelegate;
+    private bool IsDialogOpen => IsControlled ? IsOpen : isOpen;
+
+    protected override void OnParametersSet()
+    {
+        if (IsControlled && IsOpen && !wasControlledOpen)
+        {
+            PrepareOpen();
+        }
+
+        wasControlledOpen = IsControlled && IsOpen;
+    }
 
     private IEnumerable<DateOnly> CalendarDays
     {
@@ -123,22 +179,38 @@
         }
     }
 
-    private void Open()
+    private async Task OpenAsync()
     {
         if (Disabled)
         {
             return;
         }
 
+        PrepareOpen();
+        await SetDialogOpenAsync(true);
+    }
+
+    private void PrepareOpen()
+    {
         var initialDate = Value is { } selected && IsSelectable(selected)
             ? selected
             : ClosestAvailableDate();
         displayedMonth = StartOfMonth(initialDate);
         keyboardFocusDate = null;
-        isOpen = true;
     }
 
-    private void Close() => isOpen = false;
+    private Task CloseAsync() => SetDialogOpenAsync(false);
+
+    private Task SetDialogOpenAsync(bool nextOpen)
+    {
+        if (IsControlled)
+        {
+            return IsOpenChanged.InvokeAsync(nextOpen);
+        }
+
+        isOpen = nextOpen;
+        return Task.CompletedTask;
+    }
 
     private async Task SelectAsync(DateOnly value)
     {
@@ -149,8 +221,13 @@
 
         await ValueChanged.InvokeAsync(value);
         keyboardFocusDate = value;
-        Close();
+        if (CloseOnSelection)
+        {
+            await CloseAsync();
+        }
     }
+
+    private Task SelectTodayAsync() => SelectAsync(Today);
 
     private void PreviousMonth() => displayedMonth = displayedMonth.AddMonths(-1);
     private void NextMonth() => displayedMonth = displayedMonth.AddMonths(1);

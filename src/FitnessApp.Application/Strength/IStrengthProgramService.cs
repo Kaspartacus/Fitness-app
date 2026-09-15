@@ -16,6 +16,9 @@ public sealed record StrengthOverviewData(IReadOnlyList<ProgramData> Programs, P
 public sealed record CompletedExerciseInput(Guid? ProgramExerciseId, string? Name, decimal Weight, int Sets,
     int Repetitions, bool IsCompleted);
 public sealed record CompletionInput(Guid CompletionId, IReadOnlyList<CompletedExerciseInput>? Exercises);
+public sealed record CompletedWorkoutExerciseData(string Name, decimal Weight, int Sets, int Repetitions, bool IsCompleted);
+public sealed record CompletedWorkoutData(Guid Id, DateOnly Date, string WorkoutName,
+    IReadOnlyList<CompletedWorkoutExerciseData> Exercises);
 public enum ProgramStatus { Saved, NotFound, Invalid, Conflict }
 public sealed record ProgramResult(ProgramStatus Status, ProgramData? Program = null);
 
@@ -31,5 +34,7 @@ public interface IStrengthProgramService
         IReadOnlyList<ScheduleEntryData>? entries, CancellationToken cancellationToken);
     Task<PlannedWorkoutData?> GetWorkoutAsync(string userId, Guid programId, Guid workoutId, CancellationToken cancellationToken);
     Task<ProgramStatus> CompleteWorkoutAsync(string userId, Guid programId, Guid workoutId, CompletionInput input,
+        CancellationToken cancellationToken);
+    Task<CompletedWorkoutData?> GetCompletedWorkoutAsync(string userId, Guid completionId,
         CancellationToken cancellationToken);
 }

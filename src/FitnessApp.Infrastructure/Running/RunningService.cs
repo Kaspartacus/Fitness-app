@@ -1,4 +1,5 @@
 using FitnessApp.Application.Running;
+using FitnessApp.Domain.Calendar;
 using FitnessApp.Domain.Running;
 using FitnessApp.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -209,6 +210,7 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
         var currentSessions = await db.RunningSessions.AsNoTracking().Where(session => session.PlanId == planId)
             .Select(session => new
             {
+                session.Id,
                 session.Date,
                 session.Position,
                 session.StartedAtUtc,
@@ -216,16 +218,28 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
             })
             .ToListAsync(cancellationToken);
 
-        // A scheduled date is immutable once it has arrived, a run was started, or a result was associated with it.
-        // In particular, an early result can live on a future scheduled date and must never be detached or deleted.
+        var movedSessionIds = await db.CalendarOccurrenceMoves.AsNoTracking()
+            .Where(move => move.UserId == userId && move.Kind == CalendarOccurrenceKind.Running &&
+                           move.ScopeId == planId)
+            .Select(move => move.SourceId)
+            .ToArrayAsync(cancellationToken);
+        var movedSessionIdSet = movedSessionIds.ToHashSet();
+
+        // A scheduled date is immutable once it has arrived, a run was started, a result was associated with it,
+        // or the calendar has moved that one occurrence. In particular, an early result can live on a future
+        // scheduled date and must never be detached or deleted.
         var preservedSessions = currentSessions.Where(session => session.Date <= today || session.StartedAtUtc is not null ||
-                session.HasResult)
+                session.HasResult || movedSessionIdSet.Contains(session.Id))
             .ToArray();
         var preservedDates = preservedSessions.Select(session => session.Date).ToHashSet();
 
-        await db.RunningSessions.Where(session => session.PlanId == planId && session.Date > today &&
-                session.StartedAtUtc == null && !db.RunningResults.Any(result => result.SessionId == session.Id))
-            .ExecuteDeleteAsync(cancellationToken);
+        var removableSessions = db.RunningSessions.Where(session => session.PlanId == planId && session.Date > today &&
+            session.StartedAtUtc == null && !db.RunningResults.Any(result => result.SessionId == session.Id));
+        if (movedSessionIds.Length > 0)
+        {
+            removableSessions = removableSessions.Where(session => !movedSessionIds.Contains(session.Id));
+        }
+        await removableSessions.ExecuteDeleteAsync(cancellationToken);
         await db.RunningPlanDays.Where(day => day.PlanId == planId).ExecuteDeleteAsync(cancellationToken);
 
         var selectedDays = input.SelectedDays!.OrderBy(day => Array.IndexOf(WeekdayOrder, day)).ToArray();
@@ -290,11 +304,19 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
             return new RunningSessionListResult(RunningStatus.Saved, []);
         }
 
-        var sessions = activePlan.Sessions.Where(session => session.Date >= from && session.Date <= to)
-            .OrderBy(session => session.Date).ThenBy(session => session.Position).ToArray();
+        var movedDatesBySession = await OccurrenceMovesBySessionAsync(userId, activePlan.Id, activePlan.Sessions,
+            cancellationToken);
+        var sessions = activePlan.Sessions.Where(session =>
+            {
+                var effectiveDate = EffectiveSessionDate(session, movedDatesBySession);
+                return effectiveDate >= from && effectiveDate <= to;
+            })
+            .OrderBy(session => EffectiveSessionDate(session, movedDatesBySession)).ThenBy(session => session.Position)
+            .ToArray();
         var resultBySession = await ResultsBySessionAsync(userId, sessions.Select(session => session.Id), cancellationToken);
         return new RunningSessionListResult(RunningStatus.Saved,
-            sessions.Select(session => Map(session, resultBySession.GetValueOrDefault(session.Id))).ToArray());
+            sessions.Select(session => Map(session, resultBySession.GetValueOrDefault(session.Id),
+                EffectiveSessionDate(session, movedDatesBySession))).ToArray());
     }
 
     public async Task<RunningSessionData?> GetSessionAsync(string userId, Guid sessionId, CancellationToken cancellationToken)
@@ -307,7 +329,7 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
 
         var result = await db.RunningResults.AsNoTracking().SingleOrDefaultAsync(candidate =>
             candidate.UserId == userId && candidate.SessionId == sessionId, cancellationToken);
-        return Map(session, result);
+        return Map(session, result, await EffectiveSessionDateAsync(userId, session, cancellationToken));
     }
 
     public async Task<RunningSessionResult> StartSessionAsync(string userId, Guid sessionId,
@@ -319,16 +341,26 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
             return new RunningSessionResult(RunningStatus.NotFound);
         }
 
-        if (session.Date > Today())
-        {
-            return new RunningSessionResult(RunningStatus.Invalid);
-        }
-
+        var planId = session.PlanId;
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        if (await LockActivePlanAsync(userId, session.PlanId, cancellationToken) == 0)
+        if (await LockActivePlanAsync(userId, planId, cancellationToken) == 0)
         {
             await transaction.RollbackAsync(cancellationToken);
             return new RunningSessionResult(RunningStatus.Conflict);
+        }
+
+        session = await FindOwnedSessionAsync(userId, sessionId, cancellationToken);
+        if (session is null || session.PlanId != planId)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return new RunningSessionResult(RunningStatus.NotFound);
+        }
+
+        var effectiveDate = await EffectiveSessionDateAsync(userId, session, cancellationToken);
+        if (effectiveDate > Today())
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return new RunningSessionResult(RunningStatus.Invalid);
         }
 
         var completed = await db.RunningResults.AsNoTracking().SingleOrDefaultAsync(candidate =>
@@ -336,7 +368,7 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
         if (completed is not null)
         {
             await transaction.RollbackAsync(cancellationToken);
-            return new RunningSessionResult(RunningStatus.Conflict, Map(session, completed));
+            return new RunningSessionResult(RunningStatus.Conflict, Map(session, completed, effectiveDate));
         }
 
         var activeSession = await db.RunningSessions.AsNoTracking().Where(candidate =>
@@ -347,9 +379,12 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
         if (activeSession is not null)
         {
             await transaction.RollbackAsync(cancellationToken);
+            var activeSessionDate = activeSession.Id == sessionId
+                ? effectiveDate
+                : await EffectiveSessionDateAsync(userId, activeSession, cancellationToken);
             return activeSession.Id == sessionId
-                ? new RunningSessionResult(RunningStatus.Saved, Map(activeSession))
-                : new RunningSessionResult(RunningStatus.Conflict, Map(activeSession));
+                ? new RunningSessionResult(RunningStatus.Saved, Map(activeSession, effectiveDate: activeSessionDate))
+                : new RunningSessionResult(RunningStatus.Conflict, Map(activeSession, effectiveDate: activeSessionDate));
         }
 
         var now = UtcNow();
@@ -361,7 +396,7 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
         {
             session.StartedAtUtc = now;
             await transaction.CommitAsync(cancellationToken);
-            return new RunningSessionResult(RunningStatus.Saved, Map(session));
+            return new RunningSessionResult(RunningStatus.Saved, Map(session, effectiveDate: effectiveDate));
         }
 
         await transaction.RollbackAsync(cancellationToken);
@@ -377,6 +412,8 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
             return new RunningSessionResult(RunningStatus.NotFound);
         }
 
+        var effectiveDate = await EffectiveSessionDateAsync(userId, session, cancellationToken);
+
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         if (await LockActivePlanAsync(userId, session.PlanId, cancellationToken) == 0)
         {
@@ -389,7 +426,7 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
         if (completed is not null)
         {
             await transaction.RollbackAsync(cancellationToken);
-            return new RunningSessionResult(RunningStatus.Conflict, Map(session, completed));
+            return new RunningSessionResult(RunningStatus.Conflict, Map(session, completed, effectiveDate));
         }
 
         var affected = await db.RunningSessions.Where(candidate => candidate.Id == sessionId &&
@@ -401,7 +438,7 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
         {
             session.StartedAtUtc = null;
             await transaction.CommitAsync(cancellationToken);
-            return new RunningSessionResult(RunningStatus.Saved, Map(session));
+            return new RunningSessionResult(RunningStatus.Saved, Map(session, effectiveDate: effectiveDate));
         }
 
         var current = await GetSessionAsync(userId, sessionId, cancellationToken);
@@ -619,11 +656,14 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
     private async Task<RunningPlanData> MapPlanAsync(RunningPlan plan, CancellationToken cancellationToken)
     {
         var results = await ResultsBySessionAsync(plan.UserId, plan.Sessions.Select(session => session.Id), cancellationToken);
+        var movedDatesBySession = await OccurrenceMovesBySessionAsync(plan.UserId, plan.Id, plan.Sessions,
+            cancellationToken);
         return new RunningPlanData(plan.Id, plan.Version, plan.IsActive, plan.CreatedAtUtc, plan.ReplacedAtUtc,
             plan.Level, plan.ThirtyMinuteDistanceKm, plan.TargetDistanceKm, plan.TargetDate, plan.WeeklyFrequency,
             plan.SelectedDays.OrderBy(day => Array.IndexOf(WeekdayOrder, day.DayOfWeek)).Select(day => day.DayOfWeek).ToArray(),
-            plan.Sessions.OrderBy(session => session.Date).ThenBy(session => session.Position)
-                .Select(session => Map(session, results.GetValueOrDefault(session.Id))).ToArray());
+            plan.Sessions.OrderBy(session => EffectiveSessionDate(session, movedDatesBySession)).ThenBy(session => session.Position)
+                .Select(session => Map(session, results.GetValueOrDefault(session.Id),
+                    EffectiveSessionDate(session, movedDatesBySession))).ToArray());
     }
 
     private async Task<Dictionary<Guid, RunningResult>> ResultsBySessionAsync(string userId,
@@ -645,6 +685,39 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
          join plan in db.RunningPlans.AsNoTracking() on session.PlanId equals plan.Id
          where session.Id == sessionId && plan.UserId == userId
          select session).SingleOrDefaultAsync(cancellationToken);
+
+    private async Task<DateOnly> EffectiveSessionDateAsync(string userId, RunningSession session,
+        CancellationToken cancellationToken)
+    {
+        var movedDate = await db.CalendarOccurrenceMoves.AsNoTracking()
+            .Where(move => move.UserId == userId && move.Kind == CalendarOccurrenceKind.Running &&
+                           move.ScopeId == session.PlanId && move.SourceId == session.Id &&
+                           move.OriginalDate == session.Date)
+            .Select(move => (DateOnly?)move.TargetDate)
+            .SingleOrDefaultAsync(cancellationToken);
+        return movedDate ?? session.Date;
+    }
+
+    private async Task<Dictionary<Guid, CalendarOccurrenceMove>> OccurrenceMovesBySessionAsync(string userId,
+        Guid planId, IEnumerable<RunningSession> sessions, CancellationToken cancellationToken)
+    {
+        var sessionIds = sessions.Select(session => session.Id).Distinct().ToArray();
+        if (sessionIds.Length == 0)
+        {
+            return [];
+        }
+
+        return (await db.CalendarOccurrenceMoves.AsNoTracking().Where(move =>
+                move.UserId == userId && move.Kind == CalendarOccurrenceKind.Running && move.ScopeId == planId &&
+                sessionIds.Contains(move.SourceId))
+            .ToListAsync(cancellationToken)).ToDictionary(move => move.SourceId);
+    }
+
+    private static DateOnly EffectiveSessionDate(RunningSession session,
+        IReadOnlyDictionary<Guid, CalendarOccurrenceMove> movedDatesBySession) =>
+        movedDatesBySession.TryGetValue(session.Id, out var move) && move.OriginalDate == session.Date
+            ? move.TargetDate
+            : session.Date;
 
     private Task<RunningResult?> FindCompletionAsync(string userId, Guid completionId, CancellationToken cancellationToken) =>
         db.RunningResults.AsNoTracking().SingleOrDefaultAsync(result => result.UserId == userId &&
@@ -731,8 +804,9 @@ public sealed class RunningService(FitnessDbContext db, TimeProvider timeProvide
 
     private DateTime UtcNow() => timeProvider.GetUtcNow().UtcDateTime;
 
-    private static RunningSessionData Map(RunningSession session, RunningResult? result = null) => new(session.Id,
-        session.PlanId, session.Date, session.Kind, session.PlannedDistanceKm, session.PaceMinSecondsPerKm,
+    private static RunningSessionData Map(RunningSession session, RunningResult? result = null,
+        DateOnly? effectiveDate = null) => new(session.Id,
+        session.PlanId, effectiveDate ?? session.Date, session.Kind, session.PlannedDistanceKm, session.PaceMinSecondsPerKm,
         session.PaceMaxSecondsPerKm, session.Structure, session.StartedAtUtc,
         result is not null ? RunningSessionState.Completed : session.StartedAtUtc is null
             ? RunningSessionState.Planned

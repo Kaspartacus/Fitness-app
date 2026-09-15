@@ -1,5 +1,6 @@
 @page "/loeb/planlaeg"
 @attribute [Authorize]
+@using FitnessApp.Client.Calendar
 @using FitnessApp.Client.Running
 @using FitnessApp.Contracts.Running
 @inject RunningClient Running
@@ -9,7 +10,7 @@
 
 <main class="strength-app running-app strength-with-bottom-nav" aria-labelledby="running-schedule-title">
     <header class="strength-back-header">
-        <a class="strength-icon-button" href="/loeb" aria-label="Tilbage til løb" title="Tilbage til løb">←</a>
+        <a class="strength-icon-button" href="@BackUrl" aria-label="Tilbage" title="Tilbage">←</a>
         <div><h1 id="running-schedule-title">Planlæg løbedage</h1>@if (plan is not null) { <p>@plan.WeeklyFrequency @(plan.WeeklyFrequency == 1 ? "dag" : "dage") om ugen</p> }</div>
         <span class="strength-header-spacer"></span>
     </header>
@@ -62,7 +63,7 @@
         }
 
         <div class="running-page-actions">
-            <a class="strength-outline-button" href="/loeb/plan">Annuller</a>
+            <a class="strength-outline-button" href="@PlanBackUrl">Annuller</a>
             <button class="strength-primary-button" type="button" @onclick="OpenConfirmationAsync" disabled="@(!CanSave)">Gem løbedage</button>
         </div>
     }
@@ -82,7 +83,7 @@
         </div>
     </ModalDialog>
 
-    <StrengthBottomNavigation Active="running" />
+    <StrengthBottomNavigation Active="running" CalendarHref="@CalendarHref" />
 </main>
 
 @code {
@@ -98,10 +99,16 @@
     private string? validationError;
     private string? saveError;
 
+    [SupplyParameterFromQuery(Name = "maaned")] public string? RequestedMonth { get; set; }
+    [SupplyParameterFromQuery(Name = "dato")] public string? RequestedDate { get; set; }
+
     private bool HasActiveRun => plan?.Sessions.Any(session => session.State == RunningSessionState.Started) == true;
     private bool HasChanges => plan is not null && !selectedDays.SetEquals(plan.SelectedDays);
     private bool CanSave => plan is not null && !isSaving && !HasActiveRun && HasChanges && selectedDays.Count == plan.WeeklyFrequency;
     private string SelectedDayNames => string.Join(" · ", selectedDays.OrderBy(DayOrder).Select(RunningPresentation.Weekday));
+    private string BackUrl => CalendarRoute.BackPath(RequestedMonth, RequestedDate, "/loeb");
+    private string PlanBackUrl => CalendarRoute.BackPath(RequestedMonth, RequestedDate, "/loeb/plan");
+    private string CalendarHref => CalendarRoute.BackPath(RequestedMonth, RequestedDate, "/kalender");
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -186,7 +193,7 @@
         if (result.Succeeded)
         {
             confirmationOpen = false;
-            Navigation.NavigateTo("/loeb/plan");
+            Navigation.NavigateTo(PlanBackUrl);
             return;
         }
 

@@ -1,6 +1,14 @@
 # Progress
 
-Last updated: 2026-09-11
+Last updated: 2026-09-13
+
+## Calendar module — implementation record
+
+- The existing `/kalender` route is now the shared, protected calendar for running and strength rather than a second calendar implementation. It preserves the application’s dark/narrow mobile shell, mobile-only bottom navigation, desktop content constraint, Danish labels, shared visual language, and existing activity flows.
+- Its bounded owner-scoped API returns active planned running sessions, actual running results including manual and retired-plan history, current/future strength schedule occurrences, and actual completed strength snapshots in a single range response. The client requests one month at a time, cancels superseded requests, and ignores stale responses.
+- Running planned and actual dates remain separate: a result appears once on its actual activity date, with a clearly labelled, non-counting relationship from a different scheduled date. Completed strength uses its persisted timestamp converted to `Europe/Copenhagen`; its weekly schedule model contains no dated occurrence history, so the calendar projects planned strength only from the Copenhagen-local current day onward.
+- Month controls, today action, Monday-first calendar cells, date selection, activity state/type indicators, loading, empty, retry and error states are implemented. Calendar links carry selected month/day state through running session/result registration and correction, active strength, and a new owned read-only completed-strength detail view; no control intentionally leads to a placeholder.
+- The Figma Make design-context inventory inspected before interruption listed `CalendarScreen.tsx` and the shared components. The integration was not available after interruption for a fresh frame inspection, so this implementation is a documented, identity-consistent extension rather than a claim of exact current-frame or runtime visual verification.
 
 ## Running module — source and design record
 

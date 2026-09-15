@@ -3,6 +3,7 @@
 @page "/loeb/resultater/{ResultId:guid}/ret"
 @attribute [Authorize]
 @using System.Globalization
+@using FitnessApp.Client.Calendar
 @using FitnessApp.Client.Running
 @using FitnessApp.Contracts.Running
 @inject RunningClient Running
@@ -29,7 +30,7 @@
     }
     else if (AlreadyCompleted)
     {
-        <section class="strength-status-card"><p>Denne planlagte tur er allerede registreret.</p><a class="strength-primary-button strength-card-button" href="@($"/loeb/resultater/{session!.Result!.Id}/ret")">Rediger resultat</a></section>
+        <section class="strength-status-card"><p>Denne planlagte tur er allerede registreret.</p><a class="strength-primary-button strength-card-button" href="@WithCalendarState($"/loeb/resultater/{session!.Result!.Id}/ret")">Rediger resultat</a></section>
     }
     else
     {
@@ -63,7 +64,7 @@
                 </label>
                 @if (fieldError is not null) { <p class="strength-field-error" role="alert">@fieldError</p> }
                 @if (saveError is not null) { <p class="strength-field-error" role="alert">@saveError</p> }
-                @if (conflictedResultId is { } conflictId) { <a class="strength-outline-button strength-card-button" href="@($"/loeb/resultater/{conflictId}")">Se gemt resultat</a> }
+                @if (conflictedResultId is { } conflictId) { <a class="strength-outline-button strength-card-button" href="@WithCalendarState($"/loeb/resultater/{conflictId}")">Se gemt resultat</a> }
             </fieldset>
             <div class="running-page-actions">
                 <button class="strength-primary-button" type="submit" disabled="@isSaving">@(isSaving ? "Gemmer…" : SaveLabel)</button>
@@ -82,12 +83,13 @@
         <div class="app-modal-actions"><button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseDiscard">Bliv på siden</button><button class="strength-danger-button" type="button" @onclick="DiscardAndNavigate">Forlad uden at gemme</button></div>
     </ModalDialog>
 
-    <StrengthBottomNavigation Active="running" />
+    <StrengthBottomNavigation Active="running" CalendarHref="@CalendarHref" />
 </main>
 
 @code {
     [Parameter] public Guid? SessionId { get; set; }
     [Parameter] public Guid? ResultId { get; set; }
+    [SupplyParameterFromQuery(Name = "maaned")] public string? RequestedMonth { get; set; }
     [SupplyParameterFromQuery(Name = "dato")] public string? RequestedDate { get; set; }
 
     private RunningSessionResponse? session;
@@ -118,7 +120,13 @@
     private EditorMode Mode => ResultId is not null ? EditorMode.Edit : SessionId is not null ? EditorMode.Session : EditorMode.Manual;
     private string EditorTitle => Mode switch { EditorMode.Edit => "Ret løberesultat", EditorMode.Session => "Registrer løbetur", _ => "Registrer løb" };
     private string SaveLabel => Mode == EditorMode.Edit ? "Gem rettelser" : "Gem resultat";
-    private string BackUrl => Mode switch { EditorMode.Edit when ResultId is { } id => $"/loeb/resultater/{id}", EditorMode.Session when SessionId is { } id => $"/loeb/plan/{id}", _ => "/loeb" };
+    private string BackUrl => CalendarRoute.BackPath(RequestedMonth, RequestedDate, Mode switch
+    {
+        EditorMode.Edit when ResultId is { } id => $"/loeb/resultater/{id}",
+        EditorMode.Session when SessionId is { } id => $"/loeb/plan/{id}",
+        _ => "/loeb"
+    });
+    private string CalendarHref => CalendarRoute.BackPath(RequestedMonth, RequestedDate, "/kalender");
     private bool AlreadyCompleted => Mode == EditorMode.Session && session?.State == RunningSessionState.Completed && session.Result is not null;
     private static DateOnly BrowserToday => RunningPresentation.CopenhagenToday;
     private static DateOnly EarliestResultDate => new(2000, 1, 1);
@@ -314,7 +322,7 @@
         if (response.Succeeded && response.Value is { } saved)
         {
             isDirty = false;
-            Navigation.NavigateTo($"/loeb/resultater/{saved.Id}");
+            Navigation.NavigateTo(WithCalendarState($"/loeb/resultater/{saved.Id}"));
             return;
         }
 
@@ -482,6 +490,11 @@
         RunningSessionKind.Intervals => "Intervaller",
         _ => "Lang tur"
     };
+
+    private string WithCalendarState(string path) => CalendarRoute.TryParseState(RequestedMonth, RequestedDate,
+        out var month, out var selectedDate)
+        ? CalendarRoute.AppendState(path, month, selectedDate)
+        : path;
 
     private enum EditorMode { Manual, Session, Edit }
     private readonly record struct ResultValues(DateOnly Date, decimal? DistanceKm, int? DurationSeconds, int? AverageHeartRate, string? Note);

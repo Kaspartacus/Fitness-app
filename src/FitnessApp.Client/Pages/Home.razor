@@ -4,7 +4,7 @@
 
 <PageTitle>Hjem</PageTitle>
 
-<main class="dashboard-page" aria-labelledby="home-title">
+<main class="dashboard-page dashboard-with-bottom-nav" aria-labelledby="home-title">
     @if (isLoading)
     {
         <section class="state-panel">
@@ -47,6 +47,13 @@
                 <a class="button button-primary button-link" href="/loeb">Åbn løb</a>
             </article>
 
+            <article class="dashboard-card">
+                <p class="overline">Overblik</p>
+                <h2>Kalender</h2>
+                <p>Se ugens planlagte og gennemførte løbe- og styrketræninger samlet ét sted.</p>
+                <a class="button button-primary button-link" href="/kalender">Åbn kalender</a>
+            </article>
+
             @if (user.Roles.Contains("Admin", StringComparer.Ordinal))
             {
                 <article class="dashboard-card dashboard-card-accent">
@@ -57,6 +64,8 @@
                 </article>
             }
         </section>
+
+        <StrengthBottomNavigation Active="home" />
     }
     else if (errorMessage is not null)
     {

@@ -50,3 +50,8 @@ public sealed class CompletedExerciseRequest
     public int Repetitions { get; set; }
     public bool IsCompleted { get; set; }
 }
+
+public sealed record CompletedWorkoutExerciseResponse(string Name, decimal Weight, int Sets, int Repetitions,
+    bool IsCompleted);
+public sealed record CompletedWorkoutResponse(Guid Id, DateOnly Date, string WorkoutName,
+    IReadOnlyList<CompletedWorkoutExerciseResponse> Exercises);

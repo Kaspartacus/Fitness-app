@@ -1,5 +1,6 @@
 @page "/styrke/{Id:guid}/plan"
 @attribute [Authorize]
+@using FitnessApp.Client.Calendar
 @using FitnessApp.Contracts.Strength
 @using FitnessApp.Client.Strength
 @inject StrengthProgramClient Programs
@@ -9,7 +10,7 @@
 
 <main class="strength-app strength-schedule-page" aria-labelledby="schedule-title">
     <header class="strength-back-header">
-        <a class="strength-icon-button" href="@($"/styrke/{Id}")" aria-label="Tilbage til program" title="Tilbage til program">←</a>
+        <a class="strength-icon-button" href="@BackUrl" aria-label="Tilbage" title="Tilbage">←</a>
         <div><h1 id="schedule-title">Planlæg program</h1>@if (program is not null) { <p>@program.Name</p> }</div>
         <span class="strength-header-spacer"></span>
     </header>
@@ -53,6 +54,8 @@
 
 @code {
     [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery(Name = "maaned")] public string? RequestedMonth { get; set; }
+    [SupplyParameterFromQuery(Name = "dato")] public string? RequestedDate { get; set; }
     private ProgramResponse? program;
     private List<ScheduleEntryRequest> entries = [];
     private DayOfWeek? selectedDay;
@@ -63,6 +66,7 @@
 
     private bool ScheduleModalOpen => selectedDay is not null && program is not null;
     private string? ScheduleModalDescription => selectedDay is { } day ? DayName(day) : null;
+    private string BackUrl => CalendarRoute.BackPath(RequestedMonth, RequestedDate, $"/styrke/{Id}");
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 
@@ -83,7 +87,7 @@
         busy = true;
         var result = await Programs.SaveScheduleAsync(Id, new ScheduleResponse(program.Version, entries));
         busy = false;
-        if (result.Succeeded) { Navigation.NavigateTo($"/styrke/{Id}"); return; }
+        if (result.Succeeded) { Navigation.NavigateTo(BackUrl); return; }
         saveError = result.Error;
     }
 
