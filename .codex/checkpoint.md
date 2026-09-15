@@ -42,8 +42,10 @@ Extend the existing `/kalender` route with one-off, persisted moves for a specif
 
 - Commit `97a8559` (`feat: move individual calendar activities`) is pushed on `feature/calendar`.
 - Commit `e10e77c` (`fix: align calendar mobile header`) is pushed on `feature/calendar`.
+- Commit `318cd15` (`test: cover calendar occurrence migration`) is pushed on `feature/calendar`.
 - PR [#11](https://github.com/Kaspartacus/Fitness-app/pull/11) is open from `feature/calendar` to `main`. It has not been merged or deployed.
+- The PR's `build-and-test` workflow was triggered by the test-fix push and is pending at the time of this checkpoint.
 
 ## Exact next action
 
-Stage only `tests/FitnessApp.IntegrationTests/RegistrationMigrationTests.cs` and this checkpoint; commit the migration-test update, push `feature/calendar` without force, and confirm that PR #11 still targets `main`. Do not merge or deploy.
+No code action remains. Wait for the triggered PR `build-and-test` workflow to complete, then review its status; keep the PR open and do not merge or deploy.
