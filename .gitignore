@@ -14,6 +14,7 @@
 !.env.example
 appsettings.Local.json
 appsettings.*.local.json
+.codex/checkpoint.md
 secrets.json
 *.db
 *.db-shm

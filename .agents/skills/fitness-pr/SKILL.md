@@ -11,7 +11,7 @@ Prepare an honest review handoff without expanding the user's authorization.
 
 - Current branch and intended base branch.
 - User authorization for commit, push, PR creation/update, merge, or deployment.
-- The branch diff, repository instructions, and current checkpoint.
+- The branch diff, repository instructions, and an optional local task checkpoint.
 
 ## Workflow
 

@@ -1,6 +1,6 @@
 ---
 name: fitness-feature
-description: Implement a small FitnessApp product feature end to end across the existing .NET 10 hosted Blazor WebAssembly layers. Use for new vertical slices or changes that require coordinated UI, API, business rules, persistence, authorization, tests, and project progress updates. Do not use for review-only, design-only, or pull-request-only work.
+description: Implement a small FitnessApp product feature end to end across the existing .NET 10 hosted Blazor WebAssembly layers. Use for new vertical slices or changes that require coordinated UI, API, business rules, persistence, authorization, and tests. Do not use for review-only, design-only, or pull-request-only work.
 ---
 
 # Fitness Feature
@@ -10,7 +10,7 @@ Deliver one reviewable vertical slice without prebuilding future architecture.
 ## Inputs
 
 - The user's requested outcome, constraints, and acceptance criteria.
-- `AGENTS.md`, `docs/project.md`, `docs/progress.md`, and `.codex/checkpoint.md` when present.
+- The root and applicable nested `AGENTS.md` files, `docs/project.md`, and a local checkpoint only when a task hand-off needs one.
 - Existing implementation, tests, migrations, styling, and current design evidence.
 
 ## Workflow
@@ -25,7 +25,7 @@ Deliver one reviewable vertical slice without prebuilding future architecture.
 8. Verify with `./scripts/verify.sh verify` when available. Run `./scripts/verify.sh audit` when dependencies change or before a release-quality handoff.
 9. Exercise changed UI in the actual HTTPS app at mobile and desktop sizes when browser tooling is available.
 10. Remove superseded code paths, unused imports or dependencies, stale tests, obsolete configuration, dead UI, generated output, and temporary tooling in the changed scope. Retain an item only when it has a concrete documented purpose.
-11. Update durable product facts in `docs/project.md`, current evidence and next work in `docs/progress.md`, and the resumable state in `.codex/checkpoint.md`.
+11. Update durable product facts in `docs/project.md` and local module documentation when the change makes those facts inaccurate. Record task-specific hand-off state only in the ignored local `.codex/checkpoint.md` when needed.
 
 ## Guardrails
 
