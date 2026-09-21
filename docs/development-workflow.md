@@ -38,4 +38,4 @@ If a task needs a hand-off note, use the ignored local `.codex/checkpoint.md` an
 
 ## Pull requests
 
-Before handoff, inspect the relevant diff and `git status`; run the proportionate checks. Run the shared verification before a normal code handoff and the audit when dependencies change or current advisory evidence is required. Commit, push, merge, deployment, and Figma changes require current user authorization. Never force-push, reset, or delete an active or unmerged worktree merely to simplify history.
+Before handoff, inspect the relevant diff and `git status`; run the proportionate checks. Run the shared verification before a normal code handoff and the audit when dependencies change or current advisory evidence is required. Every pull-request description must end with the exact line `@codex review this`; do not add content after it. Commit, push, merge, deployment, and Figma changes require current user authorization. Never force-push, reset, or delete an active or unmerged worktree merely to simplify history.
