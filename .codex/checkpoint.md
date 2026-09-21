@@ -1,51 +1,34 @@
-# Calendar feature checkpoint
+# AI-gated PR review workflow checkpoint
 
-Updated: 2026-09-15
+Updated: 2026-09-21
 
 ## Objective
 
-Extend the existing `/kalender` route with one-off, persisted moves for a specific planned running or strength occurrence; keep the recurring plan unchanged. Keep run registration scoped to a selected run activity, and show the shared mobile bottom navigation on the authenticated home page.
+Add a concise, read-only AI pull-request review gate: reusable reviewer agents, one PR-review skill, an honest PR template, and durable workflow guidance. Do not add an LLM GitHub Action, keys, auto-merge, application-code, or test changes.
 
-## Branch and worktree
+## Branch and commit
 
-- Branch: `feature/calendar`; worktree: `/Users/kaspartacuzz/Desktop/Fitness app/Fitness-app`.
-- Existing open PR: [#11](https://github.com/Kaspartacus/Fitness-app/pull/11) targeting `main`. It has not been merged or deployed.
+- Branch: `feature/ai-gated-pr-review`; base: `origin/main` at `201ef06`.
+- Last commit: `107fa13` (`docs: add AI-gated PR review workflow`).
+- PR: not yet opened. After it exists, record its URL, base/head SHAs, latest CI state, final AI review decision, and unresolved finding references here.
 
 ## Completed work
 
-- Added an owner-scoped `CalendarOccurrenceMove` persistence model and EF migration. A move retains the original scheduled date and overlays a target date, so it does not rewrite the running or strength recurring plan.
-- Added owner-scoped calendar move endpoints and client calls. Running moves only apply to active, unstarted, result-free sessions in the plan period; strength moves validate the owned program, workout, and scheduled source day.
-- Locked a running move with the same SQLite plan-write lock used by schedule regeneration. A moved source is preserved during running schedule edits, and a session start rechecks its effective target date after taking that lock.
-- Updated the bounded calendar projection to suppress a source occurrence and render it once on its move target, with the original date displayed as context. Actual results stay on their actual dates; completed-result relationships use the moved planned date.
-- Propagated a moved running occurrence’s effective date through plan, overview, list, detail, registration, active-session, start, and cancel mappings while retaining the stored source date for the schedule.
-- Removed the generic selected-day `Registrer løb` action. Registration is only available from the selected planned run’s action dialog. Planned activities now open an action dialog with the specific run/strength move action, existing registration/start flow, and details.
-- Reused the existing centered date picker as an accessible controlled move dialog, including validation, retryable server errors, cancellation handling, focus return, and calendar-state preservation.
-- Added the existing shared bottom navigation to the authenticated home dashboard on mobile, with an active Hjem state; desktop keeps its existing desktop layout and hides the mobile navigation.
-- Updated the calendar header: mobile hides its redundant back arrow, retains the working I dag action, and adds the existing home icon at the far right. Desktop keeps the back arrow.
-- Corrected the calendar header action group so it no longer inherits the generic flexible header width; the home icon now aligns to the same right edge as on Løb.
-- Updated the empty-database migration integration test for `AddCalendarOccurrenceMoves`, including its applied-migration list and the persisted `CalendarOccurrenceMoves.TargetDate` column.
-- Used the user-provided screenshots and the existing documented design reference. Fresh Figma integration access was unavailable, so no exact Figma-frame verification is claimed.
+- Added `$fitness-pr-review`, which collects bounded PR evidence, uses only the read-only `reviewer` and security reviewer when applicable, and creates one GitHub-comment handoff with confirmed defects, suggestions, questions, and exactly one final decision.
+- Added the concise GitHub PR description template and made `$fitness-pr` require every listed review-handoff field.
+- Updated agent definitions, root review rules, and development workflow documentation. GitHub comments are documented as the handoff mechanism between separate Codex threads; automatic GitHub reviews are explicitly an external Codex/GitHub setting.
 
 ## Verification
 
-- `git diff --check` passes.
-- The latest short serial build passed with 0 errors: `DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1 MSBUILDDISABLENODEREUSE=1 dotnet build FitnessApp.slnx --no-restore --disable-build-servers --verbosity minimal -m:1 -p:BuildInParallel=false`. It emitted one `MSB3026` static-web-assets retry warning from the active local server build path.
-- The previously failing focused migration test now passes: `dotnet test tests/FitnessApp.IntegrationTests/FitnessApp.IntegrationTests.csproj --no-restore --disable-build-servers --verbosity minimal -m:1 -p:BuildInParallel=false --filter 'FullyQualifiedName=FitnessApp.IntegrationTests.RegistrationMigrationTests.LatestMigrationAppliesToEmptyDatabase'` (1 passed, 0 failed).
-- No app run, browser automation, audit, full verify script, database update, deployment, or CI change was performed. No full test suite was run.
+- `git diff --check` passed before the commit.
+- The new skill UI YAML parses with Ruby Psych; both reviewer TOML files parse with Python `tomllib`.
+- Required PR-template headings and review-decision text were checked with `rg`.
+- No application, browser, full test suite, shared verification script, deployment, repository-setting change, secret access, or GitHub Action run was performed; this documentation-only change requires only lightweight validation.
 
-## Preserved unrelated files and processes
+## Preserved unrelated state
 
-- The untracked literal directories `src/FitnessApp.Infrastructure/bin\\Debug/` and `src/FitnessApp.Server/bin\\Debug/` are preserved and must not be staged or removed.
-- A user-owned `dotnet run --project src/FitnessApp.Server --launch-profile https` process was detected and left untouched.
-
-## Delivery
-
-- Commit `97a8559` (`feat: move individual calendar activities`) is pushed on `feature/calendar`.
-- Commit `e10e77c` (`fix: align calendar mobile header`) is pushed on `feature/calendar`.
-- Commit `318cd15` (`test: cover calendar occurrence migration`) is pushed on `feature/calendar`.
-- PR [#11](https://github.com/Kaspartacus/Fitness-app/pull/11) is open from `feature/calendar` to `main`. It has not been merged or deployed.
-- The PR's `build-and-test` workflow was triggered by the test-fix push and is pending at the time of this checkpoint.
+- The untracked literal directories `src/FitnessApp.Infrastructure/bin\\Debug/` and `src/FitnessApp.Server/bin\\Debug/` predate this work and remain unstaged.
 
 ## Exact next action
 
-No code action remains. Wait for the triggered PR `build-and-test` workflow to complete, then review its status; keep the PR open and do not merge or deploy.
+Push `feature/ai-gated-pr-review`, open a normal PR to `main` using the template, record the remote PR/CI state, and do not merge.

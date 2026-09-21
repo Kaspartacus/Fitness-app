@@ -20,7 +20,7 @@ Prepare an honest review handoff without expanding the user's authorization.
 3. Run `./scripts/verify.sh verify`; run `./scripts/verify.sh audit` when dependencies changed or current advisory evidence is required.
 4. Review the final diff for unrelated files, secrets, personal data, generated databases, build outputs, whitespace errors, and misleading documentation.
 5. Commit only when authorized, with a focused message. Push only the intended branch and never force-push unless the user explicitly requests and understands it.
-6. Create or update the PR with the correct base, scope, verification evidence, design evidence, limitations, and dependency relationship for stacked work.
+6. Create or update the PR from [`.github/PULL_REQUEST_TEMPLATE.md`](../../../.github/PULL_REQUEST_TEMPLATE.md). Complete its Summary and scope, Affected modules/layers, impact assessment (migrations, API, authentication, authorization, secrets, and design; write `N/A` where not relevant), exact Verification and CI results, Known limitations, and Review handoff sections. Name the intended base branch and a specific review focus.
 7. Read the latest check run rather than relying on an older successful run. Report pending or failed checks accurately.
 8. Merge or deploy only under explicit current authorization and only after stated requirements are satisfied.
 9. After an authorized merge, inspect every worktree. Delete the merged branch's worktree and local/remote branch, then prune stale worktree registrations. Preserve unmerged or active worktrees and never delete work containing uncommitted changes.
