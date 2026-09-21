@@ -28,3 +28,8 @@ Read this file, then only the guidance and documentation relevant to the task. D
 - [Project facts, architecture, and product invariants](docs/project.md)
 - [Development workflow](docs/development-workflow.md), including verification, reviews, hooks, and pull requests
 - [Repository skills](.agents/skills/): reusable feature, design-check, review, and pull-request procedures
+
+## Code Review Rules
+
+- Every feature PR follows the read-only procedure in `.agents/skills/fitness-pr-review/SKILL.md`; its GitHub comment is a handoff, not an approval or merge action.
+- Report only demonstrated consequential defects with a file reference and triggering condition. Leave deterministic formatting, build, test, and dependency checks to CI.
