@@ -14,6 +14,7 @@ Codex discovers project skills from `.agents/skills/<skill-name>/SKILL.md`:
 - `$fitness-design-check` checks the running UI against current design evidence.
 - `$fitness-review` performs a focused code-review pass.
 - `$fitness-pr` prepares and verifies a branch or pull request.
+- `$fitness-pr-review` produces a human-gated GitHub pull-request review and handoff.
 
 Their descriptions intentionally do not overlap: choose by the primary requested outcome. A feature can invoke a design check or review as a later stage without turning those skills into implementation workflows.
 
@@ -24,7 +25,7 @@ The project defines `reviewer` and `security-reviewer` in `.codex/agents/`. Both
 - Use `reviewer` for substantial code changes before handoff.
 - Also use `security-reviewer` when changes touch authentication, roles, authorization, ownership, secrets, logging, dependencies, configuration, or deployment.
 
-Keep reviews bounded to the intended diff. Reviewer agents must not edit, commit, push, merge, deploy, or approve their own findings. AI review is supporting evidence, not human approval.
+Keep reviews bounded to the intended diff. Reviewer agents must not edit, commit, push, merge, deploy, approve, change settings, post GitHub feedback, or inspect secrets. AI review is supporting evidence, not human approval.
 
 ## Shared verification
 
@@ -49,10 +50,12 @@ Project hooks do not run automatically until a user reviews and trusts their exa
 .codex/hooks/session-context.sh
 ```
 
-At milestones, update `.codex/checkpoint.md` with the objective, branch and last commit, completed work, uncommitted work, verification, blockers, and exact next action. Never store credentials, tokens, personal data, or conversation transcripts. On resume, compare the checkpoint with Git and the filesystem instead of trusting it blindly.
+At milestones, update `.codex/checkpoint.md` with the objective, branch and last commit, completed work, uncommitted work, verification, blockers, and exact next action. For an open PR, include its URL, base and head SHA, review decision, and unresolved finding references. Never store credentials, tokens, personal data, review transcripts, or secrets. On resume, compare the checkpoint with Git and the filesystem instead of trusting it blindly.
 
 ## Pull requests and authority
 
-Work on a focused branch and keep each pull request reviewable. Run shared verification and a separate review for substantial work. Commit, push, merge, deployment, and Figma modification always depend on the user's current authorization; no skill, agent, hook, or earlier permission broadens that authority.
+Work on a focused branch and keep each pull request reviewable. Run shared verification and `$fitness-pr-review` for every feature PR. The skill posts the result as one GitHub PR comment, which is the handoff mechanism between separate Codex threads; one Codex thread cannot message another automatically. A human may merge only after required CI checks and review are satisfactory. Commit, push, merge, deployment, and Figma modification always depend on the user's current authorization; no skill, agent, hook, or earlier permission broadens that authority.
+
+To request a Codex GitHub review manually, leave `@Codex review` in the PR conversation. Automatic GitHub reviews are configured outside this repository: in Codex settings, enable **Code review** for the connected repository and turn on **Automatic reviews**. This repository does not add an LLM workflow, API key, auto-merge rule, or repository-setting automation. See the [official Codex GitHub review guide](https://learn.chatgpt.com/docs/third-party/github).
 
 After a pull request has merged, inspect all worktrees before cleanup. Preserve any worktree with active or unmerged work. For the completed branch, remove its worktree, delete its local and remote branch, and run `git worktree prune` to clear stale registrations. Do not delete branches with uncommitted changes or an open pull request.

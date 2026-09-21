@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fitness PR Review"
+  short_description: "Produce a human-gated GitHub PR review handoff"
+  default_prompt: "Use $fitness-pr-review to review this FitnessApp pull request read-only."
