@@ -2,9 +2,7 @@
 
 FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, account administration and authentication, password reset by email, private strength-program management, and personal running plans and results through the Danish UI.
 
-Product scope and the distinction between implemented and deferred work are documented in [docs/project.md](docs/project.md). Verification evidence and blockers are tracked in [docs/progress.md](docs/progress.md).
-
-The implemented authentication surfaces follow the current Figma Make direction: charcoal/gray surfaces, navy primary actions, and light-blue focus and accent states. Registration, confirmation, and administrator review extend that system because the current Make source contains a login screen but no equivalent frames for those flows.
+Product scope and the distinction between implemented and deferred work are documented in [docs/project.md](docs/project.md). Repository workflow, verification, and Codex support are documented in [docs/development-workflow.md](docs/development-workflow.md). Client visual evidence lives in [src/FitnessApp.Client/docs/design-reference.md](src/FitnessApp.Client/docs/design-reference.md).
 
 ## Prerequisites
 
@@ -242,7 +240,7 @@ The client attaches the bearer token only to same-origin `/api/` requests and re
 
 ## Development workflow
 
-Repository-native Codex skills, read-only reviewer agents, the resume checkpoint/hook, and the shared local/CI verification entrypoint are documented in [docs/development-workflow.md](docs/development-workflow.md). Project hooks require explicit review and trust through `/hooks`; the repository does not bypass that protection.
+Repository-native Codex skills, read-only reviewer agents, the opt-in resume hook, and the shared local/CI verification entrypoint are documented in [docs/development-workflow.md](docs/development-workflow.md). Project hooks require explicit review and trust through `/hooks`; the repository does not bypass that protection.
 
 ## Verification
 
@@ -251,7 +249,7 @@ Repository-native Codex skills, read-only reviewer agents, the resume checkpoint
 ./scripts/verify.sh audit
 ```
 
-The integration suite uses isolated real SQLite databases, not EF InMemory. See [docs/progress.md](docs/progress.md) for the current exact build, test, audit, migration, browser, design, and review evidence.
+The integration suite uses isolated real SQLite databases, not EF InMemory. Run the commands above for current verification evidence.
 
 ## Future operations
 

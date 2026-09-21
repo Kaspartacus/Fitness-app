@@ -1,63 +1,48 @@
 # Development workflow
 
-This repository keeps product implementation, review, verification, and pull-request preparation as separate responsibilities. `AGENTS.md` holds durable rules, `docs/project.md` holds product and architecture facts, `docs/progress.md` holds current implementation evidence and next work, and `.codex/checkpoint.md` is the concise resume record. Do not copy the same status narrative into every file.
+`AGENTS.md` files provide concise, durable routing and rules. [Project facts](project.md) explains shared architecture and product invariants; client design evidence lives with the client. Keep task status out of those documents.
 
-## Feature cleanup
+## Focused changes and review
 
-Cleanup belongs to the feature that makes an old path unnecessary. Before handoff, inspect the changed scope for replaced implementation, unused dependencies and imports, stale tests, obsolete configuration, unreachable UI, generated output, and temporary tooling. Remove what has no current purpose. Keep an item only when its near-term purpose is concrete and documented; do not retain speculative scaffolding.
+Work in focused, reviewable slices. Check the existing code and the applicable nested `AGENTS.md` before changing a module. Clean up replaced implementation, unused imports or dependencies, stale tests, obsolete configuration, dead UI, generated output, and temporary tooling in the changed scope.
+
+Use the read-only `reviewer` agent for substantial changes. Also use `security-reviewer` when a diff touches authentication, authorization, ownership, secrets, logging, dependencies, configuration, or deployment. Both definitions are in `.codex/agents/`, run with `sandbox_mode = "read-only"`, stay limited to the intended diff, and supplement human approval. They must not edit, commit, push, merge, deploy, approve, change settings, post GitHub feedback, or inspect secrets.
 
 ## Project skills
 
-Codex discovers project skills from `.agents/skills/<skill-name>/SKILL.md`:
+Project skills are discovered from `.agents/skills/<skill-name>/SKILL.md`:
 
-- `$fitness-feature` implements a small end-to-end vertical slice.
-- `$fitness-design-check` checks the running UI against current design evidence.
-- `$fitness-review` performs a focused code-review pass.
-- `$fitness-pr` prepares and verifies a branch or pull request.
-- `$fitness-pr-review` performs the required read-only AI review and GitHub handoff for a feature PR.
+- `$fitness-feature` for an end-to-end vertical slice.
+- `$fitness-design-check` for running UI and design-evidence checks.
+- `$fitness-review` for a focused code review.
+- `$fitness-pr` for branch and pull-request preparation.
+- `$fitness-pr-review` for the required read-only AI review and GitHub handoff for a feature PR.
 
-Their descriptions intentionally do not overlap: choose by the primary requested outcome. A feature can invoke a design check or review as a later stage without turning those skills into implementation workflows.
+Choose the skill for the primary outcome; a feature may use a design check or review as a later step. Keep skills in `.agents/skills`, the repository-supported discovery location, rather than in arbitrary nested module folders.
 
-## Read-only reviewer agents
+## Verification
 
-The project defines `reviewer` and `security-reviewer` in `.codex/agents/`. Both inherit the active model and run with `sandbox_mode = "read-only"`.
-
-- Use `reviewer` for substantial code changes before handoff.
-- Also use `security-reviewer` when changes touch authentication, roles, authorization, ownership, secrets, logging, dependencies, configuration, or deployment.
-
-Keep reviews bounded to the intended diff. Reviewer agents must not edit, commit, push, merge, deploy, approve, change settings, post GitHub feedback, or inspect secrets. AI review is supporting evidence, not human approval.
-
-## Shared verification
-
-Run the same entrypoint locally and in CI:
+The shared local and CI entrypoint is:
 
 ```bash
 ./scripts/verify.sh verify
 ./scripts/verify.sh audit
 ```
 
-`verify` changes to the repository root, restores tools and packages, uses the proven serial build settings, runs the test suite, and checks tracked, staged, untracked, and committed-diff whitespace. It uses `VERIFY_DIFF_BASE` when set and otherwise requires the fetched `origin/main`; CI supplies the exact pull-request base SHA. `audit` refreshes restore assets and validates structured direct/transitive vulnerability output against every project identity in `FitnessApp.slnx`. Findings, missing projects, unexpected output, and unavailable advisory data all exit nonzero. `self-test` verifies those classifications without network access.
+`verify` restores, builds, tests, and checks whitespace. It uses `VERIFY_DIFF_BASE` when set and otherwise needs a fetched `origin/main`. `audit` checks direct and transitive NuGet advisories for every project in `FitnessApp.slnx`; `self-test` checks the audit classifier without network access. The pull-request workflow uses these commands for pull requests to `main` with read-only repository permissions, no production secrets, and no deployment.
 
-The pull-request workflow uses this script for pull requests targeting `main`, with read-only repository permissions, no production secrets, and no deployment.
+## Hook and temporary checkpoints
 
-## Resume hook and checkpoint
+`.codex/hooks.json` defines an opt-in, non-mutating `SessionStart` context hook. Review and trust it through `/hooks`; do not alter Codex trust records. It can be invoked directly with `.codex/hooks/session-context.sh`.
 
-`.codex/hooks.json` registers one fast `SessionStart` hook for `startup|resume`. Its shell script performs no network calls or mutations and reports only the current branch, whether the worktree has changes, and the checkpoint path.
+If a task needs a hand-off note, use the ignored local `.codex/checkpoint.md` and record only the objective, Git state, completed work, verification, blockers, and the exact next action. For an open PR, also record its URL, base and head SHA, final AI review decision, and unresolved finding references. Never add credentials, personal data, review transcripts, or secrets. Verify Git and the filesystem on resume instead of trusting a checkpoint alone.
 
-Project hooks do not run automatically until a user reviews and trusts their exact definition. In Codex CLI, open `/hooks`, inspect this repository's hook, and choose to trust it. Do not bypass hook trust or edit Codex trust records. The script can be tested safely before activation:
+## Pull requests
 
-```bash
-.codex/hooks/session-context.sh
-```
-
-At milestones, update `.codex/checkpoint.md` with the objective, branch and last commit, completed work, uncommitted work, verification, blockers, and exact next action. For an open PR, also record the URL, base and head SHA, final AI review decision, and unresolved finding references. Never store credentials, tokens, personal data, review transcripts, or secrets. On resume, compare the checkpoint with Git and the filesystem instead of trusting it blindly.
-
-## Pull requests and authority
-
-Work on a focused branch and keep each pull request reviewable. Use `.github/PULL_REQUEST_TEMPLATE.md` through `$fitness-pr`: every description must state summary and scope, affected modules/layers, relevant migration/API/authentication/authorization/secrets/design impact, exact local verification and CI results, known limitations, and review handoff with the base branch and a specific focus.
+Before handoff, inspect the relevant diff and `git status`; run proportionate checks. Run the shared verification before a normal code handoff and the audit when dependencies change or current advisory evidence is required. Use `.github/PULL_REQUEST_TEMPLATE.md` through `$fitness-pr`: every description must state summary and scope, affected modules/layers, relevant migration/API/authentication/authorization/secrets/design impact, exact local verification and CI results, known limitations, and review handoff with the base branch and a specific focus.
 
 Every feature PR also receives one `$fitness-pr-review` pass. The coordinator reads the PR description, changed files, applicable `AGENTS.md` files, current CI status, and the diff against the PR base. It uses the read-only `reviewer` agent and adds the read-only `security-reviewer` when the security-sensitive scope applies. The final GitHub PR comment separates confirmed defects by severity with file references from suggestions and unanswered questions, then ends with exactly one decision: `CHANGES REQUIRED` plus a short English prompt to paste into the original feature Codex thread, or `READY FOR OWNER MERGE`.
 
 GitHub PR comments are the durable handoff mechanism between separate Codex threads; one thread cannot message another automatically. The repository owner manually merges only after `READY FOR OWNER MERGE` and all required CI checks pass. To request a review, comment `@Codex review` on the PR. Automatic Codex GitHub reviews are enabled outside the repository through the Codex/GitHub integration: in Codex settings, enable **Code review** for the connected repository and turn on **Automatic reviews**. This repository does not add an LLM workflow, API key, auto-merge rule, or repository-setting automation. See the [official Codex GitHub review guide](https://learn.chatgpt.com/docs/third-party/github).
 
-After a pull request has merged, inspect all worktrees before cleanup. Preserve any worktree with active or unmerged work. For the completed branch, remove its worktree, delete its local and remote branch, and run `git worktree prune` to clear stale registrations. Do not delete branches with uncommitted changes or an open pull request.
+Commit, push, merge, deployment, and Figma changes require current user authorization. Never force-push, reset, or delete an active or unmerged worktree merely to simplify history. After a pull request has merged, inspect all worktrees before cleanup. Preserve any worktree with active or unmerged work. For the completed branch, remove its worktree, delete its local and remote branch, and run `git worktree prune` to clear stale registrations. Do not delete branches with uncommitted changes or an open pull request.

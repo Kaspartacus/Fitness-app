@@ -10,8 +10,7 @@ Perform an evidence-based review. Prioritize defects that can change behavior, s
 ## Inputs
 
 - The requested review range or the current branch diff against its actual base.
-- `AGENTS.md`, product invariants in `docs/project.md`, current status in `docs/progress.md`, and relevant tests.
-- Verification output when available.
+- The root and applicable nested `AGENTS.md` files, product invariants in `docs/project.md`, relevant tests, and available verification output.
 
 ## Workflow
 

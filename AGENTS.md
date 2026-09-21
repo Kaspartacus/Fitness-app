@@ -1,45 +1,33 @@
-# Repository instructions
+# FitnessApp guidance
 
-## Working agreement
+FitnessApp is a private, mobile-first fitness application in a public repository. It is a .NET 10 modular monolith: the Blazor WebAssembly Client calls the ASP.NET Core Server over HTTP; Server composes Application and Infrastructure; Application and Infrastructure depend on Domain; Contracts contains shared transport DTOs. The Server's Client reference is only for static WebAssembly hosting.
 
-- Read [docs/project.md](docs/project.md) and [docs/progress.md](docs/progress.md) before implementation work.
-- Work in small, reviewable vertical slices. Preserve unrelated changes and do not push, merge, deploy, or discard user work unless explicitly requested.
-- Keep code, identifiers, technical documentation, and concise comments in English. Keep all application UI in Danish.
-- Prefer explicit code and shared styling. Introduce reusable components only for a concrete reuse case, and remove superseded code in the active scope.
-- Treat cleanup as part of each completed change: remove replaced code paths, unused imports and dependencies, stale tests, obsolete configuration, dead UI, and temporary artifacts when they are no longer needed. Before handoff, inspect the changed area for leftovers; preserve only code with a current purpose or documented near-term use.
-- Do not introduce speculative abstractions, generic repositories, MediatR, CQRS frameworks, message buses, microservices, giant services, or unnecessary interfaces.
-- Suggest UX scope expansions before implementing them.
+Read this file, then only the guidance and documentation relevant to the task. Do not preload the whole documentation tree or unrelated module instructions.
 
-## Architecture
+## Working conventions
 
-- Target C# and .NET 10. The browser application must run as Blazor WebAssembly, hosted from the ASP.NET Core server on the same origin.
-- Maintain the dependency direction described in [docs/project.md](docs/project.md): Client over HTTP; Server to Application and Infrastructure; Application to Domain; Infrastructure to Application and Domain; Domain to no other solution project.
-- A Server-to-Client project reference is allowed only for static WebAssembly hosting/build integration. API implementation must not depend on client types.
-- Keep feature responsibilities separated within the six existing `src/` projects, including the already established Contracts project. Do not create empty future modules or new projects without a concrete need.
-- Avoid paid services and platform-specific dependencies that prevent future Linux/ARM64 deployment.
+- Keep code, identifiers, technical documentation, and comments in English; keep application UI in Danish.
+- Preserve unrelated work. Do not discard, push, merge, deploy, change Figma, or add dependencies without the user's current authorization.
+- Keep implementation small and concrete. Do not add speculative projects, modules, abstractions, generic repositories, MediatR, CQRS frameworks, message buses, or microservices.
+- Protected data is owner-scoped from the server-derived identity. Clients never establish ownership or roles with submitted IDs. Preserve historical recorded values when plans, goals, or definitions change.
+- Keep secrets out of Git, database files out of `wwwroot`, and dependencies compatible with future Linux/ARM64 deployment. See [project facts and invariants](docs/project.md) for the authoritative detail.
+- Remove superseded code, tests, configuration, generated output, and temporary artifacts in the changed scope.
 
-## Security and data rules
+## Instruction map
 
-- Treat all protected data as user-owned. Derive identity on the server and never accept a client-supplied user ID as proof of ownership.
-- New accounts must await administrator approval. Pending or rejected accounts cannot access protected APIs or personal data, and registration must never permit choosing an administrator role.
-- Use established password hashing, secure reset flows, HTTPS, safe logging, and production-safe errors when authentication is implemented.
-- Never commit secrets or expose the future database publicly. Keep safe shared settings trackable and local secret overrides ignored.
-- Preserve historical nutrition, completed activity, actual running, and weigh-in values when source definitions, plans, or goals change. See [docs/project.md](docs/project.md) for the full product invariants.
+- [Client](src/FitnessApp.Client/AGENTS.md): Blazor UI, browser calls, and design evidence.
+- [Server](src/FitnessApp.Server/AGENTS.md): HTTP API, authentication boundary, and composition root.
+- [Application](src/FitnessApp.Application/AGENTS.md): use-case contracts and orchestration boundaries.
+- [Domain](src/FitnessApp.Domain/AGENTS.md): dependency-free business rules.
+- [Infrastructure](src/FitnessApp.Infrastructure/AGENTS.md): Identity, EF Core, SQLite, and external implementations.
+- [Contracts](src/FitnessApp.Contracts/AGENTS.md): shared transport DTOs.
+- [Integration tests](tests/FitnessApp.IntegrationTests/AGENTS.md): real-SQLite end-to-end coverage.
 
-## Design and verification
+## Shared references
 
-- Follow the design workflow in [docs/project.md](docs/project.md) and [docs/design-reference.md](docs/design-reference.md) before each feature. Inspect the relevant current evidence and existing code, surface missing behavior and unresolved decisions, and implement agreed functionality end to end. Distinguish direct visual verification, consistent extensions, and unavailable evidence. Visual similarity alone is not feature completion.
-- Reuse existing components and styling, remove superseded code in the active scope, and never change the Figma file unless explicitly authorized.
-- Before handoff, run `./scripts/verify.sh verify`, applicable non-tautological tests not already covered there, `git status`, and a final diff review. Run `./scripts/verify.sh audit` when dependencies change or current advisory evidence is required.
-- Start the server and verify the page plus WebAssembly assets in a browser when browser tooling is available. Record exact evidence and blockers in [docs/progress.md](docs/progress.md).
-
-## Branches, review, and resume
-
-- Use focused branches and pull requests for reviewable work. Commit, push, merge, deployment, and Figma changes require the user's current authorization; prior workflow permission is not permanent authority.
-- At the end of a completed branch, inspect every worktree and branch. Preserve branches with open work, then remove the completed branch's worktree and delete its local and remote branch after its pull request is merged. Prune stale worktree registrations. Never delete a branch with uncommitted work or an unmerged pull request.
-- Run a separate correctness review for substantial changes. Also run a security review when authentication, roles, authorization, ownership, secrets, logging, dependencies, configuration, or deployment changes. AI review supplements rather than replaces human approval.
-- Keep `.codex/checkpoint.md` current at meaningful milestones with the objective, branch and last commit, completed and uncommitted work, verification, blockers, and exact next action. For an open PR, include its URL, base and head SHA, final AI review decision, and unresolved finding references. On resume, verify Git and filesystem state rather than trusting the checkpoint alone.
-- Keep `AGENTS.md` for durable rules, `docs/project.md` for product and architecture, and `docs/progress.md` for current implementation evidence and next work. See [docs/development-workflow.md](docs/development-workflow.md) for tools and activation details.
+- [Project facts, architecture, and product invariants](docs/project.md)
+- [Development workflow](docs/development-workflow.md), including verification, reviews, hooks, and pull requests
+- [Repository skills](.agents/skills/): reusable feature, design-check, review, and pull-request procedures
 
 ## Code Review Rules
 
