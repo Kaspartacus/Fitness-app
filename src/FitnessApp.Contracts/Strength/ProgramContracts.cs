@@ -38,6 +38,7 @@ public sealed record StrengthOverviewResponse(IReadOnlyList<ProgramResponse> Pro
 public sealed class CompleteWorkoutRequest
 {
     public Guid CompletionId { get; set; }
+    public DateOnly? ScheduledOccurrenceDate { get; set; }
     public List<CompletedExerciseRequest>? Exercises { get; set; } = [];
 }
 

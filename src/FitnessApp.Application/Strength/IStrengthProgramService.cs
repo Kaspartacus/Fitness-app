@@ -15,7 +15,8 @@ public sealed record PlannedWorkoutData(Guid ProgramId, string ProgramName, Guid
 public sealed record StrengthOverviewData(IReadOnlyList<ProgramData> Programs, PlannedWorkoutData? Today);
 public sealed record CompletedExerciseInput(Guid? ProgramExerciseId, string? Name, decimal Weight, int Sets,
     int Repetitions, bool IsCompleted);
-public sealed record CompletionInput(Guid CompletionId, IReadOnlyList<CompletedExerciseInput>? Exercises);
+public sealed record CompletionInput(Guid CompletionId, IReadOnlyList<CompletedExerciseInput>? Exercises,
+    DateOnly? ScheduledOccurrenceDate = null);
 public sealed record CompletedWorkoutExerciseData(string Name, decimal Weight, int Sets, int Repetitions, bool IsCompleted);
 public sealed record CompletedWorkoutData(Guid Id, DateOnly Date, string WorkoutName,
     IReadOnlyList<CompletedWorkoutExerciseData> Exercises);
