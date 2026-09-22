@@ -32,4 +32,5 @@ Read this file, then only the guidance and documentation relevant to the task. D
 ## Code Review Rules
 
 - Every feature PR follows the read-only procedure in `.agents/skills/fitness-pr-review/SKILL.md`; its GitHub comment is a handoff, not an approval or merge action.
+- On every automatic review run or `@codex review` request, review the PR's latest head and post one new top-level GitHub comment that follows that procedure. Do not edit or rely on an earlier review comment.
 - Report only demonstrated consequential defects with a file reference and triggering condition. Leave deterministic formatting, build, test, and dependency checks to CI.
