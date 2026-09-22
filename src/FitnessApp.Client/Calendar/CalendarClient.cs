@@ -67,9 +67,9 @@ public sealed class CalendarClient(IHttpClientFactory httpClientFactory)
     private async Task<CalendarClientResult<bool>> MoveOccurrenceAsync(string path, DateOnly originalDate,
         DateOnly targetDate, CancellationToken cancellationToken)
     {
-        if (originalDate == default || targetDate == default || originalDate == targetDate)
+        if (originalDate == default || targetDate == default)
         {
-            return new(default, "Vælg en anden dato for træningen.");
+            return new(default, "Vælg en gyldig dato for træningen.");
         }
 
         try

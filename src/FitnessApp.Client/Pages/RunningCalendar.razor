@@ -107,13 +107,13 @@
 
                     @if (RelationshipsOn(selectedDate).Count > 0)
                     {
-                        <section class="calendar-relationships" aria-label="Oprindeligt planlagte løb">
+                        <section class="calendar-relationships" aria-label="Oprindeligt planlagte aktiviteter">
                             <p class="strength-overline">Oprindeligt planlagt</p>
                             @foreach (var completed in RelationshipsOn(selectedDate))
                             {
                                 <button class="calendar-relationship-row" type="button" @key="ActivityKey(completed)"
                                         @onclick="() => OpenActivityActions(completed)" aria-label="@ActivityActionLabel(completed)">
-                                    <span><strong>@ActivityTitle(completed)</strong><small>Gennemført @RunningPresentation.ShortDate(completed.Date)</small></span>
+                                    <span><strong>@ActivityTitle(completed)</strong><small>@ActivityTypeText(completed) gennemført @RunningPresentation.ShortDate(completed.Date)</small></span>
                                     <span class="running-session-chevron" aria-hidden="true">›</span>
                                 </button>
                             }
@@ -262,8 +262,8 @@
             return relationships == 0
                 ? actualText
                 : relationships == 1
-                    ? $"{actualText} · 1 løb er gennemført på en anden dato"
-                    : $"{actualText} · {relationships} løb er gennemført på andre datoer";
+                    ? $"{actualText} · 1 aktivitet er gennemført på en anden dato"
+                    : $"{actualText} · {relationships} aktiviteter er gennemført på andre datoer";
         }
     }
 
@@ -445,8 +445,8 @@
         if (relationships > 0)
         {
             description += relationships == 1
-                ? "; 1 løb er gennemført på en anden dag"
-                : $"; {relationships} løb er gennemført på andre dage";
+                ? "; 1 aktivitet er gennemført på en anden dag"
+                : $"; {relationships} aktiviteter er gennemført på andre dage";
         }
 
         return $"{RunningPresentation.Date(date)}: {description}";
@@ -537,7 +537,7 @@
         }
 
         var originalDate = OriginalActivityDate(activity);
-        if (targetDateValue == activity.Date || targetDateValue == originalDate)
+        if (targetDateValue == activity.Date)
         {
             moveError = "Vælg en anden dato for træningen.";
             return;
@@ -642,7 +642,7 @@
 
     private string StrengthActiveHref(CalendarActivityResponse activity) =>
         activity.StrengthProgramId is { } programId && activity.StrengthWorkoutId is { } workoutId
-            ? WithCalendarState($"/styrke/{programId}/træninger/{workoutId}/aktiv")
+            ? WithCalendarState($"/styrke/{programId}/træninger/{workoutId}/aktiv?planlagt={OriginalActivityDate(activity):yyyy-MM-dd}")
             : CalendarHref;
 
     private string WithCalendarState(string path) => CalendarRoute.AppendState(path, MonthStart(selectedDate), selectedDate);
@@ -683,7 +683,9 @@
         {
             if (activity.State == CalendarActivityState.Completed)
             {
-                return "Gennemført styrketræning";
+                return activity.PlannedDate is { } plannedDate && plannedDate != activity.Date
+                    ? $"Gennemført styrketræning · Planlagt {RunningPresentation.ShortDate(plannedDate)}"
+                    : "Gennemført styrketræning";
             }
 
             return activity.PlannedDate is { } strengthOriginalDate && strengthOriginalDate != activity.Date

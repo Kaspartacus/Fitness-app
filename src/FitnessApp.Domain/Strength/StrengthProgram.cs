@@ -47,6 +47,10 @@ public sealed class CompletedWorkout
     public Guid CompletionId { get; set; }
     public Guid ProgramId { get; set; }
     public Guid WorkoutId { get; set; }
+    /// <summary>
+    /// The original scheduled day for a calendar-started workout. Null preserves legacy and standalone history.
+    /// </summary>
+    public DateOnly? ScheduledOccurrenceDate { get; set; }
     public string WorkoutName { get; set; } = "";
     public DateTime CompletedAt { get; set; }
     public List<CompletedWorkoutExercise> Exercises { get; set; } = [];

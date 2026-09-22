@@ -45,7 +45,7 @@ internal static class StrengthProgramEndpoints
             Status(await service.CompleteWorkoutAsync(Owner(user), programId, workoutId,
                 new CompletionInput(request.CompletionId, request.Exercises?.Select(exercise => exercise is null ? null! : new CompletedExerciseInput(
                     exercise.ProgramExerciseId, exercise.Name, exercise.Weight, exercise.Sets, exercise.Repetitions,
-                    exercise.IsCompleted)).ToArray()), ct)));
+                    exercise.IsCompleted)).ToArray(), request.ScheduledOccurrenceDate), ct)));
         group.MapGet("/completions/{completionId:guid}", async Task<Results<Ok<CompletedWorkoutResponse>, NotFound<object>>>
             (Guid completionId, ClaimsPrincipal user, IStrengthProgramService service, CancellationToken ct) =>
             (await service.GetCompletedWorkoutAsync(Owner(user), completionId, ct)) is { } completed
