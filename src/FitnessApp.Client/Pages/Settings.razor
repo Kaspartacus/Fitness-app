@@ -17,13 +17,13 @@
             <p class="strength-overline">Profil</p>
             <h1 id="settings-title">Indstillinger</h1>
         </div>
-        @if (overview is { } settings)
+        @if (overview is { } headerSettings)
         {
             <a class="settings-notification-link" href="/indstillinger/notifikationer" aria-label="Notifikationer@UnreadNotificationLabel" title="Notifikationer">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 10a6 6 0 0 0-12 0c0 7-3 7-3 8.5h18C21 17 18 17 18 10" /><path d="M10 21h4" /></svg>
-                @if (settings.UnreadNotificationCount > 0)
+                @if (headerSettings.UnreadNotificationCount > 0)
                 {
-                    <span class="settings-notification-count" aria-hidden="true">@(settings.UnreadNotificationCount > 9 ? "9+" : settings.UnreadNotificationCount)</span>
+                    <span class="settings-notification-count" aria-hidden="true">@(headerSettings.UnreadNotificationCount > 9 ? "9+" : headerSettings.UnreadNotificationCount)</span>
                 }
             </a>
         }
@@ -163,7 +163,7 @@
     private string? pendingRegistrationError;
 
     private bool IsAdministrator => user?.Roles.Contains("Admin", StringComparer.Ordinal) is true;
-    private string UnreadNotificationLabel => overview?.UnreadNotificationCount is > 0 count
+    private string UnreadNotificationLabel => overview?.UnreadNotificationCount is int count && count > 0
         ? $": {count} ulæste"
         : string.Empty;
     private string PendingRegistrationText => pendingRegistrationError is not null

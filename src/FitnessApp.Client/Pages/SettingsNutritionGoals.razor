@@ -169,23 +169,28 @@
     private bool TryCreateRequest(out UpdateProfileSettingsRequest request)
     {
         validationError = null;
-        if (!TryParseOptionalInt(dailyCaloriesText, out var calories) || calories is < 500 or > 10000)
+        int? calories = null;
+        int? protein = null;
+        int? carbohydrates = null;
+        int? fat = null;
+        int? sugar = null;
+        if (!TryParseOptionalInt(dailyCaloriesText, out calories) || calories is < 500 or > 10000)
         {
             validationError = "Kaloriemålet skal være et helt tal mellem 500 og 10.000 kcal, eller stå tomt.";
         }
-        else if (!TryParseOptionalInt(proteinText, out var protein) || protein is < 0 or > 1000)
+        else if (!TryParseOptionalInt(proteinText, out protein) || protein is < 0 or > 1000)
         {
             validationError = "Protein skal være et helt tal mellem 0 og 1.000 g, eller stå tomt.";
         }
-        else if (!TryParseOptionalInt(carbohydrateText, out var carbohydrates) || carbohydrates is < 0 or > 1000)
+        else if (!TryParseOptionalInt(carbohydrateText, out carbohydrates) || carbohydrates is < 0 or > 1000)
         {
             validationError = "Kulhydrat skal være et helt tal mellem 0 og 1.000 g, eller stå tomt.";
         }
-        else if (!TryParseOptionalInt(fatText, out var fat) || fat is < 0 or > 1000)
+        else if (!TryParseOptionalInt(fatText, out fat) || fat is < 0 or > 1000)
         {
             validationError = "Fedt skal være et helt tal mellem 0 og 1.000 g, eller stå tomt.";
         }
-        else if (!TryParseOptionalInt(sugarText, out var sugar) || sugar is < 0 or > 1000)
+        else if (!TryParseOptionalInt(sugarText, out sugar) || sugar is < 0 or > 1000)
         {
             validationError = "Sukker skal være et helt tal mellem 0 og 1.000 g, eller stå tomt.";
         }

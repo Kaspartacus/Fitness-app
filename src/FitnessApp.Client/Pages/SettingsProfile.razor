@@ -162,6 +162,8 @@
     {
         validationError = null;
         var trimmedName = displayName.Trim();
+        decimal? heightCm = null;
+        decimal? weightKg = null;
         if (string.IsNullOrWhiteSpace(trimmedName))
         {
             validationError = "Skriv dit navn.";
@@ -170,7 +172,7 @@
         {
             validationError = "Navnet må højst have 100 tegn.";
         }
-        else if (!TryParseOptionalDecimal(heightCmText, out var heightCm))
+        else if (!TryParseOptionalDecimal(heightCmText, out heightCm))
         {
             validationError = "Angiv højden som et tal, for eksempel 175.";
         }
@@ -178,7 +180,7 @@
         {
             validationError = "Højden skal være mellem 50 og 300 cm.";
         }
-        else if (!TryParseOptionalDecimal(weightKgText, out var weightKg))
+        else if (!TryParseOptionalDecimal(weightKgText, out weightKg))
         {
             validationError = "Angiv vægten som et tal, for eksempel 72,5.";
         }
