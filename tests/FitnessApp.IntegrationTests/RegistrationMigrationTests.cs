@@ -19,6 +19,7 @@ public sealed class RegistrationMigrationTests
     private const string RunningModuleMigration = "20260910221108_AddRunningModule";
     private const string CalendarOccurrenceMovesMigration = "20260914193743_AddCalendarOccurrenceMoves";
     private const string SettingsAndInAppNotificationsMigration = "20260922000000_AddSettingsAndInAppNotifications";
+    private const string CompletedWorkoutOccurrenceLinkMigration = "20260922145225_AddCompletedWorkoutOccurrenceLink";
 
     [Fact]
     public async Task LatestMigrationAppliesToEmptyDatabase()
@@ -33,7 +34,8 @@ public sealed class RegistrationMigrationTests
             Assert.Equal(
                 [InitialMigration, RegistrationMigration, PasswordResetMigration, StrengthProgramsMigration, ExerciseDetailsMigration,
                     StrengthTrainingFlowMigration, CompletedWorkoutCompletionIdMigration, RunningModuleMigration,
-                    CalendarOccurrenceMovesMigration, SettingsAndInAppNotificationsMigration],
+                    CalendarOccurrenceMovesMigration, SettingsAndInAppNotificationsMigration,
+                    CompletedWorkoutOccurrenceLinkMigration],
                 await dbContext.Database.GetAppliedMigrationsAsync());
             var columns = await ReadUserColumnsAsync(databasePath);
             Assert.Contains("RegisteredAt", columns);
@@ -52,6 +54,7 @@ public sealed class RegistrationMigrationTests
             Assert.Contains("WorkoutId", await ReadColumnsAsync(databasePath, "ProgramScheduleEntries"));
             Assert.Contains("IsCompleted", await ReadColumnsAsync(databasePath, "CompletedWorkoutExercises"));
             Assert.Contains("CompletionId", await ReadColumnsAsync(databasePath, "CompletedWorkouts"));
+            Assert.Contains("ScheduledOccurrenceDate", await ReadColumnsAsync(databasePath, "CompletedWorkouts"));
             Assert.Contains("TargetDate", await ReadColumnsAsync(databasePath, "CalendarOccurrenceMoves"));
             Assert.Contains("TrainingRemindersEnabled", await ReadColumnsAsync(databasePath, "UserSettings"));
             Assert.Contains("SourceKey", await ReadColumnsAsync(databasePath, "InAppNotifications"));

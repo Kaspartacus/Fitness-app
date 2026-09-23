@@ -1,6 +1,7 @@
 @page "/styrke/{ProgramId:guid}/træninger/{WorkoutId:guid}/aktiv"
 @attribute [Authorize]
 @implements IDisposable
+@using System.Globalization
 @using FitnessApp.Client.Calendar
 @using FitnessApp.Contracts.Strength
 @using FitnessApp.Client.Strength
@@ -56,6 +57,7 @@
 @code {
     [Parameter] public Guid ProgramId { get; set; }
     [Parameter] public Guid WorkoutId { get; set; }
+    [SupplyParameterFromQuery(Name = "planlagt")] public string? RequestedOccurrenceDate { get; set; }
     [SupplyParameterFromQuery(Name = "maaned")] public string? RequestedMonth { get; set; }
     [SupplyParameterFromQuery(Name = "dato")] public string? RequestedDate { get; set; }
     private PlannedWorkoutResponse? workout;
@@ -73,6 +75,8 @@
     private Timer? timer;
 
     private string BackUrl => CalendarRoute.BackPath(RequestedMonth, RequestedDate, $"/styrke/{ProgramId}");
+    private DateOnly? ScheduledOccurrenceDate => DateOnly.TryParseExact(RequestedOccurrenceDate, "yyyy-MM-dd",
+        CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
 
     private int completedCount => logs.Count(log => log.IsCompleted);
     private int Progress => logs.Count == 0 ? 0 : completedCount * 100 / logs.Count;
@@ -102,7 +106,7 @@
     {
         if (busy) return;
         busy = true;
-        var request = new CompleteWorkoutRequest { CompletionId = completionId, Exercises = logs.Select(log => new CompletedExerciseRequest { ProgramExerciseId = log.ProgramExerciseId, Name = log.Name, Weight = log.Weight, Sets = log.Sets, Repetitions = log.Repetitions, IsCompleted = log.IsCompleted }).ToList() };
+        var request = new CompleteWorkoutRequest { CompletionId = completionId, ScheduledOccurrenceDate = ScheduledOccurrenceDate, Exercises = logs.Select(log => new CompletedExerciseRequest { ProgramExerciseId = log.ProgramExerciseId, Name = log.Name, Weight = log.Weight, Sets = log.Sets, Repetitions = log.Repetitions, IsCompleted = log.IsCompleted }).ToList() };
         var result = await Programs.CompleteWorkoutAsync(ProgramId, WorkoutId, request);
         busy = false;
         if (result.Succeeded) { hasActiveDraft = false; Navigation.NavigateTo(BackUrl); return; }

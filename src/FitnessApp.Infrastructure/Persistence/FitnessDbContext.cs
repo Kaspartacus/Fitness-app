@@ -71,6 +71,10 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
             entity.Property(workout => workout.WorkoutName).HasMaxLength(100).IsRequired();
             entity.HasIndex(workout => new { workout.UserId, workout.CompletedAt });
             entity.HasIndex(workout => new { workout.UserId, workout.CompletionId }).IsUnique();
+            entity.HasIndex(workout => new
+                { workout.UserId, workout.ProgramId, workout.WorkoutId, workout.ScheduledOccurrenceDate })
+                .IsUnique()
+                .HasFilter("\"ScheduledOccurrenceDate\" IS NOT NULL");
             entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(workout => workout.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasMany(workout => workout.Exercises).WithOne().HasForeignKey(exercise => exercise.CompletedWorkoutId)

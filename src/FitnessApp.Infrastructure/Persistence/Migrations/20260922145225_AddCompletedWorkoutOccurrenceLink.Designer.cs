@@ -3,6 +3,7 @@ using System;
 using FitnessApp.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FitnessApp.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FitnessDbContext))]
-    partial class FitnessDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260922145225_AddCompletedWorkoutOccurrenceLink")]
+    partial class AddCompletedWorkoutOccurrenceLink
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.3");
@@ -59,106 +62,6 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("CalendarOccurrenceMoves");
-                });
-
-            modelBuilder.Entity("FitnessApp.Domain.Settings.InAppNotification", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Kind")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("ReadAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SourceKey")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("TargetPath")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "ReadAtUtc", "CreatedAtUtc");
-
-                    b.HasIndex("UserId", "SourceKey")
-                        .IsUnique();
-
-                    b.ToTable("InAppNotifications");
-                });
-
-            modelBuilder.Entity("FitnessApp.Domain.Settings.UserSettings", b =>
-                {
-                    b.Property<string>("UserId")
-                        .HasMaxLength(450)
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("AdminRequestNotificationsEnabled")
-                        .ValueGeneratedOnAdd()
-                        .HasDefaultValue(true)
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("CarbohydrateTargetGrams")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("DailyCaloriesTarget")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("FatTargetGrams")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("GarminDemoConnectedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal?>("HeightCm")
-                        .HasPrecision(5, 1)
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsGarminDemoConnected")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("ProteinTargetGrams")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("SugarTargetGrams")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("TrainingRemindersEnabled")
-                        .ValueGeneratedOnAdd()
-                        .HasDefaultValue(true)
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal?>("WeightKg")
-                        .HasPrecision(5, 1)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("UserId");
-
-                    b.ToTable("UserSettings");
                 });
 
             modelBuilder.Entity("FitnessApp.Domain.Running.RunningPlan", b =>
@@ -788,24 +691,6 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                     b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("FitnessApp.Domain.Settings.InAppNotification", b =>
-                {
-                    b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("FitnessApp.Domain.Settings.UserSettings", b =>
-                {
-                    b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithOne()
-                        .HasForeignKey("FitnessApp.Domain.Settings.UserSettings", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

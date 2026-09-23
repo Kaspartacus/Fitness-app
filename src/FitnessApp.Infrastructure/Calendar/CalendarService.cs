@@ -133,6 +133,8 @@ public sealed class CalendarService(FitnessDbContext db, TimeProvider timeProvid
                                            schedule.DayOfWeek))
             .ToListAsync(cancellationToken);
 
+        var today = Today();
+        var firstScheduledStrengthDate = rangeStart < today ? today : rangeStart;
         var completionStart = CopenhagenMidnightUtc(rangeStart);
         var completionEnd = CopenhagenMidnightUtc(rangeEnd.AddDays(1));
         var completedStrength = await db.CompletedWorkouts.AsNoTracking()
@@ -141,8 +143,65 @@ public sealed class CalendarService(FitnessDbContext db, TimeProvider timeProvid
             .Select(workout => new CompletedStrengthRow(
                 workout.Id,
                 workout.CompletedAt,
-                workout.WorkoutName))
+                workout.WorkoutName,
+                workout.ProgramId,
+                workout.WorkoutId,
+                workout.ScheduledOccurrenceDate))
             .ToListAsync(cancellationToken);
+        var completedStrengthOccurrenceKeys = completedStrength
+            .Where(workout => workout.ScheduledOccurrenceDate is not null)
+            .Select(workout => new StrengthOccurrenceKey(workout.ProgramId, workout.WorkoutId,
+                workout.ScheduledOccurrenceDate!.Value))
+            .ToHashSet();
+        if (firstScheduledStrengthDate <= rangeEnd)
+        {
+            completedStrengthOccurrenceKeys.UnionWith(await db.CompletedWorkouts.AsNoTracking()
+                .Where(workout => workout.UserId == userId && workout.ScheduledOccurrenceDate != null &&
+                                  workout.ScheduledOccurrenceDate >= firstScheduledStrengthDate &&
+                                  workout.ScheduledOccurrenceDate <= rangeEnd)
+                .Select(workout => new StrengthOccurrenceKey(workout.ProgramId, workout.WorkoutId,
+                    workout.ScheduledOccurrenceDate!.Value))
+                .ToListAsync(cancellationToken));
+        }
+        completedStrengthOccurrenceKeys.UnionWith(await (from completed in db.CompletedWorkouts.AsNoTracking()
+                                                           where completed.UserId == userId &&
+                                                                 completed.ScheduledOccurrenceDate != null
+                                                           join move in db.CalendarOccurrenceMoves.AsNoTracking()
+                                                               on new
+                                                               {
+                                                                   completed.UserId,
+                                                                   ScopeId = completed.ProgramId,
+                                                                   SourceId = completed.WorkoutId,
+                                                                   OriginalDate = completed.ScheduledOccurrenceDate!.Value
+                                                               }
+                                                               equals new { move.UserId, move.ScopeId, move.SourceId, move.OriginalDate }
+                                                           where move.Kind == CalendarOccurrenceKind.Strength &&
+                                                                 move.TargetDate >= rangeStart && move.TargetDate <= rangeEnd
+                                                           select new StrengthOccurrenceKey(completed.ProgramId,
+                                                               completed.WorkoutId,
+                                                               completed.ScheduledOccurrenceDate!.Value))
+            .ToListAsync(cancellationToken));
+        var completedStrengthIds = completedStrength.Where(workout => workout.ScheduledOccurrenceDate is not null)
+            .Select(workout => workout.Id)
+            .ToArray();
+        var completedStrengthMoveDates = completedStrengthIds.Length == 0
+            ? new Dictionary<Guid, DateOnly>()
+            : (await (from completed in db.CompletedWorkouts.AsNoTracking()
+                      where completedStrengthIds.Contains(completed.Id) && completed.ScheduledOccurrenceDate != null
+                      join move in db.CalendarOccurrenceMoves.AsNoTracking()
+                          on new
+                          {
+                              completed.UserId,
+                              ScopeId = completed.ProgramId,
+                              SourceId = completed.WorkoutId,
+                              OriginalDate = completed.ScheduledOccurrenceDate!.Value
+                          }
+                          equals new { move.UserId, move.ScopeId, move.SourceId, move.OriginalDate }
+                      where move.Kind == CalendarOccurrenceKind.Strength
+                      select new CompletedStrengthMoveRow(completed.Id, move.TargetDate))
+                .ToListAsync(cancellationToken))
+                .GroupBy(item => item.CompletedWorkoutId)
+                .ToDictionary(group => group.Key, group => group.First().TargetDate);
 
         var resultRowsById = resultsInRange.ToDictionary(result => result.Id);
         foreach (var result in resultsForScheduledDates)
@@ -160,8 +219,6 @@ public sealed class CalendarService(FitnessDbContext db, TimeProvider timeProvid
                 .GroupBy(move => move.SourceId)
                 .ToDictionary(group => group.Key, group => group.First());
 
-        var today = Today();
-        var firstScheduledStrengthDate = rangeStart < today ? today : rangeStart;
         var scheduledStrengthDays = firstScheduledStrengthDate > rangeEnd
             ? 0
             : rangeEnd.DayNumber - firstScheduledStrengthDate.DayNumber + 1;
@@ -250,7 +307,8 @@ public sealed class CalendarService(FitnessDbContext db, TimeProvider timeProvid
         {
             foreach (var schedule in strengthSchedules.Where(schedule => schedule.DayOfWeek == date.DayOfWeek))
             {
-                if (strengthMovesByOccurrence.ContainsKey(new StrengthOccurrenceKey(schedule.ProgramId, schedule.WorkoutId, date)))
+                var occurrence = new StrengthOccurrenceKey(schedule.ProgramId, schedule.WorkoutId, date);
+                if (strengthMovesByOccurrence.ContainsKey(occurrence) || completedStrengthOccurrenceKeys.Contains(occurrence))
                 {
                     continue;
                 }
@@ -265,7 +323,8 @@ public sealed class CalendarService(FitnessDbContext db, TimeProvider timeProvid
             var schedule = strengthSchedules.FirstOrDefault(candidate =>
                 candidate.ProgramId == move.ScopeId && candidate.WorkoutId == move.SourceId &&
                 candidate.DayOfWeek == move.OriginalDate.DayOfWeek);
-            if (schedule is not null)
+            var occurrence = new StrengthOccurrenceKey(move.ScopeId, move.SourceId, move.OriginalDate);
+            if (schedule is not null && !completedStrengthOccurrenceKeys.Contains(occurrence))
             {
                 activities.Add(PlannedStrengthActivity(schedule, move.TargetDate, move.OriginalDate));
             }
@@ -281,7 +340,9 @@ public sealed class CalendarService(FitnessDbContext db, TimeProvider timeProvid
             null,
             null,
             null,
-            null,
+            workout.ScheduledOccurrenceDate is { } originalDate
+                ? completedStrengthMoveDates.GetValueOrDefault(workout.Id, originalDate)
+                : null,
             null,
             null,
             null,
@@ -301,7 +362,7 @@ public sealed class CalendarService(FitnessDbContext db, TimeProvider timeProvid
         MoveCalendarOccurrenceInput input, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(userId) || sessionId == Guid.Empty || input is null ||
-            input.OriginalDate == default || input.TargetDate == default || input.TargetDate == input.OriginalDate)
+            input.OriginalDate == default || input.TargetDate == default)
         {
             return new CalendarMoveResult(CalendarMoveStatus.Invalid);
         }
@@ -355,7 +416,7 @@ public sealed class CalendarService(FitnessDbContext db, TimeProvider timeProvid
         MoveCalendarOccurrenceInput input, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(userId) || programId == Guid.Empty || workoutId == Guid.Empty || input is null ||
-            input.OriginalDate == default || input.TargetDate == default || input.TargetDate == input.OriginalDate)
+            input.OriginalDate == default || input.TargetDate == default)
         {
             return new CalendarMoveResult(CalendarMoveStatus.Invalid);
         }
@@ -370,6 +431,13 @@ public sealed class CalendarService(FitnessDbContext db, TimeProvider timeProvid
         if (!sourceExists)
         {
             return new CalendarMoveResult(CalendarMoveStatus.NotFound);
+        }
+
+        if (await db.CompletedWorkouts.AsNoTracking().AnyAsync(workout => workout.UserId == userId &&
+                workout.ProgramId == programId && workout.WorkoutId == workoutId &&
+                workout.ScheduledOccurrenceDate == input.OriginalDate, cancellationToken))
+        {
+            return new CalendarMoveResult(CalendarMoveStatus.Invalid);
         }
 
         var existing = await FindMoveAsync(userId, CalendarOccurrenceKind.Strength, programId, workoutId,
@@ -414,7 +482,16 @@ public sealed class CalendarService(FitnessDbContext db, TimeProvider timeProvid
         CancellationToken cancellationToken)
     {
         var now = UtcNow();
-        if (existing is null)
+        if (targetDate == originalDate)
+        {
+            if (existing is null)
+            {
+                return new CalendarMoveResult(CalendarMoveStatus.Invalid);
+            }
+
+            db.CalendarOccurrenceMoves.Remove(existing);
+        }
+        else if (existing is null)
         {
             db.CalendarOccurrenceMoves.Add(new CalendarOccurrenceMove
             {
@@ -502,7 +579,10 @@ public sealed class CalendarService(FitnessDbContext db, TimeProvider timeProvid
 
     private sealed record StrengthScheduleRow(Guid ProgramId, Guid WorkoutId, string WorkoutName, DayOfWeek DayOfWeek);
 
-    private sealed record CompletedStrengthRow(Guid Id, DateTime CompletedAt, string WorkoutName);
+    private sealed record CompletedStrengthRow(Guid Id, DateTime CompletedAt, string WorkoutName, Guid ProgramId,
+        Guid WorkoutId, DateOnly? ScheduledOccurrenceDate);
+
+    private sealed record CompletedStrengthMoveRow(Guid CompletedWorkoutId, DateOnly TargetDate);
 
     private sealed record RunningMoveSource(Guid SessionId, Guid PlanId, DateOnly Date, DateOnly PlanTargetDate,
         bool Started, bool HasResult);

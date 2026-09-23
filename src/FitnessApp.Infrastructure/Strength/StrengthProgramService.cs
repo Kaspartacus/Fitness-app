@@ -1,4 +1,5 @@
 using FitnessApp.Application.Strength;
+using FitnessApp.Domain.Calendar;
 using FitnessApp.Domain.Strength;
 using FitnessApp.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -14,17 +15,73 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
         var programs = await QueryPrograms().Where(program => program.UserId == userId)
             .OrderBy(program => program.CreatedAt).ThenBy(program => program.Id)
             .ToListAsync(cancellationToken);
-        var today = programs.SelectMany(program => program.Schedule
-                .Where(entry => entry.DayOfWeek == Today().DayOfWeek && entry.WorkoutId is not null)
-                .Select(entry => new { Program = program, Entry = entry }))
-            .Select(item => item.Entry.WorkoutId is { } workoutId
-                ? item.Program.Workouts.FirstOrDefault(workout => workout.Id == workoutId) is { } workout
-                    ? new PlannedWorkoutData(item.Program.Id, item.Program.Name, workout.Id, workout.Name,
-                        workout.Exercises.OrderBy(exercise => exercise.Position).Select(exercise => MapActive(exercise)).ToArray())
-                    : null
-                : null)
-            .FirstOrDefault(workout => workout is not null);
-        return new StrengthOverviewData(programs.Select(Map).ToArray(), today);
+        var today = Today();
+        var occurrenceMoves = await db.CalendarOccurrenceMoves.AsNoTracking()
+            .Where(move => move.UserId == userId && move.Kind == CalendarOccurrenceKind.Strength &&
+                           (move.OriginalDate == today || move.TargetDate == today))
+            .ToListAsync(cancellationToken);
+        var movesByOccurrence = occurrenceMoves
+            .GroupBy(move => new StrengthOccurrenceKey(move.ScopeId, move.SourceId, move.OriginalDate))
+            .ToDictionary(group => group.Key, group => group.First());
+        var completedOccurrences = (await db.CompletedWorkouts.AsNoTracking()
+                .Where(workout => workout.UserId == userId && workout.ScheduledOccurrenceDate == today)
+                .Select(workout => new StrengthOccurrenceKey(workout.ProgramId, workout.WorkoutId,
+                    workout.ScheduledOccurrenceDate!.Value))
+                .ToListAsync(cancellationToken))
+            .ToHashSet();
+        var completedMovedToToday = await (from completed in db.CompletedWorkouts.AsNoTracking()
+                                            where completed.UserId == userId &&
+                                                  completed.ScheduledOccurrenceDate != null
+                                            join move in db.CalendarOccurrenceMoves.AsNoTracking()
+                                                on new
+                                                {
+                                                    completed.UserId,
+                                                    ScopeId = completed.ProgramId,
+                                                    SourceId = completed.WorkoutId,
+                                                    OriginalDate = completed.ScheduledOccurrenceDate!.Value
+                                                }
+                                                equals new { move.UserId, move.ScopeId, move.SourceId, move.OriginalDate }
+                                            where move.Kind == CalendarOccurrenceKind.Strength && move.TargetDate == today
+                                            select new StrengthOccurrenceKey(completed.ProgramId, completed.WorkoutId,
+                                                completed.ScheduledOccurrenceDate!.Value))
+            .ToListAsync(cancellationToken);
+        completedOccurrences.UnionWith(completedMovedToToday);
+
+        var candidates = new List<PlannedWorkoutData>();
+        foreach (var program in programs)
+        {
+            foreach (var entry in program.Schedule.Where(entry => entry.DayOfWeek == today.DayOfWeek &&
+                         entry.WorkoutId is not null))
+            {
+                var workout = program.Workouts.FirstOrDefault(candidate => candidate.Id == entry.WorkoutId);
+                if (workout is null)
+                {
+                    continue;
+                }
+
+                var key = new StrengthOccurrenceKey(program.Id, workout.Id, today);
+                if (!movesByOccurrence.ContainsKey(key) && !completedOccurrences.Contains(key))
+                {
+                    candidates.Add(PlannedWorkout(program, workout));
+                }
+            }
+        }
+
+        foreach (var move in occurrenceMoves.Where(move => move.TargetDate == today))
+        {
+            var program = programs.FirstOrDefault(candidate => candidate.Id == move.ScopeId);
+            var workout = program?.Workouts.FirstOrDefault(candidate => candidate.Id == move.SourceId);
+            var key = new StrengthOccurrenceKey(move.ScopeId, move.SourceId, move.OriginalDate);
+            if (program is not null && workout is not null &&
+                program.Schedule.Any(entry => entry.DayOfWeek == move.OriginalDate.DayOfWeek &&
+                                              entry.WorkoutId == workout.Id) &&
+                !completedOccurrences.Contains(key))
+            {
+                candidates.Add(PlannedWorkout(program, workout));
+            }
+        }
+
+        return new StrengthOverviewData(programs.Select(Map).ToArray(), candidates.FirstOrDefault());
     }
 
     public async Task<IReadOnlyList<ProgramData>> ListAsync(string userId, CancellationToken cancellationToken) =>
@@ -249,6 +306,13 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
             return ProgramStatus.NotFound;
         }
 
+        if (input.ScheduledOccurrenceDate is { } scheduledOccurrenceDate &&
+            !await CanCompleteScheduledOccurrenceAsync(userId, programId, workoutId, scheduledOccurrenceDate,
+                cancellationToken))
+        {
+            return ProgramStatus.Invalid;
+        }
+
         var plannedByExerciseId = planned.Exercises.ToDictionary(exercise => exercise.Id);
         if (input.Exercises is not { Count: > 0 } || input.Exercises.Count != planned.Exercises.Count ||
             input.Exercises.Any(exercise => exercise is null || exercise.ProgramExerciseId is null ||
@@ -266,6 +330,7 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
             CompletionId = input.CompletionId,
             ProgramId = programId,
             WorkoutId = workoutId,
+            ScheduledOccurrenceDate = input.ScheduledOccurrenceDate,
             WorkoutName = planned.WorkoutName,
             CompletedAt = UtcNow(),
             Exercises = input.Exercises.Select((exercise, position) => new CompletedWorkoutExercise
@@ -369,9 +434,32 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
         int? previousSets = null, int? previousRepetitions = null) => new(exercise.Id, exercise.Name, exercise.Weight,
         exercise.Sets, exercise.Repetitions, exercise.Note, previousWeight, previousSets, previousRepetitions);
 
+    private static PlannedWorkoutData PlannedWorkout(StrengthProgram program, ProgramWorkout workout) => new(
+        program.Id,
+        program.Name,
+        workout.Id,
+        workout.Name,
+        workout.Exercises.OrderBy(exercise => exercise.Position).Select(exercise => MapActive(exercise)).ToArray());
+
     private Task<CompletedWorkout?> FindCompletionAsync(string userId, Guid completionId, CancellationToken cancellationToken) =>
         db.CompletedWorkouts.AsNoTracking().Include(workout => workout.Exercises).SingleOrDefaultAsync(
             workout => workout.UserId == userId && workout.CompletionId == completionId, cancellationToken);
+
+    private async Task<bool> CanCompleteScheduledOccurrenceAsync(string userId, Guid programId, Guid workoutId,
+        DateOnly scheduledOccurrenceDate, CancellationToken cancellationToken)
+    {
+        var isScheduled = await (from program in db.StrengthPrograms.AsNoTracking()
+                                 join schedule in db.ProgramScheduleEntries.AsNoTracking() on program.Id equals schedule.ProgramId
+                                 join workout in db.ProgramWorkouts.AsNoTracking() on schedule.WorkoutId equals (Guid?)workout.Id
+                                 where program.Id == programId && program.UserId == userId && workout.Id == workoutId &&
+                                       workout.ProgramId == program.Id &&
+                                       schedule.DayOfWeek == scheduledOccurrenceDate.DayOfWeek
+                                 select schedule.Id)
+            .AnyAsync(cancellationToken);
+        return isScheduled && !await db.CompletedWorkouts.AsNoTracking().AnyAsync(workout =>
+            workout.UserId == userId && workout.ProgramId == programId && workout.WorkoutId == workoutId &&
+            workout.ScheduledOccurrenceDate == scheduledOccurrenceDate, cancellationToken);
+    }
 
     private DateOnly Today() => DateOnly.FromDateTime(
         TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), CopenhagenTimeZone).DateTime);
@@ -398,7 +486,8 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
     }
 
     private static bool MatchesCompletion(CompletedWorkout completed, Guid programId, Guid workoutId, CompletionInput input) =>
-        completed.ProgramId == programId && completed.WorkoutId == workoutId && input.Exercises is { } exercises &&
+        completed.ProgramId == programId && completed.WorkoutId == workoutId &&
+        completed.ScheduledOccurrenceDate == input.ScheduledOccurrenceDate && input.Exercises is { } exercises &&
         completed.Exercises.OrderBy(exercise => exercise.Position).Zip(exercises).All(pair =>
             pair.First.ProgramExerciseId == pair.Second.ProgramExerciseId &&
             pair.First.Weight == pair.Second.Weight &&
@@ -406,4 +495,6 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
             pair.First.Repetitions == pair.Second.Repetitions &&
             pair.First.IsCompleted == pair.Second.IsCompleted) &&
         completed.Exercises.Count == exercises.Count;
+
+    private readonly record struct StrengthOccurrenceKey(Guid ProgramId, Guid WorkoutId, DateOnly OriginalDate);
 }
