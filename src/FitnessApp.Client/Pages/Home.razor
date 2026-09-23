@@ -21,9 +21,7 @@
                 <h1 id="home-title">Hej, @user.DisplayName</h1>
                 <p>Velkommen tilbage.</p>
             </div>
-            <button class="button button-quiet" type="button" @onclick="LogoutAsync" disabled="@isLoggingOut">
-                @(isLoggingOut ? "Logger ud…" : "Log ud")
-            </button>
+            <ProfileSettingsLink />
         </header>
 
         <section class="dashboard-grid" aria-label="Din konto">
@@ -82,7 +80,6 @@
 @code {
     private FitnessApp.Contracts.Authentication.AuthenticatedUserResponse? user;
     private bool isLoading = true;
-    private bool isLoggingOut;
     private bool isRequestInProgress;
     private string? errorMessage;
 
@@ -119,21 +116,4 @@
         }
     }
 
-    private async Task LogoutAsync()
-    {
-        if (isLoggingOut)
-        {
-            return;
-        }
-
-        isLoggingOut = true;
-        try
-        {
-            await Authentication.LogoutAsync();
-        }
-        finally
-        {
-            isLoggingOut = false;
-        }
-    }
 }

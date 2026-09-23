@@ -1,0 +1,36 @@
+@page "/indstillinger/sikkerhed"
+@attribute [Authorize]
+
+<PageTitle>Sikkerhed og privatliv</PageTitle>
+
+<main class="strength-app settings-app strength-with-bottom-nav" aria-labelledby="settings-security-title">
+    <header class="strength-back-header settings-page-header">
+        <a class="strength-icon-button" href="/indstillinger" aria-label="Tilbage til indstillinger" title="Tilbage til indstillinger">←</a>
+        <div>
+            <p class="strength-overline">App</p>
+            <h1 id="settings-security-title">Sikkerhed og privatliv</h1>
+        </div>
+        <span class="strength-header-spacer" aria-hidden="true"></span>
+    </header>
+
+    <div class="settings-page-content">
+        <section class="settings-info-card">
+            <h2>Adgangskode</h2>
+            <p>Brug den eksisterende sikre adgangskodeproces, hvis du vil vælge en ny adgangskode. Vi viser eller gemmer aldrig din nuværende adgangskode i indstillinger.</p>
+            <a class="strength-primary-button" href="/glemt-adgangskode">Nulstil adgangskode</a>
+        </section>
+
+        <section class="settings-section settings-info-card">
+            <h2>Dine data</h2>
+            <p>Indstillinger, træning og notifikationer hører kun til din godkendte konto. Serveren afgør altid, hvilke data du kan se eller ændre.</p>
+        </section>
+
+        <section class="settings-section settings-info-card">
+            <h2>Notifikationer</h2>
+            <p>Notifikationer i denne version er kun tilgængelige inde i FitnessApp. Browser-push og e-mail er ikke slået til.</p>
+            <a class="strength-outline-button" href="/indstillinger/notifikationer">Se notifikationsindstillinger</a>
+        </section>
+    </div>
+
+    <StrengthBottomNavigation Active="settings" />
+</main>

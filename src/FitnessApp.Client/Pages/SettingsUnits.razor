@@ -1,0 +1,38 @@
+@page "/indstillinger/enheder"
+@attribute [Authorize]
+
+<PageTitle>Enheder</PageTitle>
+
+<main class="strength-app settings-app strength-with-bottom-nav" aria-labelledby="settings-units-title">
+    <header class="strength-back-header settings-page-header">
+        <a class="strength-icon-button" href="/indstillinger" aria-label="Tilbage til indstillinger" title="Tilbage til indstillinger">←</a>
+        <div>
+            <p class="strength-overline">Konto</p>
+            <h1 id="settings-units-title">Enheder</h1>
+        </div>
+        <span class="strength-header-spacer" aria-hidden="true"></span>
+    </header>
+
+    <div class="settings-page-content">
+        <section class="settings-info-card">
+            <h2>Enheder i FitnessApp</h2>
+            <p>De samme enheder bruges allerede i styrketræning, løb og kalender, så dine registreringer vises ens overalt.</p>
+        </section>
+
+        <section class="settings-section" aria-label="Aktive enheder">
+            <div class="settings-unit-list">
+                <div class="settings-unit-row"><span>Vægt</span><strong>kg</strong></div>
+                <div class="settings-unit-row"><span>Mad</span><strong>g</strong></div>
+                <div class="settings-unit-row"><span>Distance</span><strong>km</strong></div>
+                <div class="settings-unit-row"><span>Tempo</span><strong>min/km</strong></div>
+            </div>
+        </section>
+
+        <section class="settings-section settings-info-card" aria-label="Tilgængelighed">
+            <h2>Faste enheder i denne version</h2>
+            <p>Skift mellem enhedssystemer er ikke tilgængeligt endnu. Der gemmes derfor ikke et valg, som appen ikke kan anvende korrekt.</p>
+        </section>
+    </div>
+
+    <StrengthBottomNavigation Active="settings" />
+</main>

@@ -1,0 +1,175 @@
+@page "/indstillinger/integrationer"
+@attribute [Authorize]
+@using System.Globalization
+@using FitnessApp.Client.Settings
+@using FitnessApp.Contracts.Settings
+@inject SettingsClient SettingsApi
+
+<PageTitle>Integrationer</PageTitle>
+
+<main class="strength-app settings-app strength-with-bottom-nav" aria-labelledby="integrations-title">
+    <header class="strength-back-header settings-page-header">
+        <a class="strength-icon-button" href="/indstillinger" aria-label="Tilbage til indstillinger" title="Tilbage til indstillinger">←</a>
+        <div>
+            <p class="strength-overline">App</p>
+            <h1 id="integrations-title">Integrationer</h1>
+        </div>
+        <span class="strength-header-spacer" aria-hidden="true"></span>
+    </header>
+
+    <div class="settings-page-content">
+        @if (isLoading)
+        {
+            <p class="strength-feedback" role="status">Indlæser integrationer…</p>
+        }
+        else if (loadError is not null)
+        {
+            <section class="strength-status-card" role="alert">
+                <p>@loadError</p>
+                <button class="strength-secondary-button" type="button" @onclick="LoadAsync" disabled="@isMutating">Prøv igen</button>
+            </section>
+        }
+        else if (connection is { } garmin)
+        {
+            <section class="settings-provider-card" aria-labelledby="garmin-title">
+                <div class="settings-provider-heading">
+                    <div>
+                        <h2 id="garmin-title">Garmin</h2>
+                        <p>@ConnectionDescription</p>
+                    </div>
+                    <span class="settings-provider-badge @(garmin.IsConnected ? "is-connected" : null)">@(garmin.IsConnected ? "Forbundet" : "Demo")</span>
+                </div>
+
+                <p class="settings-provider-disclaimer">Dette er en demo-/mockforbindelse. FitnessApp beder ikke om Garmin-oplysninger, synkroniserer ikke data og importerer ikke aktiviteter.</p>
+
+                @if (garmin.IsConnected && garmin.ConnectedAt is { } connectedAt)
+                {
+                    <p class="settings-save-status" role="status">Forbundet som demo @FormatConnectedAt(connectedAt).</p>
+                }
+
+                @if (actionError is not null)
+                {
+                    <p class="strength-field-error" role="alert">@actionError</p>
+                }
+
+                <div class="settings-provider-actions">
+                    @if (garmin.IsConnected)
+                    {
+                        <button class="strength-outline-button" type="button" @onclick="OpenDisconnectConfirmation" disabled="@isMutating">Afbryd demo</button>
+                    }
+                    else
+                    {
+                        <button class="strength-primary-button" type="button" @onclick="OpenConnectConfirmation" disabled="@isMutating">Forbind Garmin-demo</button>
+                    }
+                </div>
+            </section>
+
+            <section class="settings-section settings-info-card" aria-label="Andre integrationer">
+                <h2>Andre tjenester</h2>
+                <p>Der er ingen andre integrationer i denne version. Tilslut ikke en tredjepartskonto ud fra denne skærm.</p>
+            </section>
+        }
+    </div>
+
+    <ModalDialog IsOpen="@isConfirmationOpen" Title="@ConfirmationTitle" Description="@ConfirmationDescription"
+                 InitialFocusSelector="[data-modal-cancel]" DismissOnBackdrop="@(!isMutating)" DismissOnEscape="@(!isMutating)"
+                 ShowCloseButton="@(!isMutating)" OnDismiss="CloseConfirmation">
+        <div class="app-modal-actions">
+            <button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseConfirmation" disabled="@isMutating">Annuller</button>
+            <button class="@(isDisconnectConfirmation ? "strength-danger-button" : "strength-primary-button")" type="button" @onclick="ConfirmConnectionActionAsync" disabled="@isMutating">
+                @(isMutating ? "Gemmer…" : isDisconnectConfirmation ? "Afbryd demo" : "Forbind demo")
+            </button>
+        </div>
+    </ModalDialog>
+
+    <StrengthBottomNavigation Active="settings" />
+</main>
+
+@code {
+    private GarminMockConnectionResponse? connection;
+    private bool isLoading = true;
+    private bool isMutating;
+    private bool isConfirmationOpen;
+    private bool isDisconnectConfirmation;
+    private string? loadError;
+    private string? actionError;
+
+    private string ConnectionDescription => connection?.IsConnected is true
+        ? "Din demo-forbindelse er aktiv på denne konto."
+        : "Forbind en isoleret Garmin-demo på denne konto.";
+    private string ConfirmationTitle => isDisconnectConfirmation ? "Afbryd Garmin-demo?" : "Forbind Garmin-demo?";
+    private string ConfirmationDescription => isDisconnectConfirmation
+        ? "Demo-forbindelsen slettes fra denne konto. Der er ingen synkroniserede eller importerede aktiviteter at fjerne."
+        : "Det opretter kun en demo-status på din konto. Der åbnes ikke Garmin-login, og ingen data synkroniseres eller importeres.";
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (isLoading && connection is not null || isMutating)
+        {
+            return;
+        }
+
+        isLoading = true;
+        loadError = null;
+        var result = await SettingsApi.GetOverviewAsync();
+        isLoading = false;
+        if (!result.Succeeded || result.Value is null)
+        {
+            loadError = result.Error ?? "Integrationerne kunne ikke indlæses. Prøv igen.";
+            return;
+        }
+
+        connection = result.Value.Garmin;
+        actionError = null;
+    }
+
+    private void OpenConnectConfirmation()
+    {
+        isDisconnectConfirmation = false;
+        isConfirmationOpen = true;
+        actionError = null;
+    }
+
+    private void OpenDisconnectConfirmation()
+    {
+        isDisconnectConfirmation = true;
+        isConfirmationOpen = true;
+        actionError = null;
+    }
+
+    private void CloseConfirmation()
+    {
+        if (!isMutating)
+        {
+            isConfirmationOpen = false;
+        }
+    }
+
+    private async Task ConfirmConnectionActionAsync()
+    {
+        if (isMutating)
+        {
+            return;
+        }
+
+        isMutating = true;
+        actionError = null;
+        var result = isDisconnectConfirmation
+            ? await SettingsApi.DisconnectGarminDemoAsync()
+            : await SettingsApi.ConnectGarminDemoAsync();
+        isMutating = false;
+        if (!result.Succeeded || result.Value is null)
+        {
+            actionError = result.Error ?? "Forbindelsen kunne ikke gemmes. Prøv igen.";
+            return;
+        }
+
+        connection = result.Value;
+        isConfirmationOpen = false;
+    }
+
+    private static string FormatConnectedAt(DateTimeOffset value) =>
+        value.ToLocalTime().ToString("d. MMM yyyy 'kl.' HH:mm", CultureInfo.GetCultureInfo("da-DK"));
+}

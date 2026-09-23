@@ -13,6 +13,8 @@ public interface IRegistrationService
 
 public interface IUserAdministrationService
 {
+    Task<int> CountPendingAsync(CancellationToken cancellationToken);
+
     Task<IReadOnlyCollection<PendingRegistration>> GetPendingAsync(
         int limit,
         CancellationToken cancellationToken);

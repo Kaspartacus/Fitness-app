@@ -1,0 +1,30 @@
+@page "/indstillinger/om"
+@attribute [Authorize]
+
+<PageTitle>Om appen</PageTitle>
+
+<main class="strength-app settings-app strength-with-bottom-nav" aria-labelledby="settings-about-title">
+    <header class="strength-back-header settings-page-header">
+        <a class="strength-icon-button" href="/indstillinger" aria-label="Tilbage til indstillinger" title="Tilbage til indstillinger">←</a>
+        <div>
+            <p class="strength-overline">App</p>
+            <h1 id="settings-about-title">Om appen</h1>
+        </div>
+        <span class="strength-header-spacer" aria-hidden="true"></span>
+    </header>
+
+    <div class="settings-page-content">
+        <section class="settings-info-card">
+            <h2>FitnessApp</h2>
+            <p>Version 1.0.0</p>
+            <p>Planlæg løb og styrketræning, og se kalenderen samlet ét sted.</p>
+        </section>
+
+        <section class="settings-section settings-info-card">
+            <h2>Forbindelser og beskeder</h2>
+            <p>Garmin er kun en tydeligt mærket demo/mock i denne version. Den synkroniserer eller importerer ikke aktiviteter. Notifikationer er kun i appen.</p>
+        </section>
+    </div>
+
+    <StrengthBottomNavigation Active="settings" />
+</main>
