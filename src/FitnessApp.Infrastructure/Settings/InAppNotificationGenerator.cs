@@ -58,7 +58,7 @@ internal sealed class InAppNotificationGenerator(
                     string.IsNullOrWhiteSpace(activity.Title)
                         ? "Der er planlagt styrketræning i kalenderen i dag."
                         : $"{activity.Title} er planlagt i dag.",
-                    $"/styrke/{programId}/træninger/{workoutId}/aktiv"));
+                    $"/styrke/{programId}/træninger/{workoutId}/aktiv?planlagt={originalDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}"));
             }
         }
 

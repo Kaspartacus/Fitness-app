@@ -74,6 +74,11 @@
     <ModalDialog IsOpen="@isConfirmationOpen" Title="@ConfirmationTitle" Description="@ConfirmationDescription"
                  InitialFocusSelector="[data-modal-cancel]" DismissOnBackdrop="@(!isMutating)" DismissOnEscape="@(!isMutating)"
                  ShowCloseButton="@(!isMutating)" OnDismiss="CloseConfirmation">
+        @if (actionError is not null)
+        {
+            <p class="strength-field-error" role="alert">@actionError</p>
+        }
+
         <div class="app-modal-actions">
             <button class="strength-quiet-button" type="button" data-modal-cancel @onclick="CloseConfirmation" disabled="@isMutating">Annuller</button>
             <button class="@(isDisconnectConfirmation ? "strength-danger-button" : "strength-primary-button")" type="button" @onclick="ConfirmConnectionActionAsync" disabled="@isMutating">

@@ -555,6 +555,16 @@ textarea:focus-visible {
         flex-direction: column;
     }
 
+    .dashboard-header.dashboard-header-with-profile {
+        align-items: flex-start;
+        flex-direction: row;
+        justify-content: space-between;
+    }
+
+    .dashboard-header.dashboard-header-with-profile > div {
+        min-width: 0;
+    }
+
     .dashboard-header .button,
     .admin-header > .button {
         align-self: flex-start;
