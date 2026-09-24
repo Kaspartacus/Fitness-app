@@ -17,7 +17,7 @@ Never change architecture, functionality, security controls, migrations, databas
 
 ## Run setup
 
-1. From the repository root, fetch `origin`, record `origin/main`, inspect `git status --short --branch`, remotes, branches, and worktrees. Stop if `origin/main` cannot be fetched or resolved.
+1. From the repository root, fetch `origin --prune`, record `origin/main`, inspect `git status --short --branch`, remotes, local and remote branches, and worktrees. Stop if `origin/main` cannot be fetched or resolved. Include a branch overview in the run report; branch deletion is governed by the dedicated policy below.
 2. Preserve every unrelated tracked, untracked, or staged change. If the current checkout is not a clean, dedicated cleanup worktree, do review work read-only and use a separate worktree only after evidence shows changes are needed. Never discard or relocate another user's work.
 3. Derive the application's listener ports from tracked configuration such as `Properties/launchSettings.json`; do not hardcode them. Before any cleanup, inspect those exact ports only. For each listener, verify the PID's command, working directory, and owner. Stop it with a graceful termination only when all three clearly identify this FitnessApp checkout; otherwise leave it running and report it. Do not use `sudo`, `pkill`, broad process matching, or forced termination.
 
@@ -48,6 +48,22 @@ Do not add source inventories, paths, diffs, secrets, personal data, or PR metad
 6. Check the derived listener ports again after cleanup. If this run started no application process, report their observed status; do not stop anything without the same command, working-directory, and owner proof.
 7. If changed files pass verification, inspect `git diff --check`, commit a focused cleanup commit, push the new branch without force, and open a normal PR targeting `main` using the repository PR template. Never create an empty commit or PR, and never merge or deploy. Then write the minimal state file with the successfully reviewed `origin/main` SHA and current UTC timestamp.
 
+## Branch overview and deletion
+
+Inspect local and remote branches as part of every run. You may identify branches that appear fully merged into `origin/main` and include them as recommendations only. A branch with a failed GitHub/PR query, unresolved commit, active worktree, or ambiguous owner or history is unknown; do not recommend deleting it.
+
+When useful, report each candidate with its branch name, local or remote scope, last commit SHA, last commit date, whether it is fully merged into `origin/main`, whether an open PR references it, and a recommended action. Use Git and GitHub read-only queries; do not infer open-PR status from a missing local tracking branch.
+
+Never delete branches during ordinary cleanup. Branch deletion is permitted only when the user explicitly requests branch cleanup. Before any deletion:
+
+1. Fetch and prune `origin` again; verify the current branch list and PR state.
+2. Confirm every target is not `main`, resolves to known history, and is fully merged into the current `origin/main`.
+3. Confirm no open PR uses each target branch. If PR status cannot be established, stop and preserve that branch.
+4. Show the user the exact branch names and whether each is local or remote, then ask for confirmation before deleting anything. Do not combine that confirmation with the initial branch-cleanup request.
+5. After confirmation, delete only the named branches. For local branches use `git branch -d`; never use `-D` unless the user explicitly approves force deletion of that exact branch. Never delete a remote branch by default; it requires explicit approval of each exact remote branch name in addition to the confirmation above.
+
+Never delete a branch containing unmerged work, unknown history, an active PR, or an active/unmerged worktree. If any required condition changes before deletion, stop and report it.
+
 ## Dry run
 
 For a non-mutating dry run, complete discovery, state selection, candidate evidence gathering, listener inspection, branch-name planning, and verification-command selection. Do not fetch, create a worktree or branch, edit files, clean output, stop processes, run build/tests, write state, commit, push, or open a PR. State clearly that it was a dry run and list the operations intentionally skipped.
@@ -61,5 +77,6 @@ End every real or dry run with a concise report containing:
 - exact build and directly relevant test results (or why they were not run);
 - derived port and process status;
 - the exact local startup command;
+- branch overview or cleanup recommendations, including the fields above when candidates are reported;
 - branch, commit, and PR URL, or that no changes were necessary; and
 - items deliberately left unchanged because safety could not be proven.
