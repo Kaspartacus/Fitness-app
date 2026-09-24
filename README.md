@@ -20,7 +20,7 @@ The solution file is `FitnessApp.slnx`.
 There is one hosted application and one startup project: `FitnessApp.Server`. The Blazor WebAssembly client and ASP.NET Core API run together from the existing server host:
 
 ```bash
-dotnet run --project src/FitnessApp.Server
+dotnet run --project src/FitnessApp.Server --launch-profile https
 ```
 
 Strength training and running are features of this existing layered modular monolith; neither adds a solution, application, executable, web host, or independent startup process.
