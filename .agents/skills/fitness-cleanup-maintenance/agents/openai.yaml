@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fitness Cleanup Maintenance"
+  short_description: "Safely remove proven FitnessApp cruft"
+  default_prompt: "Use $fitness-cleanup-maintenance for a narrow, evidence-backed FitnessApp cleanup."
