@@ -1,0 +1,268 @@
+@page "/indstillinger"
+@attribute [Authorize]
+@using FitnessApp.Client.Settings
+@using FitnessApp.Contracts.Authentication
+@using FitnessApp.Contracts.Settings
+@inject SettingsClient SettingsApi
+@inject AuthenticationClient Authentication
+@inject UserAdministrationClient Administration
+@inject NavigationManager Navigation
+
+<PageTitle>Indstillinger</PageTitle>
+
+<main class="strength-app settings-app strength-with-bottom-nav" aria-labelledby="settings-title">
+    <header class="strength-back-header settings-main-header">
+        <a class="strength-icon-button" href="/" aria-label="Tilbage til hjem" title="Tilbage til hjem">←</a>
+        <div class="settings-header-copy">
+            <p class="strength-overline">Profil</p>
+            <h1 id="settings-title">Indstillinger</h1>
+        </div>
+        @if (overview is { } headerSettings)
+        {
+            <a class="settings-notification-link" href="/indstillinger/notifikationer" aria-label="Notifikationer@UnreadNotificationLabel" title="Notifikationer">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 10a6 6 0 0 0-12 0c0 7-3 7-3 8.5h18C21 17 18 17 18 10" /><path d="M10 21h4" /></svg>
+                @if (headerSettings.UnreadNotificationCount > 0)
+                {
+                    <span class="settings-notification-count" aria-hidden="true">@(headerSettings.UnreadNotificationCount > 9 ? "9+" : headerSettings.UnreadNotificationCount)</span>
+                }
+            </a>
+        }
+        else
+        {
+            <span class="strength-header-spacer" aria-hidden="true"></span>
+        }
+    </header>
+
+    <div class="settings-page-content">
+        @if (isLoading)
+        {
+            <p class="strength-feedback" role="status">Indlæser dine indstillinger…</p>
+        }
+        else if (errorMessage is not null)
+        {
+            <section class="strength-status-card" role="alert">
+                <p>@errorMessage</p>
+                <button class="strength-secondary-button" type="button" @onclick="LoadAsync" disabled="@isRequestInProgress">
+                    @(isRequestInProgress ? "Prøver igen…" : "Prøv igen")
+                </button>
+            </section>
+        }
+        else if (overview is { } settings && user is { } currentUser)
+        {
+            <section class="settings-profile-card" aria-label="Din profil">
+                <span class="settings-profile-avatar" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.25" /><path d="M5.25 20c.7-3.55 3.55-5.75 6.75-5.75S18.05 16.45 18.75 20" /></svg>
+                </span>
+                <div class="settings-profile-copy">
+                    <h2>@settings.Profile.DisplayName</h2>
+                    <p>@currentUser.Email</p>
+                </div>
+            </section>
+
+            <section class="settings-section" aria-labelledby="settings-account-title">
+                <p class="strength-overline" id="settings-account-title">Konto</p>
+                <div class="settings-list">
+                    <a class="settings-row" href="/indstillinger/profil">
+                        <span class="settings-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.25" /><path d="M5.25 20c.7-3.55 3.55-5.75 6.75-5.75S18.05 16.45 18.75 20" /></svg></span>
+                        <span class="settings-row-copy"><strong>Mine oplysninger</strong><span>Navn, højde, vægt</span></span>
+                        <span class="settings-row-trailing" aria-hidden="true">›</span>
+                    </a>
+                    <a class="settings-row" href="/indstillinger/ernaeringsmaal">
+                        <span class="settings-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7.5 3.5v7M4.75 3.5v4.2a2.75 2.75 0 0 0 5.5 0V3.5M7.5 10.5V21M16.5 3.5V21M16.5 3.5c2.75 1.25 3.75 3.7 3.75 7.35v2.4H16.5" /></svg></span>
+                        <span class="settings-row-copy"><strong>Ernæringsmål</strong><span>Kalorier og makromål</span></span>
+                        <span class="settings-row-trailing" aria-hidden="true">›</span>
+                    </a>
+                    <div class="settings-row is-unavailable" aria-label="Vægttabsmål er ikke tilgængeligt endnu">
+                        <span class="settings-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19.5h16M7 16V9M12 16V5M17 16v-3" /><path d="m5.5 7.5 3-3 3 3" /></svg></span>
+                        <span class="settings-row-copy"><strong>Vægttabsmål</strong><span>Følg dit vægttab</span></span>
+                        <span class="settings-row-trailing">Kommer senere</span>
+                    </div>
+                    <a class="settings-row" href="/indstillinger/enheder">
+                        <span class="settings-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20 20 4M7 17l-3-3M11 13 8 10M15 9l-3-3M19 5l-3-3" /></svg></span>
+                        <span class="settings-row-copy"><strong>Enheder</strong><span>kg, km, min/km</span></span>
+                        <span class="settings-row-trailing" aria-hidden="true">›</span>
+                    </a>
+                </div>
+            </section>
+
+            <section class="settings-section" aria-labelledby="settings-app-title">
+                <p class="strength-overline" id="settings-app-title">App</p>
+                <div class="settings-list">
+                    <a class="settings-row" href="/indstillinger/integrationer">
+                        <span class="settings-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.07.07l2-2a5 5 0 0 0-7.07-7.07l-1.15 1.15" /><path d="M14 11a5 5 0 0 0-7.07-.07l-2 2A5 5 0 0 0 12 20l1.15-1.15" /></svg></span>
+                        <span class="settings-row-copy"><strong>Integrationer</strong><span>@(settings.Garmin.IsConnected ? "Garmin-demo forbundet" : "Garmin og andre tjenester")</span></span>
+                        <span class="settings-row-trailing" aria-hidden="true">›</span>
+                    </a>
+                    <a class="settings-row" href="/indstillinger/notifikationer">
+                        <span class="settings-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 10a6 6 0 0 0-12 0c0 7-3 7-3 8.5h18C21 17 18 17 18 10" /><path d="M10 21h4" /></svg></span>
+                        <span class="settings-row-copy"><strong>Notifikationer</strong><span>Påmindelser og beskeder i appen</span></span>
+                        @if (settings.UnreadNotificationCount > 0)
+                        {
+                            <span class="settings-row-trailing settings-count" aria-label="@settings.UnreadNotificationCount ulæste notifikationer">@settings.UnreadNotificationCount</span>
+                        }
+                        else
+                        {
+                            <span class="settings-row-trailing" aria-hidden="true">›</span>
+                        }
+                    </a>
+                    <a class="settings-row" href="/indstillinger/sikkerhed">
+                        <span class="settings-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="1.5" /><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2" /></svg></span>
+                        <span class="settings-row-copy"><strong>Indstillinger</strong><span>Sikkerhed og privatliv</span></span>
+                        <span class="settings-row-trailing" aria-hidden="true">›</span>
+                    </a>
+                    <a class="settings-row" href="/indstillinger/om">
+                        <span class="settings-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" /><path d="M12 10.75v5M12 7.5h.01" /></svg></span>
+                        <span class="settings-row-copy"><strong>Om appen</strong><span>Version 1.0.0</span></span>
+                        <span class="settings-row-trailing" aria-hidden="true">›</span>
+                    </a>
+                </div>
+            </section>
+
+            @if (IsAdministrator)
+            {
+                <section class="settings-section" aria-labelledby="settings-admin-title">
+                    <p class="strength-overline" id="settings-admin-title">Administration</p>
+                    <div class="settings-list">
+                        <a class="settings-row" href="/administration/registreringer">
+                            <span class="settings-row-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3" /><path d="M3.5 19c.6-3.2 2.9-5.25 5.5-5.25 1.15 0 2.2.4 3.05 1.1M16 8v7M12.5 11.5h7" /></svg></span>
+                            <span class="settings-row-copy"><strong>Brugeranmodninger</strong><span>@PendingRegistrationText</span></span>
+                            @if (pendingRegistrationCount is > 0)
+                            {
+                                <span class="settings-row-trailing settings-count" aria-label="@pendingRegistrationCount ventende brugeranmodninger">@pendingRegistrationCount</span>
+                            }
+                            else
+                            {
+                                <span class="settings-row-trailing" aria-hidden="true">›</span>
+                            }
+                        </a>
+                    </div>
+                    @if (pendingRegistrationError is not null)
+                    {
+                        <p class="settings-inline-error" role="alert">@pendingRegistrationError <button class="strength-text-action" type="button" @onclick="LoadPendingRegistrationCountAsync">Prøv igen</button></p>
+                    }
+                </section>
+            }
+
+            <button class="strength-outline-button settings-signout" type="button" @onclick="LogoutAsync" disabled="@isLoggingOut">
+                @(isLoggingOut ? "Logger ud…" : "Log ud")
+            </button>
+        }
+    </div>
+
+    <StrengthBottomNavigation Active="settings" />
+</main>
+
+@code {
+    private SettingsOverviewResponse? overview;
+    private AuthenticatedUserResponse? user;
+    private bool isLoading = true;
+    private bool isRequestInProgress;
+    private bool isLoggingOut;
+    private int? pendingRegistrationCount;
+    private string? errorMessage;
+    private string? pendingRegistrationError;
+
+    private bool IsAdministrator => user?.Roles.Contains("Admin", StringComparer.Ordinal) is true;
+    private string UnreadNotificationLabel => overview?.UnreadNotificationCount is int count && count > 0
+        ? $": {count} ulæste"
+        : string.Empty;
+    private string PendingRegistrationText => pendingRegistrationError is not null
+        ? "Antallet kunne ikke hentes"
+        : pendingRegistrationCount is null
+            ? "Indlæser ventende anmodninger…"
+            : pendingRegistrationCount == 0
+                ? "Ingen venter"
+                : $"{pendingRegistrationCount} venter";
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (isRequestInProgress)
+        {
+            return;
+        }
+
+        isRequestInProgress = true;
+        isLoading = true;
+        errorMessage = null;
+        pendingRegistrationError = null;
+        pendingRegistrationCount = null;
+
+        try
+        {
+            var currentUser = await Authentication.GetCurrentUserAsync();
+            if (currentUser.Status is CurrentUserStatus.Unauthorized)
+            {
+                Navigation.NavigateTo("/login", replace: true);
+                return;
+            }
+
+            if (currentUser.Status is not CurrentUserStatus.Succeeded || currentUser.User is null)
+            {
+                errorMessage = "Vi kunne ikke hente din konto. Kontrollér forbindelsen, og prøv igen.";
+                return;
+            }
+
+            user = currentUser.User;
+            var settings = await SettingsApi.GetOverviewAsync();
+            if (!settings.Succeeded || settings.Value is null)
+            {
+                errorMessage = settings.Error ?? "Indstillingerne kunne ikke indlæses. Prøv igen.";
+                return;
+            }
+
+            overview = settings.Value;
+            if (IsAdministrator)
+            {
+                await LoadPendingRegistrationCountAsync();
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            isRequestInProgress = false;
+        }
+    }
+
+    private async Task LoadPendingRegistrationCountAsync()
+    {
+        if (!IsAdministrator)
+        {
+            return;
+        }
+
+        pendingRegistrationError = null;
+        var result = await Administration.GetPendingCountAsync();
+        if (result.Status is PendingRegistrationCountStatus.Succeeded)
+        {
+            pendingRegistrationCount = result.PendingCount;
+        }
+        else if (result.Status is PendingRegistrationCountStatus.Forbidden)
+        {
+            pendingRegistrationError = "Du har ikke længere adgang til administration.";
+        }
+        else
+        {
+            pendingRegistrationError = "Antallet af ventende anmodninger kunne ikke hentes.";
+        }
+    }
+
+    private async Task LogoutAsync()
+    {
+        if (isLoggingOut)
+        {
+            return;
+        }
+
+        isLoggingOut = true;
+        try
+        {
+            await Authentication.LogoutAsync();
+        }
+        finally
+        {
+            isLoggingOut = false;
+        }
+    }
+}

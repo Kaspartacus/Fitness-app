@@ -9,3 +9,5 @@ public sealed record PendingRegistrationResponse(
 public sealed record PendingRegistrationListResponse(
     IReadOnlyCollection<PendingRegistrationResponse> Registrations,
     int Limit);
+
+public sealed record PendingRegistrationCountResponse(int PendingCount);

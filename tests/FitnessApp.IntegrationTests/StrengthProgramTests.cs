@@ -30,27 +30,43 @@ public sealed class StrengthProgramTests
     [Fact]
     public async Task MigrationPreservesFlatProgramsByGivingThemOneDefaultWorkout()
     {
-        using var factory = new AuthWebApplicationFactory();
-        await factory.InitializeDatabaseAsync();
-        var user = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        using var storage = new TestAppStorage();
         var programId = Guid.NewGuid();
-        using (var scope = factory.Services.CreateScope())
+        var userId = Guid.NewGuid().ToString("N");
+        var options = new DbContextOptionsBuilder<FitnessDbContext>()
+            .UseSqlite($"Data Source={storage.DatabasePath}")
+            .Options;
+        await using (var legacy = new FitnessDbContext(options))
         {
-            var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
-            await db.GetService<IMigrator>().MigrateAsync(FlatExerciseMigration);
-            await db.Database.ExecuteSqlInterpolatedAsync($"""
+            await legacy.GetService<IMigrator>().MigrateAsync(FlatExerciseMigration);
+            legacy.Users.Add(new ApplicationUser
+            {
+                Id = userId,
+                DisplayName = "Eksisterende bruger",
+                ApprovalStatus = AccountApprovalStatus.Approved,
+                UserName = "existing@example.test",
+                NormalizedUserName = "EXISTING@EXAMPLE.TEST",
+                Email = "existing@example.test",
+                NormalizedEmail = "EXISTING@EXAMPLE.TEST",
+                EmailConfirmed = true,
+                SecurityStamp = "security-stamp",
+                ConcurrencyStamp = "concurrency-stamp"
+            });
+            await legacy.SaveChangesAsync();
+            await legacy.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO StrengthPrograms (Id, UserId, Name, Version, CreatedAt)
-                VALUES ({programId}, {user.Id}, {"Gammelt program"}, {Guid.NewGuid()}, {DateTime.UtcNow});
+                VALUES ({programId}, {userId}, {"Gammelt program"}, {Guid.NewGuid()}, {DateTime.UtcNow});
                 INSERT INTO ProgramExercises (Id, ProgramId, Name, Weight, Sets, Repetitions, Note, Position)
                 VALUES ({Guid.NewGuid()}, {programId}, {"Squat"}, {80m}, {3}, {10}, {"Roligt tempo"}, {0}),
                        ({Guid.NewGuid()}, {programId}, {"Lunges"}, {20m}, {3}, {12}, {null}, {0});
                 """);
-            await db.Database.MigrateAsync();
         }
 
-        using var verify = factory.Services.CreateScope();
-        var migrated = await verify.ServiceProvider.GetRequiredService<FitnessDbContext>().StrengthPrograms
-            .Include(program => program.Workouts).ThenInclude(workout => workout.Exercises).SingleAsync(program => program.Id == programId);
+        await using var upgraded = new FitnessDbContext(options);
+        await upgraded.Database.MigrateAsync();
+        var migrated = await upgraded.StrengthPrograms
+            .Include(program => program.Workouts).ThenInclude(workout => workout.Exercises)
+            .SingleAsync(program => program.Id == programId);
         var workout = Assert.Single(migrated.Workouts);
         Assert.Equal("Træning 1", workout.Name);
         Assert.Equal(["Lunges", "Squat"], workout.Exercises.Select(exercise => exercise.Name).Order());

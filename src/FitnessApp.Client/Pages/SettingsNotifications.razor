@@ -1,0 +1,247 @@
+@page "/indstillinger/notifikationer"
+@attribute [Authorize]
+@using System.Globalization
+@using FitnessApp.Client.Settings
+@using FitnessApp.Contracts.Settings
+@inject SettingsClient SettingsApi
+@inject NavigationManager Navigation
+
+<PageTitle>Notifikationer</PageTitle>
+
+<main class="strength-app settings-app strength-with-bottom-nav" aria-labelledby="notifications-title">
+    <header class="strength-back-header settings-page-header">
+        <a class="strength-icon-button" href="/indstillinger" aria-label="Tilbage til indstillinger" title="Tilbage til indstillinger">←</a>
+        <div>
+            <p class="strength-overline">App</p>
+            <h1 id="notifications-title">Notifikationer</h1>
+        </div>
+        <span class="strength-header-spacer" aria-hidden="true"></span>
+    </header>
+
+    <div class="settings-page-content">
+        @if (isLoading)
+        {
+            <p class="strength-feedback" role="status">Indlæser notifikationer…</p>
+        }
+        else if (loadError is not null)
+        {
+            <section class="strength-status-card" role="alert">
+                <p>@loadError</p>
+                <button class="strength-secondary-button" type="button" @onclick="LoadAsync" disabled="@isSavingPreferences">Prøv igen</button>
+            </section>
+        }
+        else if (preferences is { } currentPreferences)
+        {
+            <p class="settings-notification-explainer">Notifikationer vises i FitnessApp, mens du bruger appen. De leveres ikke som browser-push eller e-mail, når appen er lukket.</p>
+
+            <section class="settings-section" aria-labelledby="notification-preferences-title">
+                <p class="strength-overline" id="notification-preferences-title">Påmindelser</p>
+                <div class="settings-toggle-list">
+                    <label class="settings-toggle-row">
+                        <span class="settings-toggle-copy">
+                            <strong>Træningspåmindelser</strong>
+                            <span>Vis en besked i appen, når du har planlagt løb eller styrketræning på dagen.</span>
+                        </span>
+                        <span class="settings-switch">
+                            <input type="checkbox" checked="@currentPreferences.TrainingRemindersEnabled" @onchange="args => SavePreferencesAsync(true, args)" disabled="@isSavingPreferences" aria-label="Træningspåmindelser" />
+                            <span aria-hidden="true"></span>
+                        </span>
+                    </label>
+                    @if (currentPreferences.IsAdministrator)
+                    {
+                        <label class="settings-toggle-row">
+                            <span class="settings-toggle-copy">
+                                <strong>Nye brugeranmodninger</strong>
+                                <span>Vis en besked i appen, når der venter en ny registrering til behandling.</span>
+                            </span>
+                            <span class="settings-switch">
+                                <input type="checkbox" checked="@currentPreferences.AdminRequestNotificationsEnabled" @onchange="args => SavePreferencesAsync(false, args)" disabled="@isSavingPreferences" aria-label="Nye brugeranmodninger" />
+                                <span aria-hidden="true"></span>
+                            </span>
+                        </label>
+                    }
+                </div>
+                @if (preferencesError is not null)
+                {
+                    <p class="strength-field-error" role="alert">@preferencesError</p>
+                }
+                @if (preferencesMessage is not null)
+                {
+                    <p class="settings-save-status" role="status">@preferencesMessage</p>
+                }
+            </section>
+
+            <section class="settings-section" aria-labelledby="notification-unavailable-title">
+                <p class="strength-overline" id="notification-unavailable-title">Ikke tilgængeligt</p>
+                <div class="settings-info-card">
+                    <h2>Browser-push og e-mail</h2>
+                    <p>Browser-push og e-mailnotifikationer er ikke en del af denne version. Aktivering af en kontakt her ændrer derfor ikke noget uden for appen.</p>
+                </div>
+            </section>
+
+            <section class="settings-section" aria-labelledby="notification-list-title">
+                <p class="strength-overline" id="notification-list-title">I appen</p>
+                @if (actionError is not null)
+                {
+                    <p class="strength-field-error" role="alert">
+                        @actionError
+                        @if (notificationToRetry is not null)
+                        {
+                            <button class="strength-text-action" type="button" @onclick="RetryNotificationAsync">Prøv igen</button>
+                        }
+                    </p>
+                }
+                @if (notifications.Count == 0)
+                {
+                    <section class="strength-empty-state">
+                        <span class="settings-empty-icon" aria-hidden="true">✓</span>
+                        <h2>Ingen notifikationer endnu</h2>
+                        <p>Nye træningspåmindelser og relevante administratorbeskeder vises her.</p>
+                    </section>
+                }
+                else
+                {
+                    <div class="settings-notification-list" aria-label="Dine notifikationer">
+                        @foreach (var notification in notifications)
+                        {
+                            <a class="settings-notification-card @(notification.ReadAt is null ? "is-unread" : null)"
+                               href="@notification.TargetPath" @onclick="() => OpenNotificationAsync(notification)" @onclick:preventDefault="true">
+                                <span class="settings-notification-copy">
+                                    <strong>@notification.Title</strong>
+                                    <p>@notification.Message</p>
+                                </span>
+                                <span class="settings-notification-meta @(notification.ReadAt is null ? "is-unread" : null)">
+                                    @(notification.ReadAt is null ? "Ny" : "Læst")<br />@FormatTimestamp(notification.CreatedAt)
+                                </span>
+                            </a>
+                        }
+                    </div>
+                }
+            </section>
+        }
+    </div>
+
+    <StrengthBottomNavigation Active="settings" />
+</main>
+
+@code {
+    private NotificationPreferencesResponse? preferences;
+    private IReadOnlyCollection<InAppNotificationResponse> notifications = [];
+    private bool isLoading = true;
+    private bool isSavingPreferences;
+    private Guid? notificationToRetry;
+    private string? loadError;
+    private string? preferencesError;
+    private string? preferencesMessage;
+    private string? actionError;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (isLoading && preferences is not null || isSavingPreferences)
+        {
+            return;
+        }
+
+        isLoading = true;
+        loadError = null;
+        var overviewResult = await SettingsApi.GetOverviewAsync();
+        if (!overviewResult.Succeeded || overviewResult.Value is null)
+        {
+            isLoading = false;
+            loadError = overviewResult.Error ?? "Notifikationsindstillingerne kunne ikke indlæses. Prøv igen.";
+            return;
+        }
+
+        preferences = overviewResult.Value.NotificationPreferences;
+        var notificationResult = await SettingsApi.GetNotificationsAsync();
+        isLoading = false;
+        if (!notificationResult.Succeeded || notificationResult.Value is null)
+        {
+            loadError = notificationResult.Error ?? "Notifikationerne kunne ikke indlæses. Prøv igen.";
+            return;
+        }
+
+        notifications = notificationResult.Value.Notifications
+            .OrderByDescending(notification => notification.CreatedAt)
+            .ToArray();
+        preferencesError = null;
+        preferencesMessage = null;
+        actionError = null;
+        notificationToRetry = null;
+    }
+
+    private async Task SavePreferencesAsync(bool updateTrainingReminders, ChangeEventArgs args)
+    {
+        if (isSavingPreferences || preferences is null)
+        {
+            return;
+        }
+
+        var enabled = args.Value is bool checkedValue && checkedValue;
+        var previous = preferences;
+        var request = updateTrainingReminders
+            ? new UpdateNotificationPreferencesRequest(enabled, preferences.AdminRequestNotificationsEnabled)
+            : new UpdateNotificationPreferencesRequest(preferences.TrainingRemindersEnabled, enabled);
+
+        preferences = updateTrainingReminders
+            ? preferences with { TrainingRemindersEnabled = enabled }
+            : preferences with { AdminRequestNotificationsEnabled = enabled };
+        isSavingPreferences = true;
+        preferencesError = null;
+        preferencesMessage = null;
+        var result = await SettingsApi.UpdateNotificationPreferencesAsync(request);
+        isSavingPreferences = false;
+        if (!result.Succeeded || result.Value is null)
+        {
+            preferences = previous;
+            preferencesError = result.Error ?? "Indstillingen kunne ikke gemmes. Prøv igen.";
+            return;
+        }
+
+        preferences = result.Value;
+        preferencesMessage = "Notifikationsindstillingerne er gemt.";
+    }
+
+    private Task OpenNotificationAsync(InAppNotificationResponse notification) => NavigateFromNotificationAsync(notification);
+
+    private async Task RetryNotificationAsync()
+    {
+        if (notificationToRetry is not { } id)
+        {
+            return;
+        }
+
+        var notification = notifications.FirstOrDefault(item => item.Id == id);
+        if (notification is not null)
+        {
+            await NavigateFromNotificationAsync(notification);
+        }
+    }
+
+    private async Task NavigateFromNotificationAsync(InAppNotificationResponse notification)
+    {
+        if (notification.ReadAt is null)
+        {
+            actionError = null;
+            notificationToRetry = notification.Id;
+            var result = await SettingsApi.MarkNotificationReadAsync(notification.Id);
+            if (!result.Succeeded)
+            {
+                actionError = result.Error ?? "Notifikationen kunne ikke markeres som læst. Prøv igen.";
+                return;
+            }
+
+            notifications = notifications
+                .Select(item => item.Id == notification.Id ? item with { ReadAt = DateTimeOffset.UtcNow } : item)
+                .ToArray();
+            notificationToRetry = null;
+        }
+
+        Navigation.NavigateTo(notification.TargetPath);
+    }
+
+    private static string FormatTimestamp(DateTimeOffset timestamp) =>
+        timestamp.ToLocalTime().ToString("d. MMM", CultureInfo.GetCultureInfo("da-DK"));
+}

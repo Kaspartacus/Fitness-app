@@ -1,0 +1,241 @@
+@page "/indstillinger/ernaeringsmaal"
+@attribute [Authorize]
+@using FitnessApp.Client.Settings
+@using FitnessApp.Contracts.Settings
+@inject SettingsClient SettingsApi
+
+<PageTitle>Ernæringsmål</PageTitle>
+
+<main class="strength-app settings-app strength-with-bottom-nav" aria-labelledby="nutrition-goals-title">
+    <header class="strength-back-header settings-page-header">
+        <a class="strength-icon-button" href="/indstillinger" aria-label="Tilbage til indstillinger" title="Tilbage til indstillinger">←</a>
+        <div>
+            <p class="strength-overline">Konto</p>
+            <h1 id="nutrition-goals-title">Ernæringsmål</h1>
+        </div>
+        <span class="strength-header-spacer" aria-hidden="true"></span>
+    </header>
+
+    <div class="settings-page-content">
+        @if (isLoading)
+        {
+            <p class="strength-feedback" role="status">Indlæser dine ernæringsmål…</p>
+        }
+        else if (loadError is not null)
+        {
+            <section class="strength-status-card" role="alert">
+                <p>@loadError</p>
+                <button class="strength-secondary-button" type="button" @onclick="LoadAsync" disabled="@isSaving">Prøv igen</button>
+            </section>
+        }
+        else
+        {
+            <form class="settings-form" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+                <section class="strength-editor-card">
+                    <p class="strength-overline">Daglige mål</p>
+                    <h2>Kalorier og makromål</h2>
+                    <p class="settings-form-intro">Målene gemmes på din konto. Kostsporing er endnu ikke en del af denne version.</p>
+
+                    <label class="strength-input-label" for="nutrition-calories">Kalorier</label>
+                    <div class="settings-input-with-unit">
+                        <input class="strength-input" id="nutrition-calories" inputmode="numeric" autocomplete="off" @bind="dailyCaloriesText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 2200" />
+                        <span class="settings-input-unit" aria-hidden="true">kcal</span>
+                    </div>
+
+                    <div class="settings-input-grid">
+                        <div>
+                            <label class="strength-input-label" for="nutrition-protein">Protein</label>
+                            <div class="settings-input-with-unit">
+                                <input class="strength-input" id="nutrition-protein" inputmode="numeric" autocomplete="off" @bind="proteinText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 130" />
+                                <span class="settings-input-unit" aria-hidden="true">g</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="strength-input-label" for="nutrition-carbohydrates">Kulhydrat</label>
+                            <div class="settings-input-with-unit">
+                                <input class="strength-input" id="nutrition-carbohydrates" inputmode="numeric" autocomplete="off" @bind="carbohydrateText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 240" />
+                                <span class="settings-input-unit" aria-hidden="true">g</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="strength-input-label" for="nutrition-fat">Fedt</label>
+                            <div class="settings-input-with-unit">
+                                <input class="strength-input" id="nutrition-fat" inputmode="numeric" autocomplete="off" @bind="fatText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 70" />
+                                <span class="settings-input-unit" aria-hidden="true">g</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="strength-input-label" for="nutrition-sugar">Sukker</label>
+                            <div class="settings-input-with-unit">
+                                <input class="strength-input" id="nutrition-sugar" inputmode="numeric" autocomplete="off" @bind="sugarText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 50" />
+                                <span class="settings-input-unit" aria-hidden="true">g</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (validationError is not null)
+                    {
+                        <p class="strength-field-error" role="alert">@validationError</p>
+                    }
+                    @if (saveError is not null)
+                    {
+                        <p class="strength-field-error" role="alert">@saveError</p>
+                    }
+                    @if (saveMessage is not null)
+                    {
+                        <p class="settings-save-status" role="status">@saveMessage</p>
+                    }
+
+                    <div class="strength-form-actions">
+                        <a class="strength-outline-button" href="/indstillinger">Annuller</a>
+                        <button class="strength-primary-button" type="submit" disabled="@isSaving">@(isSaving ? "Gemmer…" : "Gem mål")</button>
+                    </div>
+                </section>
+            </form>
+        }
+    </div>
+
+    <StrengthBottomNavigation Active="settings" />
+</main>
+
+@code {
+    private NutritionGoalsResponse? nutritionGoals;
+    private string dailyCaloriesText = string.Empty;
+    private string proteinText = string.Empty;
+    private string carbohydrateText = string.Empty;
+    private string fatText = string.Empty;
+    private string sugarText = string.Empty;
+    private bool isLoading = true;
+    private bool isSaving;
+    private string? loadError;
+    private string? validationError;
+    private string? saveError;
+    private string? saveMessage;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (isLoading && nutritionGoals is not null || isSaving)
+        {
+            return;
+        }
+
+        isLoading = true;
+        loadError = null;
+        var result = await SettingsApi.GetOverviewAsync();
+        isLoading = false;
+        if (!result.Succeeded || result.Value is null)
+        {
+            loadError = result.Error ?? "Ernæringsmålene kunne ikke indlæses. Prøv igen.";
+            return;
+        }
+
+        nutritionGoals = result.Value.Profile.NutritionGoals;
+        ApplyNutritionGoals(nutritionGoals);
+        validationError = null;
+        saveError = null;
+        saveMessage = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (isSaving || nutritionGoals is null)
+        {
+            return;
+        }
+
+        if (!TryCreateRequest(out var request))
+        {
+            return;
+        }
+
+        isSaving = true;
+        saveError = null;
+        saveMessage = null;
+        var result = await SettingsApi.UpdateNutritionGoalsAsync(request);
+        isSaving = false;
+        if (!result.Succeeded || result.Value is null)
+        {
+            saveError = result.Error ?? "Ernæringsmålene kunne ikke gemmes. Prøv igen.";
+            return;
+        }
+
+        nutritionGoals = result.Value;
+        ApplyNutritionGoals(nutritionGoals);
+        saveMessage = "Ernæringsmålene er gemt.";
+    }
+
+    private bool TryCreateRequest(out UpdateNutritionGoalsRequest request)
+    {
+        validationError = null;
+        int? calories = null;
+        int? protein = null;
+        int? carbohydrates = null;
+        int? fat = null;
+        int? sugar = null;
+        if (!TryParseOptionalInt(dailyCaloriesText, out calories) || calories is < 500 or > 10000)
+        {
+            validationError = "Kaloriemålet skal være et helt tal mellem 500 og 10.000 kcal, eller stå tomt.";
+        }
+        else if (!TryParseOptionalInt(proteinText, out protein) || protein is < 0 or > 1000)
+        {
+            validationError = "Protein skal være et helt tal mellem 0 og 1.000 g, eller stå tomt.";
+        }
+        else if (!TryParseOptionalInt(carbohydrateText, out carbohydrates) || carbohydrates is < 0 or > 1000)
+        {
+            validationError = "Kulhydrat skal være et helt tal mellem 0 og 1.000 g, eller stå tomt.";
+        }
+        else if (!TryParseOptionalInt(fatText, out fat) || fat is < 0 or > 1000)
+        {
+            validationError = "Fedt skal være et helt tal mellem 0 og 1.000 g, eller stå tomt.";
+        }
+        else if (!TryParseOptionalInt(sugarText, out sugar) || sugar is < 0 or > 1000)
+        {
+            validationError = "Sukker skal være et helt tal mellem 0 og 1.000 g, eller stå tomt.";
+        }
+
+        if (validationError is not null)
+        {
+            request = default!;
+            return false;
+        }
+
+        request = new UpdateNutritionGoalsRequest(
+            calories,
+            protein,
+            carbohydrates,
+            fat,
+            sugar);
+        return true;
+    }
+
+    private void ApplyNutritionGoals(NutritionGoalsResponse goals)
+    {
+        dailyCaloriesText = FormatNumber(goals.DailyCaloriesTarget);
+        proteinText = FormatNumber(goals.ProteinTargetGrams);
+        carbohydrateText = FormatNumber(goals.CarbohydrateTargetGrams);
+        fatText = FormatNumber(goals.FatTargetGrams);
+        sugarText = FormatNumber(goals.SugarTargetGrams);
+    }
+
+    private static bool TryParseOptionalInt(string text, out int? value)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            value = null;
+            return true;
+        }
+
+        if (int.TryParse(text, out var parsed))
+        {
+            value = parsed;
+            return true;
+        }
+
+        value = null;
+        return false;
+    }
+
+    private static string FormatNumber(int? value) => value?.ToString() ?? string.Empty;
+}

@@ -19,12 +19,19 @@ internal static class UserAdministrationEndpoints
         var group = endpoints.MapGroup("/api/admin/registrations")
             .RequireAuthorization(AuthenticationConstants.AdminPolicy);
 
+        group.MapGet("/pending-count", GetPendingCountAsync);
         group.MapGet("/pending", GetPendingAsync);
         group.MapPost("/{registrationId}/approve", ApproveAsync);
         group.MapPost("/{registrationId}/reject", RejectAsync);
 
         return endpoints;
     }
+
+    private static async Task<IResult> GetPendingCountAsync(
+        IUserAdministrationService administrationService,
+        CancellationToken cancellationToken) =>
+        Results.Ok(new PendingRegistrationCountResponse(
+            await administrationService.CountPendingAsync(cancellationToken)));
 
     private static async Task<IResult> GetPendingAsync(
         int? limit,
