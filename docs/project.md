@@ -44,7 +44,7 @@ Server ------------------------------> Infrastructure --> Domain
 Server --static hosting/build only--> Client
 ```
 
-`FitnessApp.slnx` is the only application solution. `FitnessApp.Server` is the only hosted startup project, launched with `dotnet run --project src/FitnessApp.Server`; it hosts both the Blazor WebAssembly client and ASP.NET Core API. Strength-program management and running are implemented within these existing layers and projects, with no separate fitness-feature solution, application, executable, host, or startup process.
+`FitnessApp.slnx` is the only application solution. `FitnessApp.Server` is the only hosted startup project, launched with `dotnet run --project src/FitnessApp.Server --launch-profile https`; it hosts both the Blazor WebAssembly client and ASP.NET Core API. Strength-program management and running are implemented within these existing layers and projects, with no separate fitness-feature solution, application, executable, host, or startup process.
 
 - `FitnessApp.Client` contains Blazor WebAssembly UI and does not reference server implementation projects.
 - `FitnessApp.Server` is the ASP.NET Core host, authentication API, and composition root. It references Application and Infrastructure. Its Client reference exists solely to include static WebAssembly assets.
