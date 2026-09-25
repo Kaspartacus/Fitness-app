@@ -99,7 +99,7 @@
 </main>
 
 @code {
-    private ProfileSettingsResponse? profile;
+    private NutritionGoalsResponse? nutritionGoals;
     private string dailyCaloriesText = string.Empty;
     private string proteinText = string.Empty;
     private string carbohydrateText = string.Empty;
@@ -116,7 +116,7 @@
 
     private async Task LoadAsync()
     {
-        if (isLoading && profile is not null || isSaving)
+        if (isLoading && nutritionGoals is not null || isSaving)
         {
             return;
         }
@@ -131,8 +131,8 @@
             return;
         }
 
-        profile = result.Value.Profile;
-        ApplyNutritionGoals(profile.NutritionGoals);
+        nutritionGoals = result.Value.Profile.NutritionGoals;
+        ApplyNutritionGoals(nutritionGoals);
         validationError = null;
         saveError = null;
         saveMessage = null;
@@ -140,7 +140,7 @@
 
     private async Task SaveAsync()
     {
-        if (isSaving || profile is null)
+        if (isSaving || nutritionGoals is null)
         {
             return;
         }
@@ -153,7 +153,7 @@
         isSaving = true;
         saveError = null;
         saveMessage = null;
-        var result = await SettingsApi.UpdateProfileAsync(request);
+        var result = await SettingsApi.UpdateNutritionGoalsAsync(request);
         isSaving = false;
         if (!result.Succeeded || result.Value is null)
         {
@@ -161,12 +161,12 @@
             return;
         }
 
-        profile = result.Value;
-        ApplyNutritionGoals(profile.NutritionGoals);
+        nutritionGoals = result.Value;
+        ApplyNutritionGoals(nutritionGoals);
         saveMessage = "Ernæringsmålene er gemt.";
     }
 
-    private bool TryCreateRequest(out UpdateProfileSettingsRequest request)
+    private bool TryCreateRequest(out UpdateNutritionGoalsRequest request)
     {
         validationError = null;
         int? calories = null;
@@ -201,10 +201,7 @@
             return false;
         }
 
-        request = new UpdateProfileSettingsRequest(
-            profile!.DisplayName,
-            profile.HeightCm,
-            profile.WeightKg,
+        request = new UpdateNutritionGoalsRequest(
             calories,
             protein,
             carbohydrates,

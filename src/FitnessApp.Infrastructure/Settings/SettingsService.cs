@@ -59,6 +59,27 @@ internal sealed class SettingsService(
         user.DisplayName = input.DisplayName!.Trim();
         settings.HeightCm = input.HeightCm;
         settings.WeightKg = input.WeightKg;
+        await db.SaveChangesAsync(cancellationToken);
+
+        return new ProfileSettingsResult(SettingsSaveStatus.Saved, MapProfile(user.DisplayName, settings));
+    }
+
+    public async Task<NutritionGoalsResult> UpdateNutritionGoalsAsync(
+        string userId,
+        UpdateNutritionGoalsInput input,
+        CancellationToken cancellationToken)
+    {
+        if (input is null || !IsValidNutritionGoals(input))
+        {
+            return new NutritionGoalsResult(SettingsSaveStatus.Invalid);
+        }
+
+        if (!await UserExistsAsync(userId, cancellationToken))
+        {
+            return new NutritionGoalsResult(SettingsSaveStatus.NotFound);
+        }
+
+        var settings = await GetOrCreateSettingsAsync(userId, cancellationToken);
         settings.DailyCaloriesTarget = input.DailyCaloriesTarget;
         settings.ProteinTargetGrams = input.ProteinTargetGrams;
         settings.CarbohydrateTargetGrams = input.CarbohydrateTargetGrams;
@@ -66,7 +87,7 @@ internal sealed class SettingsService(
         settings.SugarTargetGrams = input.SugarTargetGrams;
         await db.SaveChangesAsync(cancellationToken);
 
-        return new ProfileSettingsResult(SettingsSaveStatus.Saved, MapProfile(user.DisplayName, settings));
+        return new NutritionGoalsResult(SettingsSaveStatus.Saved, MapNutritionGoals(settings));
     }
 
     public async Task<NotificationPreferencesResult> UpdateNotificationPreferencesAsync(
@@ -217,7 +238,9 @@ internal sealed class SettingsService(
     private static bool IsValidProfile(UpdateProfileSettingsInput input) =>
         input.DisplayName?.Trim().Length is >= 1 and <= 100 &&
         IsWithinRange(input.HeightCm, 50m, 300m) &&
-        IsWithinRange(input.WeightKg, 20m, 500m) &&
+        IsWithinRange(input.WeightKg, 20m, 500m);
+
+    private static bool IsValidNutritionGoals(UpdateNutritionGoalsInput input) =>
         IsWithinRange(input.DailyCaloriesTarget, 500, 10_000) &&
         IsWithinRange(input.ProteinTargetGrams, 0, 1_000) &&
         IsWithinRange(input.CarbohydrateTargetGrams, 0, 1_000) &&
@@ -234,12 +257,14 @@ internal sealed class SettingsService(
         displayName,
         settings.HeightCm,
         settings.WeightKg,
-        new NutritionGoalsData(
-            settings.DailyCaloriesTarget,
-            settings.ProteinTargetGrams,
-            settings.CarbohydrateTargetGrams,
-            settings.FatTargetGrams,
-            settings.SugarTargetGrams));
+        MapNutritionGoals(settings));
+
+    private static NutritionGoalsData MapNutritionGoals(UserSettings settings) => new(
+        settings.DailyCaloriesTarget,
+        settings.ProteinTargetGrams,
+        settings.CarbohydrateTargetGrams,
+        settings.FatTargetGrams,
+        settings.SugarTargetGrams);
 
     private static NotificationPreferencesData MapPreferences(UserSettings settings, bool isAdministrator) => new(
         settings.TrainingRemindersEnabled,

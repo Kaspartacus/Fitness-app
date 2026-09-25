@@ -34,6 +34,11 @@ public sealed class SettingsClient(IHttpClientFactory httpClientFactory)
         CancellationToken cancellationToken = default) =>
         SendAsync<ProfileSettingsResponse>(HttpMethod.Put, "api/settings/profile", request, cancellationToken);
 
+    public Task<SettingsClientResult<NutritionGoalsResponse>> UpdateNutritionGoalsAsync(
+        UpdateNutritionGoalsRequest request,
+        CancellationToken cancellationToken = default) =>
+        SendAsync<NutritionGoalsResponse>(HttpMethod.Put, "api/settings/nutrition-goals", request, cancellationToken);
+
     public Task<SettingsClientResult<NotificationPreferencesResponse>> UpdateNotificationPreferencesAsync(
         UpdateNotificationPreferencesRequest request,
         CancellationToken cancellationToken = default) =>

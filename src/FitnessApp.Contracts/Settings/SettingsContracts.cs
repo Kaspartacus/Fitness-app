@@ -16,7 +16,9 @@ public sealed record ProfileSettingsResponse(
 public sealed record UpdateProfileSettingsRequest(
     string? DisplayName,
     decimal? HeightCm,
-    decimal? WeightKg,
+    decimal? WeightKg);
+
+public sealed record UpdateNutritionGoalsRequest(
     int? DailyCaloriesTarget,
     int? ProteinTargetGrams,
     int? CarbohydrateTargetGrams,

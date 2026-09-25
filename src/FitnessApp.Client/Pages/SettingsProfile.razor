@@ -172,7 +172,7 @@
         {
             validationError = "Navnet må højst have 100 tegn.";
         }
-        else if (!TryParseOptionalDecimal(heightCmText, out heightCm))
+        else if (!SettingsDecimalInput.TryParseOptional(heightCmText, out heightCm))
         {
             validationError = "Angiv højden som et tal, for eksempel 175.";
         }
@@ -180,7 +180,7 @@
         {
             validationError = "Højden skal være mellem 50 og 300 cm.";
         }
-        else if (!TryParseOptionalDecimal(weightKgText, out weightKg))
+        else if (!SettingsDecimalInput.TryParseOptional(weightKgText, out weightKg))
         {
             validationError = "Angiv vægten som et tal, for eksempel 72,5.";
         }
@@ -195,36 +195,11 @@
             return false;
         }
 
-        var nutrition = profile!.NutritionGoals;
         request = new UpdateProfileSettingsRequest(
             trimmedName,
             heightCm,
-            weightKg,
-            nutrition.DailyCaloriesTarget,
-            nutrition.ProteinTargetGrams,
-            nutrition.CarbohydrateTargetGrams,
-            nutrition.FatTargetGrams,
-            nutrition.SugarTargetGrams);
+            weightKg);
         return true;
-    }
-
-    private static bool TryParseOptionalDecimal(string text, out decimal? value)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            value = null;
-            return true;
-        }
-
-        if (decimal.TryParse(text, NumberStyles.Number, DanishCulture, out var parsed) ||
-            decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out parsed))
-        {
-            value = parsed;
-            return true;
-        }
-
-        value = null;
-        return false;
     }
 
     private static string FormatNumber(decimal? value) => value?.ToString("0.##", DanishCulture) ?? string.Empty;

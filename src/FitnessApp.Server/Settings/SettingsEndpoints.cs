@@ -14,6 +14,7 @@ internal static class SettingsEndpoints
 
         group.MapGet("", GetOverviewAsync);
         group.MapPut("/profile", UpdateProfileAsync);
+        group.MapPut("/nutrition-goals", UpdateNutritionGoalsAsync);
         group.MapPut("/notification-preferences", UpdateNotificationPreferencesAsync);
         group.MapPost("/garmin-demo/connect", ConnectGarminDemoAsync);
         group.MapPost("/garmin-demo/disconnect", DisconnectGarminDemoAsync);
@@ -53,7 +54,32 @@ internal static class SettingsEndpoints
             new UpdateProfileSettingsInput(
                 request.DisplayName,
                 request.HeightCm,
-                request.WeightKg,
+                request.WeightKg),
+            cancellationToken);
+
+        return result.Status switch
+        {
+            SettingsSaveStatus.Saved when result.Profile is { } profile => Results.Ok(Map(profile)),
+            SettingsSaveStatus.Invalid => ProfileValidation(),
+            SettingsSaveStatus.NotFound => Results.NotFound(new { title = "Profilen blev ikke fundet." }),
+            _ => Unexpected()
+        };
+    }
+
+    private static async Task<IResult> UpdateNutritionGoalsAsync(
+        UpdateNutritionGoalsRequest? request,
+        ClaimsPrincipal user,
+        ISettingsService settingsService,
+        CancellationToken cancellationToken)
+    {
+        if (request is null)
+        {
+            return NutritionGoalsValidation();
+        }
+
+        var result = await settingsService.UpdateNutritionGoalsAsync(
+            Owner(user),
+            new UpdateNutritionGoalsInput(
                 request.DailyCaloriesTarget,
                 request.ProteinTargetGrams,
                 request.CarbohydrateTargetGrams,
@@ -63,9 +89,9 @@ internal static class SettingsEndpoints
 
         return result.Status switch
         {
-            SettingsSaveStatus.Saved when result.Profile is { } profile => Results.Ok(Map(profile)),
-            SettingsSaveStatus.Invalid => ProfileValidation(),
-            SettingsSaveStatus.NotFound => Results.NotFound(new { title = "Profilen blev ikke fundet." }),
+            SettingsSaveStatus.Saved when result.Goals is { } goals => Results.Ok(Map(goals)),
+            SettingsSaveStatus.Invalid => NutritionGoalsValidation(),
+            SettingsSaveStatus.NotFound => Results.NotFound(new { title = "Ernæringsmålene blev ikke fundet." }),
             _ => Unexpected()
         };
     }
@@ -147,8 +173,13 @@ internal static class SettingsEndpoints
 
     private static IResult ProfileValidation() => Results.ValidationProblem(new Dictionary<string, string[]>
     {
-        ["Profil"] = ["Kontrollér navn, højde, vægt samt energi- og makromål."]
+        ["Profil"] = ["Kontrollér navn, højde og vægt."]
     }, title: "Kontrollér profiloplysningerne.");
+
+    private static IResult NutritionGoalsValidation() => Results.ValidationProblem(new Dictionary<string, string[]>
+    {
+        ["Ernæringsmål"] = ["Kontrollér energi- og makromål."]
+    }, title: "Kontrollér ernæringsmålene.");
 
     private static IResult Unexpected() => Results.Problem(
         statusCode: StatusCodes.Status500InternalServerError,
@@ -168,12 +199,14 @@ internal static class SettingsEndpoints
         profile.DisplayName,
         profile.HeightCm,
         profile.WeightKg,
-        new NutritionGoalsResponse(
-            profile.NutritionGoals.DailyCaloriesTarget,
-            profile.NutritionGoals.ProteinTargetGrams,
-            profile.NutritionGoals.CarbohydrateTargetGrams,
-            profile.NutritionGoals.FatTargetGrams,
-            profile.NutritionGoals.SugarTargetGrams));
+        Map(profile.NutritionGoals));
+
+    private static NutritionGoalsResponse Map(NutritionGoalsData goals) => new(
+        goals.DailyCaloriesTarget,
+        goals.ProteinTargetGrams,
+        goals.CarbohydrateTargetGrams,
+        goals.FatTargetGrams,
+        goals.SugarTargetGrams);
 
     private static NotificationPreferencesResponse Map(NotificationPreferencesData preferences) => new(
         preferences.TrainingRemindersEnabled,

@@ -31,7 +31,9 @@ public sealed record SettingsOverviewData(
 public sealed record UpdateProfileSettingsInput(
     string? DisplayName,
     decimal? HeightCm,
-    decimal? WeightKg,
+    decimal? WeightKg);
+
+public sealed record UpdateNutritionGoalsInput(
     int? DailyCaloriesTarget,
     int? ProteinTargetGrams,
     int? CarbohydrateTargetGrams,
@@ -52,6 +54,10 @@ public enum SettingsSaveStatus
 public sealed record ProfileSettingsResult(
     SettingsSaveStatus Status,
     ProfileSettingsData? Profile = null);
+
+public sealed record NutritionGoalsResult(
+    SettingsSaveStatus Status,
+    NutritionGoalsData? Goals = null);
 
 public sealed record NotificationPreferencesResult(
     SettingsSaveStatus Status,
@@ -86,6 +92,11 @@ public interface ISettingsService
     Task<ProfileSettingsResult> UpdateProfileAsync(
         string userId,
         UpdateProfileSettingsInput input,
+        CancellationToken cancellationToken);
+
+    Task<NutritionGoalsResult> UpdateNutritionGoalsAsync(
+        string userId,
+        UpdateNutritionGoalsInput input,
         CancellationToken cancellationToken);
 
     Task<NotificationPreferencesResult> UpdateNotificationPreferencesAsync(
