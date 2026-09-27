@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using FitnessApp.Domain.Calendar;
 using FitnessApp.Domain.Running;
+using FitnessApp.Domain.Settings;
 using FitnessApp.Domain.Strength;
 using FitnessApp.Infrastructure.Nutrition;
 
@@ -32,6 +33,8 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
     public DbSet<NutritionFoodEntry> NutritionFoodEntries => Set<NutritionFoodEntry>();
     public DbSet<NutritionRecipe> NutritionRecipes => Set<NutritionRecipe>();
     public DbSet<NutritionRecipeIngredient> NutritionRecipeIngredients => Set<NutritionRecipeIngredient>();
+    public DbSet<UserSettings> UserSettings => Set<UserSettings>();
+    public DbSet<InAppNotification> InAppNotifications => Set<InAppNotification>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -208,6 +211,33 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
             entity.Property(ingredient => ingredient.Name).HasMaxLength(500).IsRequired();
             entity.Property(ingredient => ingredient.FoodGroup).HasMaxLength(300).IsRequired();
             entity.Property(ingredient => ingredient.CatalogueVersion).HasMaxLength(32).IsRequired();
+        });
+
+        builder.Entity<UserSettings>(entity =>
+        {
+            entity.HasKey(settings => settings.UserId);
+            entity.Property(settings => settings.UserId).HasMaxLength(450);
+            entity.Property(settings => settings.HeightCm).HasPrecision(5, 1);
+            entity.Property(settings => settings.WeightKg).HasPrecision(5, 1);
+            entity.Property(settings => settings.TrainingRemindersEnabled).HasDefaultValue(true);
+            entity.Property(settings => settings.AdminRequestNotificationsEnabled).HasDefaultValue(true);
+            entity.HasOne<ApplicationUser>().WithOne().HasForeignKey<UserSettings>(settings => settings.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<InAppNotification>(entity =>
+        {
+            entity.HasKey(notification => notification.Id);
+            entity.Property(notification => notification.UserId).HasMaxLength(450).IsRequired();
+            entity.Property(notification => notification.Kind).HasConversion<int>();
+            entity.Property(notification => notification.SourceKey).HasMaxLength(200).IsRequired();
+            entity.Property(notification => notification.Title).HasMaxLength(160).IsRequired();
+            entity.Property(notification => notification.Message).HasMaxLength(500).IsRequired();
+            entity.Property(notification => notification.TargetPath).HasMaxLength(300).IsRequired();
+            entity.HasIndex(notification => new { notification.UserId, notification.SourceKey }).IsUnique();
+            entity.HasIndex(notification => new { notification.UserId, notification.ReadAtUtc, notification.CreatedAtUtc });
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(notification => notification.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<ApplicationUser>(entity =>

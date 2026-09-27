@@ -9,6 +9,9 @@ internal sealed class UserAdministrationService(
     FitnessDbContext dbContext,
     TimeProvider timeProvider) : IUserAdministrationService
 {
+    public Task<int> CountPendingAsync(CancellationToken cancellationToken) =>
+        Registrations().CountAsync(cancellationToken);
+
     public async Task<IReadOnlyCollection<PendingRegistration>> GetPendingAsync(
         int limit,
         CancellationToken cancellationToken)
