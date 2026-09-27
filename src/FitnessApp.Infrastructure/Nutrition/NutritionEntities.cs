@@ -17,6 +17,20 @@ public sealed class FridaFood
     public decimal? SugarPer100g { get; set; }
 }
 
+public sealed class NutritionCustomFood
+{
+    public Guid Id { get; set; }
+    public string UserId { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string SearchName { get; set; } = string.Empty;
+    public decimal EnergyKcalPer100g { get; set; }
+    public decimal ProteinPer100g { get; set; }
+    public decimal CarbohydratePer100g { get; set; }
+    public decimal FatPer100g { get; set; }
+    public decimal SugarPer100g { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+}
+
 public sealed class FridaCatalogueRelease
 {
     public const string Key = "frida";
@@ -43,6 +57,7 @@ public sealed class NutritionFoodEntry
     public Guid MealId { get; set; }
     public NutritionMeal Meal { get; set; } = null!;
     public int? FoodId { get; set; }
+    public Guid? CustomFoodId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string FoodGroup { get; set; } = string.Empty;
     public string CatalogueVersion { get; set; } = string.Empty;
@@ -72,6 +87,7 @@ public sealed class NutritionRecipeIngredient
     public Guid RecipeId { get; set; }
     public NutritionRecipe Recipe { get; set; } = null!;
     public int? FoodId { get; set; }
+    public Guid? CustomFoodId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string FoodGroup { get; set; } = string.Empty;
     public string CatalogueVersion { get; set; } = string.Empty;

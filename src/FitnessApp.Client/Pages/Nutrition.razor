@@ -72,8 +72,8 @@
 
 <StrengthBottomNavigation Active="nutrition" />
 
-<ModalDialog IsOpen="@foodDialog" Title="Tilføj mad" Description="Søg i DTU Frida-fødevarekataloget. Værdier er pr. 100 g." DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CloseFood">
-    @if (selectedFood is null)
+<ModalDialog IsOpen="@foodDialog" Title="Tilføj mad" Description="Søg i DTU Frida-kataloget eller opret din egen madvare. Værdier er pr. 100 g." DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CloseFood">
+    @if (selectedFood is null && !creatingCustomFood)
     {
         <input class="nutrition-search" value="@foodQuery" @oninput="FoodQueryChangedAsync" placeholder="Søg efter madvare" aria-label="Søg efter madvare" />
         @if (searching) { <p class="strength-muted-copy" role="status">Søger …</p> }
@@ -83,11 +83,29 @@
             @foreach (var food in searchResults) { <button type="button" @onclick="() => SelectFood(food)"><span><strong>@food.Name</strong><small>@food.FoodGroup · @Number(food.EnergyKcalPer100g) kcal / 100 g · Protein @Number(food.ProteinPer100g) g</small></span><b>＋</b></button> }
         </div>
         @if (searchHasMore) { <button class="strength-secondary-button" type="button" @onclick="LoadMoreFoodsAsync" disabled="@searching">@(searching ? "Indlæser …" : searchError is null ? "Vis flere fødevarer" : "Prøv igen")</button> }
+        <div class="nutrition-custom-food-link"><span>Kan du ikke finde maden?</span><button class="strength-text-action" type="button" @onclick="OpenCustomFoodForm" disabled="@busy">Opret egen madvare</button></div>
+    }
+    else if (creatingCustomFood)
+    {
+        <form class="nutrition-custom-food-form" @onsubmit="CreateCustomFoodAsync" @onsubmit:preventDefault>
+            <p class="strength-muted-copy">Indtast værdier pr. 100 g. Madvaren bliver kun synlig for dig.</p>
+            <label>Navn<input class="strength-input" maxlength="120" autocomplete="off" @bind="customFoodName" @bind:event="oninput" disabled="@busy" /></label>
+            <div class="nutrition-custom-food-grid">
+                <label>Kalorier<input class="strength-input" inputmode="decimal" autocomplete="off" placeholder="Fx 250" @bind="customEnergyText" @bind:event="oninput" disabled="@busy" /><span>kcal / 100 g</span></label>
+                <label>Fedt<input class="strength-input" inputmode="decimal" autocomplete="off" placeholder="Fx 8" @bind="customFatText" @bind:event="oninput" disabled="@busy" /><span>g / 100 g</span></label>
+                <label>Sukker<input class="strength-input" inputmode="decimal" autocomplete="off" placeholder="Fx 4" @bind="customSugarText" @bind:event="oninput" disabled="@busy" /><span>g / 100 g</span></label>
+                <label>Kulhydrat<input class="strength-input" inputmode="decimal" autocomplete="off" placeholder="Fx 20" @bind="customCarbohydrateText" @bind:event="oninput" disabled="@busy" /><span>g / 100 g</span></label>
+                <label>Protein<input class="strength-input" inputmode="decimal" autocomplete="off" placeholder="Fx 12" @bind="customProteinText" @bind:event="oninput" disabled="@busy" /><span>g / 100 g</span></label>
+            </div>
+            @if (customFoodError is not null) { <p class="strength-error" role="alert">@customFoodError</p> }
+            <div class="app-modal-actions"><button class="strength-secondary-button" type="button" @onclick="CloseCustomFoodForm" disabled="@busy">Tilbage</button><button class="strength-primary-button" type="submit" disabled="@busy">@(busy ? "Gemmer …" : "Gem madvare")</button></div>
+        </form>
     }
     else
     {
+        var food = selectedFood!;
         @if (searchError is not null) { <p class="strength-error" role="alert">@searchError</p> }
-        <div class="nutrition-food-detail"><p class="strength-overline">NÆRINGSINDHOLD PR. 100 G</p><h3>@selectedFood.Name</h3><dl><div><dt>Kalorier</dt><dd>@Number(selectedFood.EnergyKcalPer100g) kcal</dd></div><div><dt>Protein</dt><dd>@Number(selectedFood.ProteinPer100g) g</dd></div><div><dt>Kulhydrat</dt><dd>@Number(selectedFood.CarbohydratePer100g) g</dd></div><div><dt>Fedt</dt><dd>@Number(selectedFood.FatPer100g) g</dd></div><div><dt>Sukker</dt><dd>@Number(selectedFood.SugarPer100g) g</dd></div></dl><label for="nutrition-grams">MÆNGDE</label><div class="nutrition-grams"><input id="nutrition-grams" type="text" inputmode="decimal" value="@grams.ToString("0.#", Danish)" @oninput="GramsChanged" /><span>g</span></div>@if (!gramsValid) { <p class="strength-field-error" role="alert">Angiv en mængde mellem 0,1 og 10.000 g.</p> }<p class="nutrition-calculated">Beregnet <strong>@Number(CalculatedEnergy) kcal</strong></p></div>
+        <div class="nutrition-food-detail"><p class="strength-overline">NÆRINGSINDHOLD PR. 100 G</p><h3>@food.Name</h3><dl><div><dt>Kalorier</dt><dd>@Number(food.EnergyKcalPer100g) kcal</dd></div><div><dt>Protein</dt><dd>@Number(food.ProteinPer100g) g</dd></div><div><dt>Kulhydrat</dt><dd>@Number(food.CarbohydratePer100g) g</dd></div><div><dt>Fedt</dt><dd>@Number(food.FatPer100g) g</dd></div><div><dt>Sukker</dt><dd>@Number(food.SugarPer100g) g</dd></div></dl><label for="nutrition-grams">MÆNGDE</label><div class="nutrition-grams"><input id="nutrition-grams" type="text" inputmode="decimal" value="@grams.ToString("0.#", Danish)" @oninput="GramsChanged" /><span>g</span></div>@if (!gramsValid) { <p class="strength-field-error" role="alert">Angiv en mængde mellem 0,1 og 10.000 g.</p> }<p class="nutrition-calculated">Beregnet <strong>@Number(CalculatedEnergy) kcal</strong></p></div>
         <div class="app-modal-actions"><button class="strength-secondary-button" @onclick="BackToFoodSearch" disabled="@busy">Tilbage</button><button class="strength-primary-button" @onclick="AddFoodAsync" disabled="@(busy || !gramsValid)">@(busy ? "Tilføjer …" : $"Tilføj til {SlotName(openSlot)}")</button></div>
     }
 </ModalDialog>
@@ -128,16 +146,19 @@
     private NutritionDayResponse? day;
     private DateOnly SelectedDate = RunningPresentation.CopenhagenToday;
     private NutritionMealSlot openSlot = NutritionMealSlot.Breakfast;
-    private bool loading = true, busy, foodDialog, searching, recipeDialog, recipesDialog, recipesLoading;
+    private bool loading = true, busy, foodDialog, searching, creatingCustomFood, recipeDialog, recipesDialog, recipesLoading;
     private bool gramsValid = true, recipePortionsValid = true, addRecipePortionsValid = true, searchHasMore;
     private int loadSequence, searchPage;
-    private string? error, operationError, searchError, saveRecipeError, recipeListError, addRecipeError;
+    private string? error, operationError, searchError, customFoodError, saveRecipeError, recipeListError, addRecipeError;
     private string foodQuery = string.Empty, recipeName = string.Empty;
+    private string customFoodName = string.Empty, customEnergyText = string.Empty, customProteinText = string.Empty;
+    private string customCarbohydrateText = string.Empty, customFatText = string.Empty, customSugarText = string.Empty;
     private decimal grams = 100, recipePortions = 1, addRecipePortions = 1;
     private FoodSearchResponse? selectedFood;
     private NutritionFoodEntryResponse? entryToDelete;
     private NutritionRecipeResponse? selectedRecipe;
-    private readonly Dictionary<(DateOnly Date, NutritionMealSlot Slot, int FoodId, decimal Grams), Guid> pendingFoodRequests = [];
+    private readonly Dictionary<(DateOnly Date, NutritionMealSlot Slot, int? FoodId, Guid? CustomFoodId, decimal Grams), Guid> pendingFoodRequests = [];
+    private readonly Dictionary<(string Name, decimal Energy, decimal Protein, decimal Carbohydrate, decimal Fat, decimal Sugar), Guid> pendingCustomFoodRequests = [];
     private readonly Dictionary<(DateOnly Date, NutritionMealSlot Slot, string Name, decimal Portions), Guid> pendingRecipeCreations = [];
     private readonly Dictionary<(Guid RecipeId, DateOnly Date, NutritionMealSlot Slot, decimal Portions), Guid> pendingRecipeAdditions = [];
     private List<FoodSearchResponse> searchResults = [];
@@ -168,6 +189,7 @@
         openSlot = slot;
         foodDialog = true;
         selectedFood = null;
+        creatingCustomFood = false;
         foodQuery = string.Empty;
         searchResults = [];
         searchError = null;
@@ -180,11 +202,90 @@
         if (busy) return;
         foodDialog = false;
         selectedFood = null;
+        creatingCustomFood = false;
         searchCts?.Cancel();
         searching = false;
     }
 
     private void BackToFoodSearch() { selectedFood = null; searchError = null; }
+
+    private void OpenCustomFoodForm()
+    {
+        creatingCustomFood = true;
+        customFoodName = string.Empty;
+        customEnergyText = string.Empty;
+        customProteinText = string.Empty;
+        customCarbohydrateText = string.Empty;
+        customFatText = string.Empty;
+        customSugarText = string.Empty;
+        customFoodError = null;
+    }
+
+    private void CloseCustomFoodForm()
+    {
+        if (busy) return;
+        creatingCustomFood = false;
+        customFoodError = null;
+    }
+
+    private async Task CreateCustomFoodAsync()
+    {
+        if (busy) return;
+        customFoodError = null;
+        var name = customFoodName.Trim();
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 120)
+        {
+            customFoodError = "Skriv et navn på højst 120 tegn.";
+            return;
+        }
+        if (!TryRequiredNutritionValue(customEnergyText, 1000m, out var energy) ||
+            !TryRequiredNutritionValue(customProteinText, 100m, out var protein) ||
+            !TryRequiredNutritionValue(customCarbohydrateText, 100m, out var carbohydrates) ||
+            !TryRequiredNutritionValue(customFatText, 100m, out var fat) ||
+            !TryRequiredNutritionValue(customSugarText, 100m, out var sugar))
+        {
+            customFoodError = "Udfyld alle næringsværdier med tal fra 0 og op. Makronæringsstoffer må højst være 100 g pr. 100 g.";
+            return;
+        }
+
+        var key = (name, energy, protein, carbohydrates, fat, sugar);
+        if (!pendingCustomFoodRequests.TryGetValue(key, out var requestId))
+            pendingCustomFoodRequests[key] = requestId = Guid.NewGuid();
+
+        busy = true;
+        var result = await NutritionClient.CreateCustomFoodAsync(new()
+        {
+            Id = requestId,
+            Name = name,
+            EnergyKcalPer100g = energy,
+            ProteinPer100g = protein,
+            CarbohydratePer100g = carbohydrates,
+            FatPer100g = fat,
+            SugarPer100g = sugar
+        }, CancellationToken.None);
+        busy = false;
+        if (!result.IsSuccess || result.Value is null)
+        {
+            customFoodError = result.Error ?? "Madvaren kunne ikke gemmes. Prøv igen.";
+            return;
+        }
+
+        pendingCustomFoodRequests.Remove(key);
+        selectedFood = result.Value;
+        creatingCustomFood = false;
+        grams = 100;
+        gramsValid = true;
+        searchError = null;
+    }
+
+    private static bool TryRequiredNutritionValue(string? text, decimal max, out decimal value)
+    {
+        value = 0m;
+        if (!SettingsDecimalInput.TryParseOptional(text, out var parsed) || parsed is null || parsed < 0m || parsed > max)
+            return false;
+        value = parsed.Value;
+        return true;
+    }
 
     private async Task FoodQueryChangedAsync(ChangeEventArgs eventArgs)
     {
@@ -267,11 +368,11 @@
     private async Task AddFoodAsync()
     {
         if (selectedFood is null || !gramsValid || busy) return;
-        var payload = (SelectedDate, openSlot, selectedFood.FoodId, grams);
+        var payload = (SelectedDate, openSlot, selectedFood.FoodId, selectedFood.CustomFoodId, grams);
         if (!pendingFoodRequests.TryGetValue(payload, out var requestId)) pendingFoodRequests[payload] = requestId = Guid.NewGuid();
         busy = true;
         searchError = null;
-        var result = await NutritionClient.AddAsync(new() { Id = requestId, Date = SelectedDate, MealSlot = openSlot, FoodId = selectedFood.FoodId, Grams = grams }, CancellationToken.None);
+        var result = await NutritionClient.AddAsync(new() { Id = requestId, Date = SelectedDate, MealSlot = openSlot, FoodId = selectedFood.FoodId, CustomFoodId = selectedFood.CustomFoodId, Grams = grams }, CancellationToken.None);
         busy = false;
         if (result.IsSuccess) { day = result.Value; operationError = null; pendingFoodRequests.Remove(payload); CloseFood(); }
         else searchError = result.Error;

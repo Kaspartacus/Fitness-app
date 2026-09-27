@@ -3,6 +3,7 @@
 @using FitnessApp.Client.Settings
 @using FitnessApp.Contracts.Settings
 @inject SettingsClient SettingsApi
+@inject NavigationManager Navigation
 
 <PageTitle>Ernæringsmål</PageTitle>
 
@@ -164,7 +165,7 @@
 
         nutritionGoals = result.Value;
         ApplyNutritionGoals(nutritionGoals);
-        saveMessage = "Ernæringsmålene er gemt.";
+        Navigation.NavigateTo("/kost");
     }
 
     private bool TryCreateRequest(out UpdateNutritionGoalsRequest request)

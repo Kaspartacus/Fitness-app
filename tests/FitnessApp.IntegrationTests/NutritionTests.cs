@@ -33,6 +33,111 @@ public sealed class NutritionTests
     }
 
     [Fact]
+    public async Task CustomFoodsAreSavedPrivatelySearchableAndUsableInDailyLogs()
+    {
+        using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync(); await SeedCatalogue(factory);
+        var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        var other = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        using var ownerClient = await Login(factory, owner);
+        using var otherClient = await Login(factory, other);
+        var customId = Guid.NewGuid();
+        var customFood = new CreateCustomNutritionFoodRequest
+        {
+            Id = customId,
+            Name = "Hjemmelavet rugbrød",
+            EnergyKcalPer100g = 250,
+            ProteinPer100g = 10,
+            CarbohydratePer100g = 30,
+            FatPer100g = 8,
+            SugarPer100g = 3
+        };
+
+        var created = await ownerClient.PostAsJsonAsync("/api/nutrition/foods/custom", customFood);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var savedFood = (await created.Content.ReadFromJsonAsync<FoodSearchResponse>())!;
+        Assert.Null(savedFood.FoodId);
+        Assert.Equal(customId, savedFood.CustomFoodId);
+        Assert.Equal("Egen madvare", savedFood.FoodGroup);
+
+        var duplicate = await ownerClient.PostAsJsonAsync("/api/nutrition/foods/custom", customFood);
+        Assert.Equal(HttpStatusCode.Created, duplicate.StatusCode);
+        Assert.Equal(customId, (await duplicate.Content.ReadFromJsonAsync<FoodSearchResponse>())!.CustomFoodId);
+        Assert.Equal(HttpStatusCode.Conflict, (await ownerClient.PostAsJsonAsync("/api/nutrition/foods/custom", new CreateCustomNutritionFoodRequest
+        {
+            Id = customId,
+            Name = "Andet rugbrød",
+            EnergyKcalPer100g = 250,
+            ProteinPer100g = 10,
+            CarbohydratePer100g = 30,
+            FatPer100g = 8,
+            SugarPer100g = 3
+        })).StatusCode);
+
+        var ownerSearch = (await ownerClient.GetFromJsonAsync<FoodSearchPageResponse>("/api/nutrition/foods?query=rugbroed&page=1&pageSize=20"))!;
+        Assert.Equal(customId, Assert.Single(ownerSearch.Items).CustomFoodId);
+        var otherSearch = (await otherClient.GetFromJsonAsync<FoodSearchPageResponse>("/api/nutrition/foods?query=rugbroed&page=1&pageSize=20"))!;
+        Assert.Empty(otherSearch.Items);
+
+        var date = new DateOnly(2026, 9, 26);
+        var addRequest = new AddNutritionFoodRequest
+        {
+            Id = Guid.NewGuid(), Date = date, MealSlot = NutritionMealSlot.Breakfast,
+            CustomFoodId = customId, Grams = 50
+        };
+        Assert.Equal(HttpStatusCode.Created, (await ownerClient.PostAsJsonAsync("/api/nutrition/entries", addRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await ownerClient.PostAsJsonAsync("/api/nutrition/entries", addRequest)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await otherClient.PostAsJsonAsync("/api/nutrition/entries", new AddNutritionFoodRequest
+        {
+            Id = Guid.NewGuid(), Date = date, MealSlot = NutritionMealSlot.Breakfast,
+            CustomFoodId = customId, Grams = 50
+        })).StatusCode);
+
+        var day = (await ownerClient.GetFromJsonAsync<NutritionDayResponse>($"/api/nutrition/days/{date:yyyy-MM-dd}"))!;
+        Assert.Equal(125m, day.Totals.EnergyKcal);
+        Assert.Equal(5m, day.Totals.Protein);
+        Assert.Equal(15m, day.Totals.Carbohydrate);
+        Assert.Equal(4m, day.Totals.Fat);
+        Assert.Equal(1.5m, day.Totals.Sugar);
+        Assert.Single(day.Meals.Single(meal => meal.Slot == NutritionMealSlot.Breakfast).Entries);
+
+        Assert.Equal(HttpStatusCode.Created, (await ownerClient.PostAsJsonAsync("/api/nutrition/recipes", new CreateNutritionRecipeRequest
+        {
+            Id = Guid.NewGuid(), Date = date, MealSlot = NutritionMealSlot.Breakfast, Name = "Rugbrødsmåltid", Portions = 1
+        })).StatusCode);
+        var recipes = (await ownerClient.GetFromJsonAsync<NutritionRecipeResponse[]>("/api/nutrition/recipes"))!;
+        var recipe = Assert.Single(recipes);
+        Assert.Equal(HttpStatusCode.Created, (await ownerClient.PostAsJsonAsync($"/api/nutrition/recipes/{recipe.Id}/entries", new AddNutritionRecipeRequest
+        {
+            Id = Guid.NewGuid(), Date = date, MealSlot = NutritionMealSlot.Dinner, Portions = 1
+        })).StatusCode);
+        var updatedDay = (await ownerClient.GetFromJsonAsync<NutritionDayResponse>($"/api/nutrition/days/{date:yyyy-MM-dd}"))!;
+        Assert.Equal(250m, updatedDay.Totals.EnergyKcal);
+        Assert.Equal("Hjemmelavet rugbrød", Assert.Single(updatedDay.Meals.Single(meal => meal.Slot == NutritionMealSlot.Dinner).Entries).Name);
+    }
+
+    [Fact]
+    public async Task CustomFoodsRequireAllNutrientValuesWithinRange()
+    {
+        using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync();
+        using var client = await Login(factory);
+        var invalid = new CreateCustomNutritionFoodRequest
+        {
+            Id = Guid.NewGuid(), Name = "Ugyldig mad", EnergyKcalPer100g = 1200,
+            ProteinPer100g = 101, CarbohydratePer100g = 0, FatPer100g = 0, SugarPer100g = 0
+        };
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/nutrition/foods/custom", invalid)).StatusCode);
+        var incomplete = new CreateCustomNutritionFoodRequest
+        {
+            Id = Guid.NewGuid(), Name = "Mangler sukker", EnergyKcalPer100g = 120,
+            ProteinPer100g = 4, CarbohydratePer100g = 20, FatPer100g = 3
+        };
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/nutrition/foods/custom", incomplete)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateHttpsClient().PostAsJsonAsync("/api/nutrition/foods/custom", invalid)).StatusCode);
+        await using var scope = factory.Services.CreateAsyncScope();
+        Assert.Empty(await scope.ServiceProvider.GetRequiredService<FitnessDbContext>().NutritionCustomFoods.ToListAsync());
+    }
+
+    [Fact]
     public async Task DailyGoalsComeFromSettingsAndEmptyTotalsAreZero()
     {
         using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync(); await SeedCatalogue(factory);

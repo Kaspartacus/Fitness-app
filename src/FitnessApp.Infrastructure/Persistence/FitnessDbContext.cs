@@ -27,6 +27,7 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
     public DbSet<RunningResult> RunningResults => Set<RunningResult>();
     public DbSet<CalendarOccurrenceMove> CalendarOccurrenceMoves => Set<CalendarOccurrenceMove>();
     public DbSet<FridaFood> FridaFoods => Set<FridaFood>();
+    public DbSet<NutritionCustomFood> NutritionCustomFoods => Set<NutritionCustomFood>();
     public DbSet<FridaCatalogueRelease> FridaCatalogueReleases => Set<FridaCatalogueRelease>();
     public DbSet<NutritionMeal> NutritionMeals => Set<NutritionMeal>();
     public DbSet<NutritionFoodEntry> NutritionFoodEntries => Set<NutritionFoodEntry>();
@@ -164,6 +165,16 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
             entity.Property(food => food.SearchName).HasMaxLength(700).IsRequired();
             entity.Property(food => food.PublishedNutrientsJson).IsRequired();
             entity.HasIndex(food => food.SearchName);
+        });
+        builder.Entity<NutritionCustomFood>(entity =>
+        {
+            entity.HasKey(food => food.Id);
+            entity.Property(food => food.UserId).HasMaxLength(450).IsRequired();
+            entity.Property(food => food.Name).HasMaxLength(120).IsRequired();
+            entity.Property(food => food.SearchName).HasMaxLength(200).IsRequired();
+            entity.Property(food => food.CreatedAtUtc).IsRequired();
+            entity.HasIndex(food => new { food.UserId, food.SearchName });
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(food => food.UserId).OnDelete(DeleteBehavior.Cascade);
         });
         builder.Entity<FridaCatalogueRelease>(entity =>
         {

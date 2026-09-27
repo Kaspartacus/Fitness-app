@@ -18,9 +18,11 @@ The importer maps only these published Frida parameters, all per 100 g of edible
 
 Missing values remain unknown (`null`), rather than becoming zero. Calculations retain decimal precision and scale the source value by `grams / 100`; the Danish UI only rounds for display.
 
+Each approved user can add private custom foods from the food-search dialog. A custom food requires a name and all five values (energy, protein, available carbohydrate, fat, and sugar) per 100 g. It is stored separately from the shared Frida catalogue, appears only in that user's searches, and is not removed by a Frida reimport. Daily entries and saved recipes keep nutrient snapshots.
+
 ## Goals and saved meals
 
-Nutrition goals use the account's `UserSettings` as their single source of truth and support optional Danish decimal values. The consolidation migration copies legacy `NutritionTargets` values into empty settings fields, preserves pre-existing settings values, and only then removes the duplicate table. Its rollback recreates the legacy table from the account settings.
+Nutrition goals use the account's `UserSettings` as their single source of truth and support optional Danish decimal values. Saving goals returns to the daily Nutrition overview. The consolidation migration copies legacy `NutritionTargets` values into empty settings fields, preserves pre-existing settings values, and only then removes the duplicate table. Its rollback recreates the legacy table from the account settings.
 
 Adding food, saving a meal, and adding a saved meal use stable client-generated request IDs. Repeating the same request is safe; reusing an ID with different data conflicts. Saved meals keep snapshots of their ingredient nutrients, and scaled servings are rejected if any ingredient would be outside the valid 0.1–10,000 g range.
 

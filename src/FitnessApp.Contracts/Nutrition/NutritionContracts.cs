@@ -11,7 +11,8 @@ public enum NutritionMealSlot
 }
 
 public sealed record FoodSearchResponse(
-    int FoodId,
+    int? FoodId,
+    Guid? CustomFoodId,
     string Name,
     string FoodGroup,
     decimal? EnergyKcalPer100g,
@@ -27,8 +28,20 @@ public sealed class AddNutritionFoodRequest
     public Guid Id { get; set; }
     public DateOnly Date { get; set; }
     public NutritionMealSlot MealSlot { get; set; }
-    public int FoodId { get; set; }
+    public int? FoodId { get; set; }
+    public Guid? CustomFoodId { get; set; }
     public decimal Grams { get; set; }
+}
+
+public sealed class CreateCustomNutritionFoodRequest
+{
+    public Guid Id { get; set; }
+    public string? Name { get; set; }
+    public decimal? EnergyKcalPer100g { get; set; }
+    public decimal? ProteinPer100g { get; set; }
+    public decimal? CarbohydratePer100g { get; set; }
+    public decimal? FatPer100g { get; set; }
+    public decimal? SugarPer100g { get; set; }
 }
 
 public sealed class UpdateNutritionFoodRequest

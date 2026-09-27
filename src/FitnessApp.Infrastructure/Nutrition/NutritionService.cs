@@ -22,22 +22,107 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
         return new NutritionDayData(date, Sum(responses.SelectMany(meal => meal.Entries)), target, responses, Attribution);
     }
 
-    public async Task<FoodSearchPageData> SearchFoodsAsync(string query, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<FoodSearchPageData> SearchFoodsAsync(string userId, string query, int page, int pageSize, CancellationToken cancellationToken)
     {
         page = Math.Clamp(page, 1, 10_000); pageSize = Math.Clamp(pageSize, 1, 30);
         var terms = Normalize(query).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (terms.Length == 0) return new FoodSearchPageData([], page, pageSize, false);
-        IQueryable<FridaFood> foods = db.FridaFoods.AsNoTracking();
+        var fridaFoods = db.FridaFoods.AsNoTracking().Select(food => new
+        {
+            FoodId = (int?)food.FoodId,
+            CustomFoodId = (Guid?)null,
+            food.DanishName,
+            FoodGroup = food.FoodGroup,
+            food.SearchName,
+            food.EnergyKcalPer100g,
+            food.ProteinPer100g,
+            food.CarbohydratePer100g,
+            food.FatPer100g,
+            food.SugarPer100g
+        });
+        var customFoods = db.NutritionCustomFoods.AsNoTracking().Where(food => food.UserId == userId).Select(food => new
+        {
+            FoodId = (int?)null,
+            CustomFoodId = (Guid?)food.Id,
+            DanishName = food.Name,
+            FoodGroup = "Egen madvare",
+            food.SearchName,
+            EnergyKcalPer100g = (decimal?)food.EnergyKcalPer100g,
+            ProteinPer100g = (decimal?)food.ProteinPer100g,
+            CarbohydratePer100g = (decimal?)food.CarbohydratePer100g,
+            FatPer100g = (decimal?)food.FatPer100g,
+            SugarPer100g = (decimal?)food.SugarPer100g
+        });
+        var foods = fridaFoods.Concat(customFoods);
         foreach (var term in terms) foods = foods.Where(food => EF.Functions.Like(food.SearchName, $"%{EscapeLikeTerm(term)}%", "\\"));
         var normalized = string.Join(' ', terms);
         var candidates = await foods.OrderBy(food => food.SearchName == normalized ? 0 : food.SearchName.StartsWith(normalized) ? 1 : 2)
-            .ThenBy(food => food.DanishName).ThenBy(food => food.FoodId).Skip((page - 1) * pageSize).Take(pageSize + 1).ToListAsync(cancellationToken);
-        return new FoodSearchPageData(candidates.Take(pageSize).Select(Map).ToArray(), page, pageSize, candidates.Count > pageSize);
+            .ThenBy(food => food.DanishName).ThenBy(food => food.FoodId).ThenBy(food => food.CustomFoodId)
+            .Skip((page - 1) * pageSize).Take(pageSize + 1).ToListAsync(cancellationToken);
+        return new FoodSearchPageData(candidates.Take(pageSize).Select(food => new FoodSearchData(
+            food.FoodId, food.CustomFoodId, food.DanishName, food.FoodGroup, food.EnergyKcalPer100g,
+            food.ProteinPer100g, food.CarbohydratePer100g, food.FatPer100g, food.SugarPer100g)).ToArray(), page, pageSize, candidates.Count > pageSize);
+    }
+
+    public async Task<(NutritionOperationStatus Status, FoodSearchData? Food)> CreateCustomFoodAsync(
+        string userId,
+        CreateCustomNutritionFoodInput request,
+        CancellationToken cancellationToken)
+    {
+        var name = request?.Name?.Trim();
+        if (request is null || request.Id == Guid.Empty || string.IsNullOrWhiteSpace(name) || name.Length > 120 ||
+            request.EnergyKcalPer100g is < 0m or > 1000m ||
+            request.ProteinPer100g is < 0m or > 100m ||
+            request.CarbohydratePer100g is < 0m or > 100m ||
+            request.FatPer100g is < 0m or > 100m ||
+            request.SugarPer100g is < 0m or > 100m)
+        {
+            return (NutritionOperationStatus.Invalid, null);
+        }
+
+        var existing = await db.NutritionCustomFoods.AsNoTracking()
+            .SingleOrDefaultAsync(food => food.Id == request.Id, cancellationToken);
+        if (existing is not null)
+        {
+            return existing.UserId == userId && Matches(existing, name, request)
+                ? (NutritionOperationStatus.Saved, Map(existing))
+                : (NutritionOperationStatus.Conflict, null);
+        }
+
+        var food = new NutritionCustomFood
+        {
+            Id = request.Id,
+            UserId = userId,
+            Name = name,
+            SearchName = Normalize(name),
+            EnergyKcalPer100g = request.EnergyKcalPer100g,
+            ProteinPer100g = request.ProteinPer100g,
+            CarbohydratePer100g = request.CarbohydratePer100g,
+            FatPer100g = request.FatPer100g,
+            SugarPer100g = request.SugarPer100g,
+            CreatedAtUtc = timeProvider.GetUtcNow().UtcDateTime
+        };
+        db.NutritionCustomFoods.Add(food);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return (NutritionOperationStatus.Saved, Map(food));
+        }
+        catch (DbUpdateException)
+        {
+            db.ChangeTracker.Clear();
+            var racedFood = await db.NutritionCustomFoods.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.Id == request.Id, cancellationToken);
+            return racedFood is not null && racedFood.UserId == userId && Matches(racedFood, name, request)
+                ? (NutritionOperationStatus.Saved, Map(racedFood))
+                : (NutritionOperationStatus.Conflict, null);
+        }
     }
 
     public async Task<NutritionOperationResult> AddFoodAsync(string userId, AddNutritionFoodInput request, CancellationToken cancellationToken)
     {
-        if (request is null || request.Id == Guid.Empty || !IsValidDate(request.Date) || !IsValidSlot(request.MealSlot) || !ValidGrams(request.Grams))
+        if (request is null || request.Id == Guid.Empty || !IsValidDate(request.Date) || !IsValidSlot(request.MealSlot) || !ValidGrams(request.Grams) ||
+            (request.FoodId is null) == (request.CustomFoodId is null))
             return new(NutritionOperationStatus.Invalid);
         var existing = await db.NutritionFoodEntries.Include(entry => entry.Meal)
             .SingleOrDefaultAsync(entry => entry.Id == request.Id, cancellationToken);
@@ -45,17 +130,27 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
         {
             if (existing.Meal.UserId != userId) return new(NutritionOperationStatus.NotFound);
             return existing.Meal.Date == request.Date && existing.Meal.Slot == request.MealSlot &&
-                   existing.FoodId == request.FoodId && existing.Grams == request.Grams
+                   existing.FoodId == request.FoodId && existing.CustomFoodId == request.CustomFoodId && existing.Grams == request.Grams
                 ? new(NutritionOperationStatus.Saved, await GetDayAsync(userId, existing.Meal.Date, cancellationToken))
                 : new(NutritionOperationStatus.Conflict);
         }
-        var food = await db.FridaFoods.AsNoTracking().SingleOrDefaultAsync(item => item.FoodId == request.FoodId, cancellationToken);
-        if (food is null) return new(NutritionOperationStatus.NotFound);
-        var release = await db.FridaCatalogueReleases.AsNoTracking().SingleOrDefaultAsync(item => item.Id == FridaCatalogueRelease.Key, cancellationToken);
-        if (release is null) return new(NutritionOperationStatus.Conflict);
         var meal = await db.NutritionMeals.SingleOrDefaultAsync(item => item.UserId == userId && item.Date == request.Date && item.Slot == request.MealSlot, cancellationToken);
         if (meal is null) { meal = new() { Id = Guid.NewGuid(), UserId = userId, Date = request.Date, Slot = request.MealSlot }; db.NutritionMeals.Add(meal); }
-        meal.Entries.Add(Snapshot(request.Id, food, request.Grams, release.Version));
+        if (request.FoodId is { } foodId)
+        {
+            var food = await db.FridaFoods.AsNoTracking().SingleOrDefaultAsync(item => item.FoodId == foodId, cancellationToken);
+            if (food is null) return new(NutritionOperationStatus.NotFound);
+            var release = await db.FridaCatalogueReleases.AsNoTracking().SingleOrDefaultAsync(item => item.Id == FridaCatalogueRelease.Key, cancellationToken);
+            if (release is null) return new(NutritionOperationStatus.Conflict);
+            meal.Entries.Add(Snapshot(request.Id, food, request.Grams, release.Version));
+        }
+        else
+        {
+            var food = await db.NutritionCustomFoods.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.Id == request.CustomFoodId && item.UserId == userId, cancellationToken);
+            if (food is null) return new(NutritionOperationStatus.NotFound);
+            meal.Entries.Add(Snapshot(request.Id, food, request.Grams));
+        }
         try { await db.SaveChangesAsync(cancellationToken); return new(NutritionOperationStatus.Saved, await GetDayAsync(userId, request.Date, cancellationToken)); }
         catch (DbUpdateException) { db.ChangeTracker.Clear(); return new(NutritionOperationStatus.Conflict); }
     }
@@ -188,9 +283,15 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
     }
 
     private static NutritionFoodEntry Snapshot(Guid id, FridaFood food, decimal grams, string version) => new() { Id = id, FoodId = food.FoodId, Name = food.DanishName, FoodGroup = food.FoodGroup, CatalogueVersion = version, Grams = grams, EnergyKcalPer100g = food.EnergyKcalPer100g, ProteinPer100g = food.ProteinPer100g, CarbohydratePer100g = food.CarbohydratePer100g, FatPer100g = food.FatPer100g, SugarPer100g = food.SugarPer100g };
-    private static NutritionRecipeIngredient Snapshot(NutritionFoodEntry entry) => new() { Id = Guid.NewGuid(), FoodId = entry.FoodId, Name = entry.Name, FoodGroup = entry.FoodGroup, CatalogueVersion = entry.CatalogueVersion, Grams = entry.Grams, EnergyKcalPer100g = entry.EnergyKcalPer100g, ProteinPer100g = entry.ProteinPer100g, CarbohydratePer100g = entry.CarbohydratePer100g, FatPer100g = entry.FatPer100g, SugarPer100g = entry.SugarPer100g };
-    private static NutritionFoodEntry Snapshot(Guid id, NutritionRecipeIngredient item, decimal grams) => new() { Id = id, FoodId = item.FoodId, Name = item.Name, FoodGroup = item.FoodGroup, CatalogueVersion = item.CatalogueVersion, Grams = grams, EnergyKcalPer100g = item.EnergyKcalPer100g, ProteinPer100g = item.ProteinPer100g, CarbohydratePer100g = item.CarbohydratePer100g, FatPer100g = item.FatPer100g, SugarPer100g = item.SugarPer100g };
-    private static FoodSearchData Map(FridaFood item) => new(item.FoodId, item.DanishName, item.FoodGroup, item.EnergyKcalPer100g, item.ProteinPer100g, item.CarbohydratePer100g, item.FatPer100g, item.SugarPer100g);
+    private static NutritionFoodEntry Snapshot(Guid id, NutritionCustomFood food, decimal grams) => new() { Id = id, CustomFoodId = food.Id, Name = food.Name, FoodGroup = "Egen madvare", CatalogueVersion = "Egen", Grams = grams, EnergyKcalPer100g = food.EnergyKcalPer100g, ProteinPer100g = food.ProteinPer100g, CarbohydratePer100g = food.CarbohydratePer100g, FatPer100g = food.FatPer100g, SugarPer100g = food.SugarPer100g };
+    private static NutritionRecipeIngredient Snapshot(NutritionFoodEntry entry) => new() { Id = Guid.NewGuid(), FoodId = entry.FoodId, CustomFoodId = entry.CustomFoodId, Name = entry.Name, FoodGroup = entry.FoodGroup, CatalogueVersion = entry.CatalogueVersion, Grams = entry.Grams, EnergyKcalPer100g = entry.EnergyKcalPer100g, ProteinPer100g = entry.ProteinPer100g, CarbohydratePer100g = entry.CarbohydratePer100g, FatPer100g = entry.FatPer100g, SugarPer100g = entry.SugarPer100g };
+    private static NutritionFoodEntry Snapshot(Guid id, NutritionRecipeIngredient item, decimal grams) => new() { Id = id, FoodId = item.FoodId, CustomFoodId = item.CustomFoodId, Name = item.Name, FoodGroup = item.FoodGroup, CatalogueVersion = item.CatalogueVersion, Grams = grams, EnergyKcalPer100g = item.EnergyKcalPer100g, ProteinPer100g = item.ProteinPer100g, CarbohydratePer100g = item.CarbohydratePer100g, FatPer100g = item.FatPer100g, SugarPer100g = item.SugarPer100g };
+    private static FoodSearchData Map(FridaFood item) => new(item.FoodId, null, item.DanishName, item.FoodGroup, item.EnergyKcalPer100g, item.ProteinPer100g, item.CarbohydratePer100g, item.FatPer100g, item.SugarPer100g);
+    private static FoodSearchData Map(NutritionCustomFood item) => new(null, item.Id, item.Name, "Egen madvare", item.EnergyKcalPer100g, item.ProteinPer100g, item.CarbohydratePer100g, item.FatPer100g, item.SugarPer100g);
+    private static bool Matches(NutritionCustomFood food, string name, CreateCustomNutritionFoodInput request) =>
+        food.Name == name && food.EnergyKcalPer100g == request.EnergyKcalPer100g &&
+        food.ProteinPer100g == request.ProteinPer100g && food.CarbohydratePer100g == request.CarbohydratePer100g &&
+        food.FatPer100g == request.FatPer100g && food.SugarPer100g == request.SugarPer100g;
     private static NutritionFoodEntryData Map(NutritionFoodEntry item) => new(item.Id, item.FoodId, item.Name, item.FoodGroup, item.Grams, Scale(item.EnergyKcalPer100g, item.Grams), Scale(item.ProteinPer100g, item.Grams), Scale(item.CarbohydratePer100g, item.Grams), Scale(item.FatPer100g, item.Grams), Scale(item.SugarPer100g, item.Grams));
     private static NutritionFoodEntryData Map(NutritionRecipeIngredient item) => new(item.Id, item.FoodId, item.Name, item.FoodGroup, item.Grams, Scale(item.EnergyKcalPer100g, item.Grams), Scale(item.ProteinPer100g, item.Grams), Scale(item.CarbohydratePer100g, item.Grams), Scale(item.FatPer100g, item.Grams), Scale(item.SugarPer100g, item.Grams));
     private static NutritionTotalsData Sum(IEnumerable<NutritionFoodEntryData> entries) => new(SumValue(entries.Select(item => item.EnergyKcal)), SumValue(entries.Select(item => item.Protein)), SumValue(entries.Select(item => item.Carbohydrate)), SumValue(entries.Select(item => item.Fat)), SumValue(entries.Select(item => item.Sugar)));
