@@ -29,6 +29,11 @@ Read this file, then only the guidance and documentation relevant to the task. D
 - [Development workflow](docs/development-workflow.md), including verification, reviews, hooks, and pull requests
 - [Repository skills](.agents/skills/): reusable feature, design-check, review, and pull-request procedures
 
+## Exact cleanup trigger
+
+- When the entire user message is exactly `Sæt i gang`, use the `cleanup_maintainer` custom agent and `$fitness-cleanup-maintenance` skill. This exact trigger authorizes that skill's cleanup branch, commit, push, and pull-request workflow, but never a merge or deployment.
+- Do not treat `Sæt i gang` inside a longer message as a cleanup trigger.
+
 ## Code Review Rules
 
 - Every feature PR follows the read-only procedure in `.agents/skills/fitness-pr-review/SKILL.md`; its GitHub comment is a handoff, not an approval or merge action.
