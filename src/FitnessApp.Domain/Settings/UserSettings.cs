@@ -8,15 +8,15 @@ public sealed class UserSettings
 
     public decimal? WeightKg { get; set; }
 
-    public int? DailyCaloriesTarget { get; set; }
+    public decimal? DailyCaloriesTarget { get; set; }
 
-    public int? ProteinTargetGrams { get; set; }
+    public decimal? ProteinTargetGrams { get; set; }
 
-    public int? CarbohydrateTargetGrams { get; set; }
+    public decimal? CarbohydrateTargetGrams { get; set; }
 
-    public int? FatTargetGrams { get; set; }
+    public decimal? FatTargetGrams { get; set; }
 
-    public int? SugarTargetGrams { get; set; }
+    public decimal? SugarTargetGrams { get; set; }
 
     public bool TrainingRemindersEnabled { get; set; } = true;
 

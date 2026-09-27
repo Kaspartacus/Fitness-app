@@ -33,7 +33,7 @@ public sealed class SettingsEndpointTests
         Assert.Null(staleNutritionOverview.Profile.HeightCm);
 
         var profile = new UpdateProfileSettingsRequest("Opdateret profil", 181.5m, 80.5m);
-        var nutrition = new UpdateNutritionGoalsRequest(2500, 160, 260, 75, 45);
+        var nutrition = new UpdateNutritionGoalsRequest(2500.5m, 160.5m, 260.5m, 75.5m, 45.5m);
 
         if (nutritionSavesFirst)
         {
@@ -51,11 +51,11 @@ public sealed class SettingsEndpointTests
         Assert.Equal("Opdateret profil", ownerOverview.Profile.DisplayName);
         Assert.Equal(181.5m, ownerOverview.Profile.HeightCm);
         Assert.Equal(80.5m, ownerOverview.Profile.WeightKg);
-        Assert.Equal(2500, ownerOverview.Profile.NutritionGoals.DailyCaloriesTarget);
-        Assert.Equal(160, ownerOverview.Profile.NutritionGoals.ProteinTargetGrams);
-        Assert.Equal(260, ownerOverview.Profile.NutritionGoals.CarbohydrateTargetGrams);
-        Assert.Equal(75, ownerOverview.Profile.NutritionGoals.FatTargetGrams);
-        Assert.Equal(45, ownerOverview.Profile.NutritionGoals.SugarTargetGrams);
+        Assert.Equal(2500.5m, ownerOverview.Profile.NutritionGoals.DailyCaloriesTarget);
+        Assert.Equal(160.5m, ownerOverview.Profile.NutritionGoals.ProteinTargetGrams);
+        Assert.Equal(260.5m, ownerOverview.Profile.NutritionGoals.CarbohydrateTargetGrams);
+        Assert.Equal(75.5m, ownerOverview.Profile.NutritionGoals.FatTargetGrams);
+        Assert.Equal(45.5m, ownerOverview.Profile.NutritionGoals.SugarTargetGrams);
 
         var otherOverview = await otherClient.GetFromJsonAsync<SettingsOverviewResponse>(Settings);
         Assert.NotNull(otherOverview);

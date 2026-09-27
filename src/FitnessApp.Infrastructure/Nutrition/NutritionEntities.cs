@@ -28,16 +28,6 @@ public sealed class FridaCatalogueRelease
     public DateTime ImportedAtUtc { get; set; }
 }
 
-public sealed class NutritionTarget
-{
-    public string UserId { get; set; } = string.Empty;
-    public decimal? EnergyKcal { get; set; }
-    public decimal? Protein { get; set; }
-    public decimal? Carbohydrate { get; set; }
-    public decimal? Fat { get; set; }
-    public decimal? Sugar { get; set; }
-}
-
 public sealed class NutritionMeal
 {
     public Guid Id { get; set; }
@@ -70,6 +60,8 @@ public sealed class NutritionRecipe
     public string UserId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public decimal Portions { get; set; }
+    public DateOnly CreatedFromDate { get; set; }
+    public NutritionMealSlot CreatedFromSlot { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public List<NutritionRecipeIngredient> Ingredients { get; set; } = [];
 }
@@ -89,4 +81,14 @@ public sealed class NutritionRecipeIngredient
     public decimal? CarbohydratePer100g { get; set; }
     public decimal? FatPer100g { get; set; }
     public decimal? SugarPer100g { get; set; }
+}
+
+public sealed class NutritionRecipeAddition
+{
+    public string UserId { get; set; } = string.Empty;
+    public Guid RequestId { get; set; }
+    public Guid RecipeId { get; set; }
+    public DateOnly Date { get; set; }
+    public NutritionMealSlot Slot { get; set; }
+    public decimal Portions { get; set; }
 }

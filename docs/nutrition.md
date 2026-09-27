@@ -6,7 +6,7 @@ The Nutrition module keeps private daily food logs in six fixed sections: breakf
 
 The catalogue is imported locally from DTU National Food Institute's **Frida 5.5** XLSX release, file ID `60901603`, DOI [`10.11583/DTU.29500682.v8`](https://doi.org/10.11583/DTU.29500682.v8). The pinned source file is `Frida_5.5_Dataset.xlsx`; its published and required MD5 is `b553eed6805e3cd8856663421de0f1fe`. The dataset is licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The UI credits DTU and links to the DOI.
 
-The importer reads the complete `Food` and `Data_Normalised` worksheets. It uses the Danish food name, food group, and source `FoodID`; it does not fetch or scrape food pages during search. The search index normalizes case and Danish `æ`, `ø`, and `å`, supports multi-word terms, and returns at most 30 ranked results per request.
+The importer reads the complete `Food` and `Data_Normalised` worksheets. It uses the Danish food name, food group, and source `FoodID`; it does not fetch or scrape food pages during search. The search index normalizes case and Danish `æ`, `ø`, and `å`, supports multi-word terms, and returns ranked results in pages, with the UI allowing the next page to be loaded.
 
 The importer maps only these published Frida parameters, all per 100 g of edible food:
 
@@ -17,6 +17,12 @@ The importer maps only these published Frida parameters, all per 100 g of edible
 - `245`: Sum sugars.
 
 Missing values remain unknown (`null`), rather than becoming zero. Calculations retain decimal precision and scale the source value by `grams / 100`; the Danish UI only rounds for display.
+
+## Goals and saved meals
+
+Nutrition goals use the account's `UserSettings` as their single source of truth and support optional Danish decimal values. The consolidation migration copies legacy `NutritionTargets` values into empty settings fields, preserves pre-existing settings values, and only then removes the duplicate table. Its rollback recreates the legacy table from the account settings.
+
+Adding food, saving a meal, and adding a saved meal use stable client-generated request IDs. Repeating the same request is safe; reusing an ID with different data conflicts. Saved meals keep snapshots of their ingredient nutrients, and scaled servings are rejected if any ingredient would be outside the valid 0.1–10,000 g range.
 
 ## Local import
 

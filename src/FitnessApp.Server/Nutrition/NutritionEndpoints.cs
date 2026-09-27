@@ -16,8 +16,6 @@ internal static class NutritionEndpoints
         group.MapPost("/entries", AddFoodAsync);
         group.MapPut("/entries/{id:guid}", UpdateFoodAsync);
         group.MapDelete("/entries/{id:guid}", DeleteFoodAsync);
-        group.MapGet("/target", GetTargetAsync);
-        group.MapPut("/target", UpdateTargetAsync);
         group.MapGet("/recipes", ListRecipesAsync);
         group.MapPost("/recipes", CreateRecipeAsync);
         group.MapPost("/recipes/{id:guid}/entries", AddRecipeAsync);
@@ -29,10 +27,8 @@ internal static class NutritionEndpoints
     private static async Task<IResult> AddFoodAsync(AddNutritionFoodRequest? request, ClaimsPrincipal user, INutritionService service, CancellationToken ct) => request is null ? Invalid("Mad", "Vælg en fødevare og mængde.") : Status(await service.AddFoodAsync(Owner(user), new AddNutritionFoodInput(request.Id, request.Date, (FitnessApp.Domain.Nutrition.NutritionMealSlot)(int)request.MealSlot, request.FoodId, request.Grams), ct), true);
     private static async Task<IResult> UpdateFoodAsync(Guid id, UpdateNutritionFoodRequest? request, ClaimsPrincipal user, INutritionService service, CancellationToken ct) => request is null ? Invalid("Mængde", "Angiv en gyldig mængde i gram.") : Status(await service.UpdateFoodAsync(Owner(user), id, new UpdateNutritionFoodInput(request.Grams), ct));
     private static async Task<IResult> DeleteFoodAsync(Guid id, ClaimsPrincipal user, INutritionService service, CancellationToken ct) => Status(await service.DeleteFoodAsync(Owner(user), id, ct));
-    private static async Task<IResult> GetTargetAsync(ClaimsPrincipal user, INutritionService service, CancellationToken ct) => (await service.GetTargetAsync(Owner(user), ct)) is { } target ? Results.Ok(target) : Results.NoContent();
-    private static async Task<IResult> UpdateTargetAsync(UpdateNutritionTargetRequest? request, ClaimsPrincipal user, INutritionService service, CancellationToken ct) => request is null ? Invalid("Mål", "Angiv gyldige ernæringsmål.") : SimpleStatus(await service.UpdateTargetAsync(Owner(user), new UpdateNutritionTargetInput(request.EnergyKcal, request.Protein, request.Carbohydrate, request.Fat, request.Sugar), ct));
     private static async Task<IResult> ListRecipesAsync(ClaimsPrincipal user, INutritionService service, CancellationToken ct) => Results.Ok(await service.ListRecipesAsync(Owner(user), ct));
-    private static async Task<IResult> CreateRecipeAsync(CreateNutritionRecipeRequest? request, ClaimsPrincipal user, INutritionService service, CancellationToken ct) => request is null ? Invalid("Måltid", "Angiv et navn og antal portioner.") : SimpleStatus(await service.CreateRecipeAsync(Owner(user), new CreateNutritionRecipeInput(request.Date, (FitnessApp.Domain.Nutrition.NutritionMealSlot)(int)request.MealSlot, request.Name, request.Portions), ct), true);
+    private static async Task<IResult> CreateRecipeAsync(CreateNutritionRecipeRequest? request, ClaimsPrincipal user, INutritionService service, CancellationToken ct) => request is null ? Invalid("Måltid", "Angiv et navn og antal portioner.") : SimpleStatus(await service.CreateRecipeAsync(Owner(user), new CreateNutritionRecipeInput(request.Id, request.Date, (FitnessApp.Domain.Nutrition.NutritionMealSlot)(int)request.MealSlot, request.Name, request.Portions), ct), true);
     private static async Task<IResult> AddRecipeAsync(Guid id, AddNutritionRecipeRequest? request, ClaimsPrincipal user, INutritionService service, CancellationToken ct) => request is null ? Invalid("Måltid", "Angiv dato, måltid og antal portioner.") : Status(await service.AddRecipeAsync(Owner(user), id, new AddNutritionRecipeInput(request.Id, request.Date, (FitnessApp.Domain.Nutrition.NutritionMealSlot)(int)request.MealSlot, request.Portions), ct), true);
     private static IResult Status(NutritionOperationResult result, bool created = false) => result.Status switch
     {

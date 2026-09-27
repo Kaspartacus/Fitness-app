@@ -57,17 +57,9 @@ public sealed record NutritionTargetResponse(decimal? EnergyKcal, decimal? Prote
 public sealed record NutritionDayResponse(DateOnly Date, NutritionTotalsResponse Totals, NutritionTargetResponse? Target,
     IReadOnlyList<NutritionMealResponse> Meals, string CatalogueAttribution);
 
-public sealed class UpdateNutritionTargetRequest
-{
-    public decimal? EnergyKcal { get; set; }
-    public decimal? Protein { get; set; }
-    public decimal? Carbohydrate { get; set; }
-    public decimal? Fat { get; set; }
-    public decimal? Sugar { get; set; }
-}
-
 public sealed class CreateNutritionRecipeRequest
 {
+    public Guid Id { get; set; }
     public DateOnly Date { get; set; }
     public NutritionMealSlot MealSlot { get; set; }
     public string? Name { get; set; }

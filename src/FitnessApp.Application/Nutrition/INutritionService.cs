@@ -13,8 +13,7 @@ public sealed record NutritionMealData(NutritionMealSlot Slot, string Name, IRea
 public sealed record NutritionTotalsData(decimal? EnergyKcal, decimal? Protein, decimal? Carbohydrate, decimal? Fat, decimal? Sugar);
 public sealed record NutritionTargetData(decimal? EnergyKcal, decimal? Protein, decimal? Carbohydrate, decimal? Fat, decimal? Sugar);
 public sealed record NutritionDayData(DateOnly Date, NutritionTotalsData Totals, NutritionTargetData? Target, IReadOnlyList<NutritionMealData> Meals, string CatalogueAttribution);
-public sealed record UpdateNutritionTargetInput(decimal? EnergyKcal, decimal? Protein, decimal? Carbohydrate, decimal? Fat, decimal? Sugar);
-public sealed record CreateNutritionRecipeInput(DateOnly Date, NutritionMealSlot MealSlot, string? Name, decimal Portions);
+public sealed record CreateNutritionRecipeInput(Guid Id, DateOnly Date, NutritionMealSlot MealSlot, string? Name, decimal Portions);
 public sealed record NutritionRecipeData(Guid Id, string Name, decimal Portions, NutritionTotalsData Totals, int IngredientCount);
 public sealed record AddNutritionRecipeInput(Guid Id, DateOnly Date, NutritionMealSlot MealSlot, decimal Portions);
 public sealed record NutritionOperationResult(NutritionOperationStatus Status, NutritionDayData? Day = null);
@@ -27,7 +26,6 @@ public interface INutritionService
     Task<NutritionOperationResult> UpdateFoodAsync(string userId, Guid entryId, UpdateNutritionFoodInput request, CancellationToken cancellationToken);
     Task<NutritionOperationResult> DeleteFoodAsync(string userId, Guid entryId, CancellationToken cancellationToken);
     Task<NutritionTargetData?> GetTargetAsync(string userId, CancellationToken cancellationToken);
-    Task<NutritionOperationStatus> UpdateTargetAsync(string userId, UpdateNutritionTargetInput request, CancellationToken cancellationToken);
     Task<IReadOnlyList<NutritionRecipeData>> ListRecipesAsync(string userId, CancellationToken cancellationToken);
     Task<NutritionOperationStatus> CreateRecipeAsync(string userId, CreateNutritionRecipeInput request, CancellationToken cancellationToken);
     Task<NutritionOperationResult> AddRecipeAsync(string userId, Guid recipeId, AddNutritionRecipeInput request, CancellationToken cancellationToken);

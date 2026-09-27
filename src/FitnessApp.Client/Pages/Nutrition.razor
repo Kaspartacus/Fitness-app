@@ -1,6 +1,8 @@
 @page "/kost"
 @attribute [Authorize]
 @using System.Globalization
+@using FitnessApp.Client.Running
+@using FitnessApp.Client.Settings
 @inject NutritionClient NutritionClient
 
 <PageTitle>Kost</PageTitle>
@@ -8,24 +10,32 @@
 <main class="strength-app strength-with-bottom-nav nutrition-page" aria-labelledby="nutrition-title">
     <header class="strength-page-header nutrition-header">
         <div><p class="strength-overline">DAGENS OVERBLIK</p><h1 id="nutrition-title">Kost</h1></div>
-        <a class="strength-icon-button" href="/profil" aria-label="Profil og indstillinger" title="Profil og indstillinger">♙</a>
+        <ProfileSettingsLink />
     </header>
 
     <div class="nutrition-date-control" aria-label="Skift dag">
         <button type="button" @onclick="PreviousDay" aria-label="Forrige dag">‹</button>
-        <button type="button" @onclick="Today"><strong>@(SelectedDate == DateOnly.FromDateTime(DateTime.Today) ? "I dag" : SelectedDate.ToString("dddd", Danish))</strong><span>@SelectedDate.ToString("dddd d. MMMM", Danish)</span></button>
+        <button type="button" @onclick="Today"><strong>@(SelectedDate == RunningPresentation.CopenhagenToday ? "I dag" : SelectedDate.ToString("dddd", Danish))</strong><span>@SelectedDate.ToString("dddd d. MMMM", Danish)</span></button>
         <button type="button" @onclick="NextDay" aria-label="Næste dag">›</button>
     </div>
 
+    @if (operationError is not null)
+    {
+        <p class="strength-error" role="alert">@operationError</p>
+    }
     @if (loading)
-    { <p class="strength-muted-copy" role="status">Indlæser dagens kost …</p> }
+    {
+        <p class="strength-muted-copy" role="status">Indlæser dagens kost …</p>
+    }
     else if (error is not null)
-    { <section class="strength-empty-state"><p>@error</p><button class="strength-primary-button" @onclick="LoadAsync">Prøv igen</button></section> }
+    {
+        <section class="strength-empty-state"><p role="alert">@error</p><button class="strength-primary-button" @onclick="LoadAsync">Prøv igen</button></section>
+    }
     else if (day is not null)
     {
         <section class="nutrition-summary" aria-label="Dagens ernæring">
-            <div class="nutrition-ring"><strong>@Number(day.Totals.EnergyKcal)</strong><span>af @Number(day.Target?.EnergyKcal) kcal</span><small>@RemainingCalories kcal tilbage</small></div>
-            <button class="nutrition-target-link" @onclick="OpenTargets">@((day.Target is null) ? "Sæt ernæringsmål" : "Redigér ernæringsmål")</button>
+            <div class="nutrition-ring"><strong>@Number(day.Totals.EnergyKcal)</strong><span>af @Number(day.Target?.EnergyKcal) kcal</span><small>@Number(RemainingCalories) kcal tilbage</small></div>
+            <a class="nutrition-target-link" href="/indstillinger/ernaeringsmaal">@(day.Target is null ? "Sæt ernæringsmål" : "Redigér ernæringsmål")</a>
         </section>
         <section class="nutrition-macros" aria-label="Makronæringsstoffer">
             @Macro("Protein", day.Totals.Protein, day.Target?.Protein, "protein")
@@ -51,7 +61,7 @@
                                 <div class="nutrition-entry-actions"><button type="button" disabled="@busy" @onclick="() => AdjustAsync(entry, -10)" aria-label="Reducer @entry.Name">−</button><span>@Number(entry.Grams)</span><button type="button" disabled="@busy" @onclick="() => AdjustAsync(entry, 10)" aria-label="Forøg @entry.Name">+</button><button class="nutrition-delete" type="button" disabled="@busy" @onclick="() => AskDelete(entry)" aria-label="Slet @entry.Name">×</button></div>
                             </article>
                         }
-                        <div class="nutrition-meal-actions"><button class="strength-secondary-button" type="button" @onclick="() => OpenFood(meal.Slot)">＋ Tilføj mad</button><button class="strength-secondary-button" type="button" @onclick="OpenRecipes">＋ Tilføj måltid</button><button class="strength-text-action" type="button" @onclick="() => OpenSaveRecipe(meal.Slot)" disabled="@(meal.Entries.Count == 0)">Gem som måltid</button></div>
+                        <div class="nutrition-meal-actions"><button class="strength-secondary-button" type="button" @onclick="() => OpenFood(meal.Slot)">＋ Tilføj mad</button><button class="strength-secondary-button" type="button" @onclick="() => OpenRecipes(meal.Slot)">＋ Tilføj måltid</button><button class="strength-text-action" type="button" @onclick="() => OpenSaveRecipe(meal.Slot)" disabled="@(meal.Entries.Count == 0 || busy)">Gem som måltid</button></div>
                     </div>
                 }
             </section>
@@ -62,75 +72,333 @@
 
 <StrengthBottomNavigation Active="nutrition" />
 
-<ModalDialog IsOpen="@foodDialog" Title="Tilføj mad" Description="Søg i DTU Frida-fødevarekataloget. Værdier er pr. 100 g." OnDismiss="CloseFood">
+<ModalDialog IsOpen="@foodDialog" Title="Tilføj mad" Description="Søg i DTU Frida-fødevarekataloget. Værdier er pr. 100 g." DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CloseFood">
     @if (selectedFood is null)
     {
         <input class="nutrition-search" value="@foodQuery" @oninput="FoodQueryChangedAsync" placeholder="Søg efter madvare" aria-label="Søg efter madvare" />
         @if (searching) { <p class="strength-muted-copy" role="status">Søger …</p> }
-        else if (searchError is not null) { <p class="strength-error">@searchError</p> }
-        else if (foodQuery.Length >= 2 && searchResults.Count == 0) { <p class="strength-muted-copy">Ingen fødevarer matcher din søgning.</p> }
-        <div class="nutrition-search-results">@foreach (var food in searchResults) { <button type="button" @onclick="() => SelectFood(food)"><span><strong>@food.Name</strong><small>@food.FoodGroup · @Number(food.EnergyKcalPer100g) kcal / 100 g · Protein @Number(food.ProteinPer100g) g</small></span><b>＋</b></button> }</div>
+        @if (searchError is not null) { <p class="strength-error" role="alert">@searchError</p><button class="strength-secondary-button" type="button" @onclick="SearchChangedAsync" disabled="@searching">Prøv igen</button> }
+        @if (!searching && searchError is null && foodQuery.Trim().Length >= 2 && searchResults.Count == 0) { <p class="strength-muted-copy">Ingen fødevarer matcher din søgning.</p> }
+        <div class="nutrition-search-results">
+            @foreach (var food in searchResults) { <button type="button" @onclick="() => SelectFood(food)"><span><strong>@food.Name</strong><small>@food.FoodGroup · @Number(food.EnergyKcalPer100g) kcal / 100 g · Protein @Number(food.ProteinPer100g) g</small></span><b>＋</b></button> }
+        </div>
+        @if (searchHasMore) { <button class="strength-secondary-button" type="button" @onclick="LoadMoreFoodsAsync" disabled="@searching">@(searching ? "Indlæser …" : searchError is null ? "Vis flere fødevarer" : "Prøv igen")</button> }
     }
     else
     {
-        <div class="nutrition-food-detail"><p class="strength-overline">NÆRINGSINDHOLD PR. 100 G</p><h3>@selectedFood.Name</h3><dl><div><dt>Kalorier</dt><dd>@Number(selectedFood.EnergyKcalPer100g) kcal</dd></div><div><dt>Protein</dt><dd>@Number(selectedFood.ProteinPer100g) g</dd></div><div><dt>Kulhydrat</dt><dd>@Number(selectedFood.CarbohydratePer100g) g</dd></div><div><dt>Fedt</dt><dd>@Number(selectedFood.FatPer100g) g</dd></div></dl><label for="nutrition-grams">MÆNGDE</label><div class="nutrition-grams"><input id="nutrition-grams" type="number" min="0.1" max="10000" step="0.1" @bind="grams" @bind:culture="Danish" /><span>g</span></div><p class="nutrition-calculated">Beregnet <strong>@Number(CalculatedEnergy) kcal</strong></p></div>
-        <div class="app-modal-actions"><button class="strength-secondary-button" @onclick="() => selectedFood = null" disabled="@busy">Tilbage</button><button class="strength-primary-button" @onclick="AddFoodAsync" disabled="@busy">Tilføj til @SlotName(openSlot)</button></div>
+        @if (searchError is not null) { <p class="strength-error" role="alert">@searchError</p> }
+        <div class="nutrition-food-detail"><p class="strength-overline">NÆRINGSINDHOLD PR. 100 G</p><h3>@selectedFood.Name</h3><dl><div><dt>Kalorier</dt><dd>@Number(selectedFood.EnergyKcalPer100g) kcal</dd></div><div><dt>Protein</dt><dd>@Number(selectedFood.ProteinPer100g) g</dd></div><div><dt>Kulhydrat</dt><dd>@Number(selectedFood.CarbohydratePer100g) g</dd></div><div><dt>Fedt</dt><dd>@Number(selectedFood.FatPer100g) g</dd></div><div><dt>Sukker</dt><dd>@Number(selectedFood.SugarPer100g) g</dd></div></dl><label for="nutrition-grams">MÆNGDE</label><div class="nutrition-grams"><input id="nutrition-grams" type="text" inputmode="decimal" value="@grams.ToString("0.#", Danish)" @oninput="GramsChanged" /><span>g</span></div>@if (!gramsValid) { <p class="strength-field-error" role="alert">Angiv en mængde mellem 0,1 og 10.000 g.</p> }<p class="nutrition-calculated">Beregnet <strong>@Number(CalculatedEnergy) kcal</strong></p></div>
+        <div class="app-modal-actions"><button class="strength-secondary-button" @onclick="BackToFoodSearch" disabled="@busy">Tilbage</button><button class="strength-primary-button" @onclick="AddFoodAsync" disabled="@(busy || !gramsValid)">@(busy ? "Tilføjer …" : $"Tilføj til {SlotName(openSlot)}")</button></div>
     }
 </ModalDialog>
 
-<ModalDialog IsOpen="@(entryToDelete is not null)" Title="Slet mad?" Description="Fødevaren fjernes fra måltidet. Handlingen kan ikke fortrydes." Destructive="true" OnDismiss="CancelDelete">
+<ModalDialog IsOpen="@(entryToDelete is not null)" Title="Slet mad?" Description="Fødevaren fjernes fra måltidet. Handlingen kan ikke fortrydes." Destructive="true" DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CancelDelete">
+    @if (operationError is not null) { <p class="strength-error" role="alert">@operationError</p> }
     <div class="app-modal-actions"><button data-modal-cancel class="strength-secondary-button" @onclick="CancelDelete" disabled="@busy">Annuller</button><button class="strength-danger-button" @onclick="DeleteAsync" disabled="@busy">Slet</button></div>
 </ModalDialog>
 
-<ModalDialog IsOpen="@targetDialog" Title="Ernæringsmål" Description="Alle mål er valgfri. Indtast energi i kcal og makronæringsstoffer i gram." OnDismiss="() => targetDialog = false">
-    <div class="nutrition-target-fields">@TargetField("Energi", "kcal", target.EnergyKcal, value => target.EnergyKcal = value) @TargetField("Protein", "g", target.Protein, value => target.Protein = value) @TargetField("Kulhydrat", "g", target.Carbohydrate, value => target.Carbohydrate = value) @TargetField("Fedt", "g", target.Fat, value => target.Fat = value) @TargetField("Sukker", "g", target.Sugar, value => target.Sugar = value)</div>
-    <div class="app-modal-actions"><button class="strength-secondary-button" @onclick="() => targetDialog = false" disabled="@busy">Annuller</button><button class="strength-primary-button" @onclick="SaveTargetsAsync" disabled="@busy">Gem mål</button></div>
+<ModalDialog IsOpen="@recipeDialog" Title="Gem som måltid" Description="Opskriften gemmer et snapshot af de aktuelle ingredienser." DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CloseSaveRecipe">
+    <label>Navn<input value="@recipeName" maxlength="160" @oninput="RecipeNameChanged" /></label>
+    <label>Antal portioner<input type="text" inputmode="decimal" value="@recipePortions.ToString("0.#", Danish)" @oninput="RecipePortionsChanged" /></label>
+    @if (!recipePortionsValid) { <p class="strength-field-error" role="alert">Angiv mellem 0,1 og 100 portioner.</p> }
+    @if (saveRecipeError is not null) { <p class="strength-error" role="alert">@saveRecipeError</p> }
+    <div class="app-modal-actions"><button class="strength-secondary-button" @onclick="CloseSaveRecipe" disabled="@busy">Annuller</button><button class="strength-primary-button" @onclick="SaveRecipeAsync" disabled="@(busy || !recipePortionsValid || string.IsNullOrWhiteSpace(recipeName))">@(busy ? "Gemmer …" : "Gem måltid")</button></div>
 </ModalDialog>
 
-<ModalDialog IsOpen="@recipeDialog" Title="Gem som måltid" Description="Opskriften gemmer et snapshot af de aktuelle ingredienser." OnDismiss="() => recipeDialog = false">
-    <label>Navn<input @bind="recipeName" maxlength="160" /></label><label>Antal portioner<input type="number" min="0.1" max="100" step="0.1" @bind="recipePortions" @bind:culture="Danish" /></label>
-    <div class="app-modal-actions"><button class="strength-secondary-button" @onclick="() => recipeDialog = false" disabled="@busy">Annuller</button><button class="strength-primary-button" @onclick="SaveRecipeAsync" disabled="@busy">Gem måltid</button></div>
-</ModalDialog>
-
-<ModalDialog IsOpen="@recipesDialog" Title="Tilføj måltid" Description="Vælg en tidligere gemt opskrift." OnDismiss="() => recipesDialog = false">
-    @if (recipesLoading) { <p class="strength-muted-copy">Indlæser måltider …</p> }
+<ModalDialog IsOpen="@recipesDialog" Title="Tilføj måltid" Description="Vælg en tidligere gemt opskrift." DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CloseRecipes">
+    @if (recipesLoading) { <p class="strength-muted-copy" role="status">Indlæser måltider …</p> }
+    else if (recipeListError is not null) { <p class="strength-error" role="alert">@recipeListError</p><button class="strength-secondary-button" type="button" @onclick="LoadRecipesAsync">Prøv igen</button> }
     else if (recipes.Count == 0) { <p class="strength-muted-copy">Du har endnu ikke gemt et måltid.</p> }
-    else { <div class="nutrition-search-results">@foreach (var recipe in recipes) { <button @onclick="() => AddRecipeAsync(recipe)"><span><strong>@recipe.Name</strong><small>@recipe.IngredientCount ingredienser · @Number(recipe.Totals.EnergyKcal) kcal pr. opskrift</small></span><b>＋</b></button> }</div> }
+    else
+    {
+        <div class="nutrition-search-results">@foreach (var recipe in recipes) { <button type="button" class="@(selectedRecipe?.Id == recipe.Id ? "is-selected" : null)" @onclick="() => SelectRecipe(recipe)" disabled="@busy"><span><strong>@recipe.Name</strong><small>@recipe.IngredientCount ingredienser · @Number(recipe.Totals.EnergyKcal) kcal pr. opskrift</small></span><b>@(selectedRecipe?.Id == recipe.Id ? "✓" : "＋")</b></button> }</div>
+        @if (selectedRecipe is not null)
+        {
+            <label>Portioner<input type="text" inputmode="decimal" value="@addRecipePortions.ToString("0.#", Danish)" @oninput="AddRecipePortionsChanged" disabled="@busy" /></label>
+            <p class="strength-muted-copy">@Number(addRecipePortions) portioner af @selectedRecipe.Name</p>
+            @if (!addRecipePortionsValid) { <p class="strength-field-error" role="alert">Angiv mellem 0,1 og 100 portioner.</p> }
+            @if (addRecipeError is not null) { <p class="strength-error" role="alert">@addRecipeError</p> }
+            <div class="app-modal-actions"><button class="strength-primary-button" type="button" @onclick="AddRecipeAsync" disabled="@(busy || !addRecipePortionsValid)">@(busy ? "Tilføjer …" : $"Tilføj til {SlotName(openSlot)}")</button></div>
+        }
+    }
 </ModalDialog>
 
 @code {
     private static readonly CultureInfo Danish = CultureInfo.GetCultureInfo("da-DK");
-    private NutritionDayResponse? day; private DateOnly SelectedDate = DateOnly.FromDateTime(DateTime.Today); private NutritionMealSlot openSlot = NutritionMealSlot.Breakfast;
-    private bool loading = true, busy, foodDialog, searching, targetDialog, recipeDialog, recipesDialog, recipesLoading; private string? error, searchError; private string foodQuery = string.Empty, recipeName = string.Empty; private decimal grams = 100, recipePortions = 1;
-    private FoodSearchResponse? selectedFood; private NutritionFoodEntryResponse? entryToDelete; private List<FoodSearchResponse> searchResults = []; private List<NutritionRecipeResponse> recipes = []; private CancellationTokenSource? searchCts;
-    private UpdateNutritionTargetRequest target = new();
+    private NutritionDayResponse? day;
+    private DateOnly SelectedDate = RunningPresentation.CopenhagenToday;
+    private NutritionMealSlot openSlot = NutritionMealSlot.Breakfast;
+    private bool loading = true, busy, foodDialog, searching, recipeDialog, recipesDialog, recipesLoading;
+    private bool gramsValid = true, recipePortionsValid = true, addRecipePortionsValid = true, searchHasMore;
+    private int loadSequence, searchPage;
+    private string? error, operationError, searchError, saveRecipeError, recipeListError, addRecipeError;
+    private string foodQuery = string.Empty, recipeName = string.Empty;
+    private decimal grams = 100, recipePortions = 1, addRecipePortions = 1;
+    private FoodSearchResponse? selectedFood;
+    private NutritionFoodEntryResponse? entryToDelete;
+    private NutritionRecipeResponse? selectedRecipe;
+    private readonly Dictionary<(DateOnly Date, NutritionMealSlot Slot, int FoodId, decimal Grams), Guid> pendingFoodRequests = [];
+    private readonly Dictionary<(DateOnly Date, NutritionMealSlot Slot, string Name, decimal Portions), Guid> pendingRecipeCreations = [];
+    private readonly Dictionary<(Guid RecipeId, DateOnly Date, NutritionMealSlot Slot, decimal Portions), Guid> pendingRecipeAdditions = [];
+    private List<FoodSearchResponse> searchResults = [];
+    private List<NutritionRecipeResponse> recipes = [];
+    private CancellationTokenSource? searchCts;
+
     protected override async Task OnInitializedAsync() => await LoadAsync();
-    private async Task LoadAsync() { loading = true; error = null; var result = await NutritionClient.GetDayAsync(SelectedDate, CancellationToken.None); if (result.IsSuccess) day = result.Value; else error = result.Error; loading = false; }
+
+    private async Task LoadAsync()
+    {
+        var sequence = ++loadSequence;
+        loading = true;
+        error = null;
+        var result = await NutritionClient.GetDayAsync(SelectedDate, CancellationToken.None);
+        if (sequence != loadSequence) return;
+        if (result.IsSuccess) day = result.Value;
+        else error = result.Error;
+        loading = false;
+    }
+
     private async Task PreviousDay() { SelectedDate = SelectedDate.AddDays(-1); await LoadAsync(); }
     private async Task NextDay() { SelectedDate = SelectedDate.AddDays(1); await LoadAsync(); }
-    private async Task Today() { SelectedDate = DateOnly.FromDateTime(DateTime.Today); await LoadAsync(); }
+    private async Task Today() { SelectedDate = RunningPresentation.CopenhagenToday; await LoadAsync(); }
     private void Toggle(NutritionMealSlot slot) => openSlot = openSlot == slot ? (NutritionMealSlot)(-1) : slot;
-    private void OpenFood(NutritionMealSlot slot) { openSlot = slot; foodDialog = true; selectedFood = null; foodQuery = string.Empty; searchResults = []; }
-    private void CloseFood() { foodDialog = false; selectedFood = null; searchCts?.Cancel(); }
-    private async Task FoodQueryChangedAsync(ChangeEventArgs eventArgs) { foodQuery = eventArgs.Value?.ToString() ?? string.Empty; await SearchChangedAsync(); }
-    private async Task SearchChangedAsync() { searchCts?.Cancel(); searchCts = new(); var ct = searchCts.Token; if (foodQuery.Trim().Length < 2) { searchResults = []; return; } searching = true; searchError = null; try { await Task.Delay(250, ct); var result = await NutritionClient.SearchAsync(foodQuery, ct); if (!ct.IsCancellationRequested) { searchResults = result.Value?.Items.ToList() ?? []; searchError = result.Error; } } catch (OperationCanceledException) { } finally { if (!ct.IsCancellationRequested) searching = false; } }
-    private void SelectFood(FoodSearchResponse food) { selectedFood = food; grams = 100; }
-    private async Task AddFoodAsync() { if (selectedFood is null) return; busy = true; var result = await NutritionClient.AddAsync(new() { Id = Guid.NewGuid(), Date = SelectedDate, MealSlot = openSlot, FoodId = selectedFood.FoodId, Grams = grams }, CancellationToken.None); busy = false; if (result.IsSuccess) { day = result.Value; CloseFood(); } else searchError = result.Error; }
-    private async Task AdjustAsync(NutritionFoodEntryResponse entry, decimal amount) { var value = Math.Max(.1m, entry.Grams + amount); busy = true; var result = await NutritionClient.UpdateAsync(entry.Id, value, CancellationToken.None); busy = false; if (result.IsSuccess) day = result.Value; else error = result.Error; }
-    private void AskDelete(NutritionFoodEntryResponse entry) => entryToDelete = entry;
-    private void CancelDelete() => entryToDelete = null;
-    private async Task DeleteAsync() { if (entryToDelete is null) return; busy = true; var result = await NutritionClient.DeleteAsync(entryToDelete.Id, CancellationToken.None); busy = false; if (result.IsSuccess) { day = result.Value; entryToDelete = null; } else error = result.Error; }
-    private void OpenTargets() { var value = day?.Target; target = new() { EnergyKcal = value?.EnergyKcal, Protein = value?.Protein, Carbohydrate = value?.Carbohydrate, Fat = value?.Fat, Sugar = value?.Sugar }; targetDialog = true; }
-    private async Task SaveTargetsAsync() { busy = true; var result = await NutritionClient.SaveTargetAsync(target, CancellationToken.None); busy = false; if (result.IsSuccess) { targetDialog = false; await LoadAsync(); } else error = result.Error; }
-    private void OpenSaveRecipe(NutritionMealSlot slot) { openSlot = slot; recipeName = SlotName(slot); recipePortions = 1; recipeDialog = true; }
-    private async Task SaveRecipeAsync() { busy = true; var result = await NutritionClient.SaveRecipeAsync(new() { Date = SelectedDate, MealSlot = openSlot, Name = recipeName, Portions = recipePortions }, CancellationToken.None); busy = false; if (result.IsSuccess) recipeDialog = false; else error = result.Error; }
-    private async Task OpenRecipes() { recipesDialog = true; recipesLoading = true; var result = await NutritionClient.RecipesAsync(CancellationToken.None); recipes = result.Value?.ToList() ?? []; if (!result.IsSuccess) error = result.Error; recipesLoading = false; }
-    private async Task AddRecipeAsync(NutritionRecipeResponse recipe) { busy = true; var result = await NutritionClient.AddRecipeAsync(recipe.Id, new() { Id = Guid.NewGuid(), Date = SelectedDate, MealSlot = openSlot, Portions = 1 }, CancellationToken.None); busy = false; if (result.IsSuccess) { day = result.Value; recipesDialog = false; } else error = result.Error; }
-    private decimal? MealEnergy(NutritionMealResponse meal) => meal.Entries.Select(entry => entry.EnergyKcal).Where(value => value.HasValue).Select(value => value!.Value).DefaultIfEmpty().Sum();
+
+    private void OpenFood(NutritionMealSlot slot)
+    {
+        openSlot = slot;
+        foodDialog = true;
+        selectedFood = null;
+        foodQuery = string.Empty;
+        searchResults = [];
+        searchError = null;
+        searchHasMore = false;
+        searchPage = 0;
+    }
+
+    private void CloseFood()
+    {
+        if (busy) return;
+        foodDialog = false;
+        selectedFood = null;
+        searchCts?.Cancel();
+        searching = false;
+    }
+
+    private void BackToFoodSearch() { selectedFood = null; searchError = null; }
+
+    private async Task FoodQueryChangedAsync(ChangeEventArgs eventArgs)
+    {
+        foodQuery = eventArgs.Value?.ToString() ?? string.Empty;
+        await SearchChangedAsync();
+    }
+
+    private async Task SearchChangedAsync()
+    {
+        searchCts?.Cancel();
+        searchCts?.Dispose();
+        searchCts = new CancellationTokenSource();
+        var cancellationToken = searchCts.Token;
+        searchResults = [];
+        searchPage = 0;
+        searchHasMore = false;
+        searchError = null;
+        if (foodQuery.Trim().Length < 2)
+        {
+            searching = false;
+            return;
+        }
+
+        searching = true;
+        try
+        {
+            await Task.Delay(250, cancellationToken);
+            await SearchPageAsync(1, append: false, cancellationToken);
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            if (!cancellationToken.IsCancellationRequested) searching = false;
+        }
+    }
+
+    private async Task LoadMoreFoodsAsync()
+    {
+        if (searching || !searchHasMore || foodQuery.Trim().Length < 2) return;
+        searchCts?.Cancel();
+        searchCts?.Dispose();
+        searchCts = new CancellationTokenSource();
+        var cancellationToken = searchCts.Token;
+        searching = true;
+        searchError = null;
+        try { await SearchPageAsync(searchPage + 1, append: true, cancellationToken); }
+        catch (OperationCanceledException) { }
+        finally { if (!cancellationToken.IsCancellationRequested) searching = false; }
+    }
+
+    private async Task SearchPageAsync(int page, bool append, CancellationToken cancellationToken)
+    {
+        var result = await NutritionClient.SearchAsync(foodQuery, page, cancellationToken);
+        if (cancellationToken.IsCancellationRequested) return;
+        if (!result.IsSuccess || result.Value is null)
+        {
+            searchError = result.Error ?? "Søgningen kunne ikke gennemføres. Prøv igen.";
+            return;
+        }
+        searchPage = result.Value.Page;
+        searchHasMore = result.Value.HasMore;
+        if (append) searchResults.AddRange(result.Value.Items);
+        else searchResults = result.Value.Items.ToList();
+    }
+
+    private void SelectFood(FoodSearchResponse food)
+    {
+        selectedFood = food;
+        grams = 100;
+        gramsValid = true;
+        searchError = null;
+    }
+
+    private void GramsChanged(ChangeEventArgs args)
+    {
+        gramsValid = SettingsDecimalInput.TryParseOptional(args.Value?.ToString(), out var parsed) && parsed is >= .1m and <= 10000m;
+        if (gramsValid) grams = parsed!.Value;
+    }
+
+    private async Task AddFoodAsync()
+    {
+        if (selectedFood is null || !gramsValid || busy) return;
+        var payload = (SelectedDate, openSlot, selectedFood.FoodId, grams);
+        if (!pendingFoodRequests.TryGetValue(payload, out var requestId)) pendingFoodRequests[payload] = requestId = Guid.NewGuid();
+        busy = true;
+        searchError = null;
+        var result = await NutritionClient.AddAsync(new() { Id = requestId, Date = SelectedDate, MealSlot = openSlot, FoodId = selectedFood.FoodId, Grams = grams }, CancellationToken.None);
+        busy = false;
+        if (result.IsSuccess) { day = result.Value; operationError = null; pendingFoodRequests.Remove(payload); CloseFood(); }
+        else searchError = result.Error;
+    }
+
+    private async Task AdjustAsync(NutritionFoodEntryResponse entry, decimal amount)
+    {
+        var value = Math.Clamp(entry.Grams + amount, .1m, 10000m);
+        busy = true;
+        var result = await NutritionClient.UpdateAsync(entry.Id, value, CancellationToken.None);
+        busy = false;
+        if (result.IsSuccess) { day = result.Value; operationError = null; }
+        else operationError = result.Error;
+    }
+
+    private void AskDelete(NutritionFoodEntryResponse entry) { operationError = null; entryToDelete = entry; }
+    private void CancelDelete() { if (!busy) { entryToDelete = null; operationError = null; } }
+
+    private async Task DeleteAsync()
+    {
+        if (entryToDelete is null || busy) return;
+        busy = true;
+        var result = await NutritionClient.DeleteAsync(entryToDelete.Id, CancellationToken.None);
+        busy = false;
+        if (result.IsSuccess) { day = result.Value; entryToDelete = null; operationError = null; }
+        else operationError = result.Error;
+    }
+
+    private void OpenSaveRecipe(NutritionMealSlot slot)
+    {
+        openSlot = slot;
+        recipeName = SlotName(slot);
+        recipePortions = 1;
+        recipePortionsValid = true;
+        saveRecipeError = null;
+        recipeDialog = true;
+    }
+
+    private void CloseSaveRecipe()
+    {
+        if (busy) return;
+        recipeDialog = false;
+        saveRecipeError = null;
+    }
+
+    private void RecipeNameChanged(ChangeEventArgs args) { recipeName = args.Value?.ToString() ?? string.Empty; saveRecipeError = null; }
+
+    private void RecipePortionsChanged(ChangeEventArgs args)
+    {
+        recipePortionsValid = SettingsDecimalInput.TryParseOptional(args.Value?.ToString(), out var parsed) && parsed is >= .1m and <= 100m;
+        if (recipePortionsValid) recipePortions = parsed!.Value;
+        saveRecipeError = null;
+    }
+
+    private async Task SaveRecipeAsync()
+    {
+        if (!recipePortionsValid || string.IsNullOrWhiteSpace(recipeName) || busy) return;
+        var payload = (SelectedDate, openSlot, recipeName.Trim(), recipePortions);
+        if (!pendingRecipeCreations.TryGetValue(payload, out var requestId)) pendingRecipeCreations[payload] = requestId = Guid.NewGuid();
+        busy = true;
+        saveRecipeError = null;
+        var result = await NutritionClient.SaveRecipeAsync(new() { Id = requestId, Date = SelectedDate, MealSlot = openSlot, Name = recipeName.Trim(), Portions = recipePortions }, CancellationToken.None);
+        busy = false;
+        if (result.IsSuccess) { pendingRecipeCreations.Remove(payload); CloseSaveRecipe(); operationError = null; }
+        else saveRecipeError = result.Error;
+    }
+
+    private async Task OpenRecipes(NutritionMealSlot slot)
+    {
+        openSlot = slot;
+        recipesDialog = true;
+        selectedRecipe = null;
+        addRecipePortions = 1;
+        addRecipePortionsValid = true;
+        addRecipeError = null;
+        await LoadRecipesAsync();
+    }
+
+    private async Task LoadRecipesAsync()
+    {
+        recipesLoading = true;
+        recipeListError = null;
+        var result = await NutritionClient.RecipesAsync(CancellationToken.None);
+        if (result.IsSuccess && result.Value is not null) recipes = result.Value.ToList();
+        else { recipes = []; recipeListError = result.Error ?? "Måltiderne kunne ikke indlæses. Prøv igen."; }
+        recipesLoading = false;
+    }
+
+    private void SelectRecipe(NutritionRecipeResponse recipe)
+    {
+        if (selectedRecipe?.Id != recipe.Id) addRecipeError = null;
+        selectedRecipe = recipe;
+        addRecipePortions = 1;
+        addRecipePortionsValid = true;
+    }
+
+    private void AddRecipePortionsChanged(ChangeEventArgs args)
+    {
+        addRecipePortionsValid = SettingsDecimalInput.TryParseOptional(args.Value?.ToString(), out var parsed) && parsed is >= .1m and <= 100m;
+        if (addRecipePortionsValid) addRecipePortions = parsed!.Value;
+        addRecipeError = null;
+    }
+
+    private async Task AddRecipeAsync()
+    {
+        if (selectedRecipe is null || !addRecipePortionsValid || busy) return;
+        var payload = (selectedRecipe.Id, SelectedDate, openSlot, addRecipePortions);
+        if (!pendingRecipeAdditions.TryGetValue(payload, out var requestId)) pendingRecipeAdditions[payload] = requestId = Guid.NewGuid();
+        busy = true;
+        addRecipeError = null;
+        var result = await NutritionClient.AddRecipeAsync(selectedRecipe.Id, new() { Id = requestId, Date = SelectedDate, MealSlot = openSlot, Portions = addRecipePortions }, CancellationToken.None);
+        busy = false;
+        if (result.IsSuccess) { day = result.Value; recipesDialog = false; pendingRecipeAdditions.Remove(payload); operationError = null; }
+        else addRecipeError = result.Error;
+    }
+
+    private void CloseRecipes() { if (!busy) recipesDialog = false; }
+
+    private static decimal? MealEnergy(NutritionMealResponse meal)
+    {
+        if (meal.Entries.Count == 0) return 0m;
+        return meal.Entries.Any(entry => entry.EnergyKcal is null) ? null : meal.Entries.Sum(entry => entry.EnergyKcal!.Value);
+    }
+
     private decimal? CalculatedEnergy => selectedFood?.EnergyKcalPer100g is null ? null : selectedFood.EnergyKcalPer100g * grams / 100m;
     private decimal? RemainingCalories => day?.Target?.EnergyKcal is null || day.Totals.EnergyKcal is null ? null : day.Target.EnergyKcal - day.Totals.EnergyKcal;
-    private static string Number(decimal? value) => value is null ? "—" : Math.Round(value.Value, 1).ToString("0.#", Danish);
+    private static string Number(decimal? value) => value is null ? "—" : Math.Round(value.Value, 1, MidpointRounding.AwayFromZero).ToString("0.#", Danish);
     private static string SlotName(NutritionMealSlot slot) => slot switch { NutritionMealSlot.Breakfast => "morgenmad", NutritionMealSlot.MorningSnack => "formiddagssnack", NutritionMealSlot.Lunch => "frokost", NutritionMealSlot.AfternoonSnack => "eftermiddagssnack", NutritionMealSlot.Dinner => "aftensmad", _ => "aftenssnack" };
     private RenderFragment Macro(string name, decimal? actual, decimal? goal, string css) => @<div class="nutrition-macro @css"><span>@name</span><strong>@Number(actual) / @Number(goal) g</strong><i style="--progress:@(goal is > 0 && actual is not null ? Math.Min(100, actual.Value / goal.Value * 100) : 0)%"></i></div>;
-    private RenderFragment TargetField(string label, string unit, decimal? value, Action<decimal?> changed) => @<label>@label <span>@unit</span><input type="number" min="0" step="0.1" value="@value?.ToString(CultureInfo.InvariantCulture)" @onchange="e => changed(decimal.TryParse(e.Value?.ToString(), NumberStyles.Number, Danish, out var result) ? result : null)" /></label>;
 }
