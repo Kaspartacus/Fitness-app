@@ -151,6 +151,79 @@ public sealed class RegistrationMigrationTests
     }
 
     [Fact]
+    public async Task NutritionReceiptDowngradeDoesNotLinkReceiptsAcrossOwnersWhenRecipeIdsAreReused()
+    {
+        var databasePath = NewDatabasePath();
+        const string firstUserId = "nutrition-receipt-owner-a";
+        const string secondUserId = "nutrition-receipt-owner-b";
+        var recipeId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        try
+        {
+            await using (var dbContext = CreateContext(databasePath))
+                await dbContext.GetService<IMigrator>().MigrateAsync(UserNutritionFoodsMigration);
+
+            await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+            {
+                await connection.OpenAsync();
+                var command = connection.CreateCommand();
+                command.CommandText = """
+                    INSERT INTO AspNetUsers (
+                        Id, DisplayName, ApprovalStatus, UserName, NormalizedUserName,
+                        Email, NormalizedEmail, EmailConfirmed, PasswordHash,
+                        SecurityStamp, ConcurrencyStamp, PhoneNumber, PhoneNumberConfirmed,
+                        TwoFactorEnabled, LockoutEnd, LockoutEnabled, AccessFailedCount)
+                    VALUES
+                        ($firstUserId, 'First owner', 1, 'first@example.test', 'FIRST@EXAMPLE.TEST',
+                            'first@example.test', 'FIRST@EXAMPLE.TEST', 1, 'password-hash',
+                            'security-stamp-a', 'user-stamp-a', NULL, 0, 0, NULL, 1, 0),
+                        ($secondUserId, 'Second owner', 1, 'second@example.test', 'SECOND@EXAMPLE.TEST',
+                            'second@example.test', 'SECOND@EXAMPLE.TEST', 1, 'password-hash',
+                            'security-stamp-b', 'user-stamp-b', NULL, 0, 0, NULL, 1, 0);
+                    INSERT INTO NutritionRecipes (Id, UserId, Name, Portions, CreatedAtUtc, CreatedFromDate, CreatedFromSlot)
+                    VALUES ($recipeId, $firstUserId, 'Måltid A', 1, '2026-09-26 12:00:00', '2026-09-26', 2);
+                    INSERT INTO NutritionRecipeAdditions (UserId, RequestId, RecipeId, Date, Slot, Portions)
+                    VALUES ($firstUserId, $requestId, $recipeId, '2026-09-27', 4, 1);
+                    """;
+                command.Parameters.AddWithValue("$firstUserId", firstUserId);
+                command.Parameters.AddWithValue("$secondUserId", secondUserId);
+                command.Parameters.AddWithValue("$recipeId", recipeId.ToString());
+                command.Parameters.AddWithValue("$requestId", requestId.ToString());
+                await command.ExecuteNonQueryAsync();
+            }
+
+            await using (var dbContext = CreateContext(databasePath))
+                await dbContext.Database.MigrateAsync();
+
+            await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+            {
+                await connection.OpenAsync();
+                var command = connection.CreateCommand();
+                command.CommandText = """
+                    DELETE FROM NutritionRecipes WHERE Id = $recipeId;
+                    INSERT INTO NutritionRecipes (Id, UserId, Name, Portions, CreatedAtUtc, CreatedFromDate, CreatedFromSlot)
+                    VALUES ($recipeId, $secondUserId, 'Måltid B', 1, '2026-09-27 12:00:00', '2026-09-27', 3);
+                    """;
+                command.Parameters.AddWithValue("$recipeId", recipeId.ToString());
+                command.Parameters.AddWithValue("$secondUserId", secondUserId);
+                await command.ExecuteNonQueryAsync();
+            }
+
+            await using (var dbContext = CreateContext(databasePath))
+            {
+                await dbContext.GetService<IMigrator>().MigrateAsync(NutritionFoodAdditionReceiptsMigration);
+                Assert.Empty(await dbContext.NutritionRecipeAdditions.AsNoTracking().ToListAsync());
+                Assert.Equal(secondUserId, await dbContext.NutritionRecipes.AsNoTracking()
+                    .Where(recipe => recipe.Id == recipeId).Select(recipe => recipe.UserId).SingleAsync());
+            }
+        }
+        finally
+        {
+            DeleteDatabase(databasePath);
+        }
+    }
+
+    [Fact]
     public async Task NutritionMigrationPreservesFractionalLegacyTargetsAndExistingSettings()
     {
         var databasePath = NewDatabasePath();

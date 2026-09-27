@@ -55,7 +55,9 @@ public partial class DetachNutritionRecipeAdditionReceipts : Migration
             INSERT INTO "NutritionRecipeAdditions_Restored" ("UserId", "RequestId", "RecipeId", "Date", "Slot", "Portions")
             SELECT additions."UserId", additions."RequestId", additions."RecipeId", additions."Date", additions."Slot", additions."Portions"
             FROM "NutritionRecipeAdditions" AS additions
-            INNER JOIN "NutritionRecipes" AS recipes ON recipes."Id" = additions."RecipeId";
+            INNER JOIN "NutritionRecipes" AS recipes
+                ON recipes."Id" = additions."RecipeId"
+                AND recipes."UserId" = additions."UserId";
 
             DROP TABLE "NutritionRecipeAdditions";
             ALTER TABLE "NutritionRecipeAdditions_Restored" RENAME TO "NutritionRecipeAdditions";
