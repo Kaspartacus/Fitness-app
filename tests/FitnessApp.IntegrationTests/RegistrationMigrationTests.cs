@@ -22,6 +22,7 @@ public sealed class RegistrationMigrationTests
     private const string CompletedWorkoutOccurrenceLinkMigration = "20260922145225_AddCompletedWorkoutOccurrenceLink";
     private const string NutritionModuleMigration = "20260926193048_AddNutritionModule";
     private const string ConsolidateNutritionGoalsAndReceiptsMigration = "20260927083716_ConsolidateNutritionGoalsAndReceipts";
+    private const string UserNutritionFoodsMigration = "20260927104634_AddUserNutritionFoods";
 
     [Fact]
     public async Task LatestMigrationAppliesToEmptyDatabase()
@@ -38,7 +39,7 @@ public sealed class RegistrationMigrationTests
                     StrengthTrainingFlowMigration, CompletedWorkoutCompletionIdMigration, RunningModuleMigration,
                     CalendarOccurrenceMovesMigration, SettingsAndInAppNotificationsMigration,
                     CompletedWorkoutOccurrenceLinkMigration, NutritionModuleMigration,
-                    ConsolidateNutritionGoalsAndReceiptsMigration],
+                    ConsolidateNutritionGoalsAndReceiptsMigration, UserNutritionFoodsMigration],
                 await dbContext.Database.GetAppliedMigrationsAsync());
             var columns = await ReadUserColumnsAsync(databasePath);
             Assert.Contains("RegisteredAt", columns);
