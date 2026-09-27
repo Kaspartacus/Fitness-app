@@ -144,8 +144,13 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
         var scaledIngredients = recipe.Ingredients.Select(ingredient => (Ingredient: ingredient, Grams: ingredient.Grams * factor)).ToArray();
         if (scaledIngredients.Any(item => !ValidGrams(item.Grams))) return new(NutritionOperationStatus.Invalid);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        var meal = await db.NutritionMeals.SingleOrDefaultAsync(item => item.UserId == userId && item.Date == request.Date && item.Slot == request.MealSlot, cancellationToken) ?? new NutritionMeal { Id = Guid.NewGuid(), UserId = userId, Date = request.Date, Slot = request.MealSlot };
-        if (meal.Entries.Count == 0 && db.Entry(meal).State == EntityState.Detached) db.NutritionMeals.Add(meal);
+        var meal = await db.NutritionMeals.Include(item => item.Entries)
+            .SingleOrDefaultAsync(item => item.UserId == userId && item.Date == request.Date && item.Slot == request.MealSlot, cancellationToken);
+        if (meal is null)
+        {
+            meal = new NutritionMeal { Id = Guid.NewGuid(), UserId = userId, Date = request.Date, Slot = request.MealSlot };
+            db.NutritionMeals.Add(meal);
+        }
         foreach (var item in scaledIngredients) meal.Entries.Add(Snapshot(Guid.NewGuid(), item.Ingredient, item.Grams));
         db.NutritionRecipeAdditions.Add(new NutritionRecipeAddition
         {
@@ -168,7 +173,8 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
             db.ChangeTracker.Clear();
             var racedAddition = await db.NutritionRecipeAdditions.AsNoTracking()
                 .SingleOrDefaultAsync(addition => addition.UserId == userId && addition.RequestId == request.Id, cancellationToken);
-            return racedAddition is not null && Matches(racedAddition, recipeId, request)
+            if (racedAddition is null) throw;
+            return Matches(racedAddition, recipeId, request)
                 ? new(NutritionOperationStatus.Saved, await GetDayAsync(userId, racedAddition.Date, cancellationToken))
                 : new(NutritionOperationStatus.Conflict);
         }
