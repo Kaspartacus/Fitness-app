@@ -2,6 +2,7 @@ using System.Threading.RateLimiting;
 using FitnessApp.Server.Calendar;
 using FitnessApp.Server.Running;
 using FitnessApp.Server.Strength;
+using FitnessApp.Server.Nutrition;
 using FitnessApp.Application.Authentication;
 using FitnessApp.Infrastructure;
 using FitnessApp.Infrastructure.Persistence;
@@ -14,6 +15,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
 var bootstrapAdministrator = args.Length == 1 && args[0] == "bootstrap-admin";
+var importFrida = args.Length > 0 && args[0] == "import-frida";
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Logging.ClearProviders();
@@ -145,6 +147,12 @@ if (bootstrapAdministrator)
     return;
 }
 
+if (importFrida)
+{
+    Environment.ExitCode = await FridaImportCommand.RunAsync(app, args, CancellationToken.None);
+    return;
+}
+
 if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
 {
     app.UseHsts();
@@ -192,7 +200,8 @@ app.Use(async (context, next) =>
         context.Request.Path.StartsWithSegments("/api/admin") ||
         context.Request.Path.StartsWithSegments("/api/strength") ||
         context.Request.Path.StartsWithSegments("/api/running") ||
-        context.Request.Path.StartsWithSegments("/api/calendar"))
+        context.Request.Path.StartsWithSegments("/api/calendar") ||
+        context.Request.Path.StartsWithSegments("/api/nutrition"))
     {
         AuthenticationHttpResponses.SetNoStore(context.Response);
     }
@@ -215,6 +224,7 @@ app.MapUserAdministrationEndpoints();
 app.MapStrengthProgramEndpoints();
 app.MapRunningEndpoints();
 app.MapCalendarEndpoints();
+app.MapNutritionEndpoints();
 app.MapStaticAssets();
 app.UseEndpoints(_ => { });
 

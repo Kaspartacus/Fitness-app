@@ -7,6 +7,8 @@ using FitnessApp.Infrastructure.Calendar;
 using FitnessApp.Infrastructure.Email;
 using FitnessApp.Infrastructure.Persistence;
 using FitnessApp.Infrastructure.Running;
+using FitnessApp.Infrastructure.Nutrition;
+using FitnessApp.Application.Nutrition;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,6 +50,8 @@ public static class DependencyInjection
         services.AddScoped<FitnessApp.Application.Strength.IStrengthProgramService, FitnessApp.Infrastructure.Strength.StrengthProgramService>();
         services.AddScoped<ICalendarService, CalendarService>();
         services.AddScoped<IRunningService, RunningService>();
+        services.AddScoped<INutritionService, NutritionService>();
+        services.AddScoped<FridaImportService>();
         services.AddScoped<IAuthenticationService, AuthenticationService>();
         services.AddScoped<IAdminBootstrapper, AdminBootstrapper>();
         services.AddScoped<IRegistrationService, RegistrationService>();
