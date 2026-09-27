@@ -144,14 +144,21 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
         var scaledIngredients = recipe.Ingredients.Select(ingredient => (Ingredient: ingredient, Grams: ingredient.Grams * factor)).ToArray();
         if (scaledIngredients.Any(item => !ValidGrams(item.Grams))) return new(NutritionOperationStatus.Invalid);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        var meal = await db.NutritionMeals.Include(item => item.Entries)
-            .SingleOrDefaultAsync(item => item.UserId == userId && item.Date == request.Date && item.Slot == request.MealSlot, cancellationToken);
-        if (meal is null)
+        var mealId = await db.NutritionMeals.AsNoTracking()
+            .Where(item => item.UserId == userId && item.Date == request.Date && item.Slot == request.MealSlot)
+            .Select(item => item.Id).SingleOrDefaultAsync(cancellationToken);
+        var entries = scaledIngredients.Select(item => Snapshot(Guid.NewGuid(), item.Ingredient, item.Grams)).ToArray();
+        if (mealId == Guid.Empty)
         {
-            meal = new NutritionMeal { Id = Guid.NewGuid(), UserId = userId, Date = request.Date, Slot = request.MealSlot };
+            var meal = new NutritionMeal { Id = Guid.NewGuid(), UserId = userId, Date = request.Date, Slot = request.MealSlot };
+            meal.Entries.AddRange(entries);
             db.NutritionMeals.Add(meal);
         }
-        foreach (var item in scaledIngredients) meal.Entries.Add(Snapshot(Guid.NewGuid(), item.Ingredient, item.Grams));
+        else
+        {
+            foreach (var entry in entries) entry.MealId = mealId;
+            db.NutritionFoodEntries.AddRange(entries);
+        }
         db.NutritionRecipeAdditions.Add(new NutritionRecipeAddition
         {
             UserId = userId,
