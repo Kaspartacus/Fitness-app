@@ -226,8 +226,6 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
             entity.Property(addition => addition.Slot).HasConversion<int>();
             entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(addition => addition.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne<NutritionRecipe>().WithMany().HasForeignKey(addition => addition.RecipeId)
-                .OnDelete(DeleteBehavior.Cascade);
         });
         builder.Entity<NutritionFoodAddition>(entity =>
         {

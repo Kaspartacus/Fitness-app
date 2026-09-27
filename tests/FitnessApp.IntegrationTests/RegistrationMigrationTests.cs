@@ -25,6 +25,7 @@ public sealed class RegistrationMigrationTests
     private const string ConsolidateNutritionGoalsAndReceiptsMigration = "20260927083716_ConsolidateNutritionGoalsAndReceipts";
     private const string UserNutritionFoodsMigration = "20260927104634_AddUserNutritionFoods";
     private const string NutritionFoodAdditionReceiptsMigration = "20260927152000_AddNutritionFoodAdditionReceipts";
+    private const string NutritionRecipeAdditionReceiptsMigration = "20260927165000_DetachNutritionRecipeAdditionReceipts";
 
     [Fact]
     public async Task LatestMigrationAppliesToEmptyDatabase()
@@ -41,7 +42,8 @@ public sealed class RegistrationMigrationTests
                     StrengthTrainingFlowMigration, CompletedWorkoutCompletionIdMigration, RunningModuleMigration,
                     CalendarOccurrenceMovesMigration, SettingsAndInAppNotificationsMigration,
                     CompletedWorkoutOccurrenceLinkMigration, NutritionModuleMigration,
-                    ConsolidateNutritionGoalsAndReceiptsMigration, UserNutritionFoodsMigration, NutritionFoodAdditionReceiptsMigration],
+                    ConsolidateNutritionGoalsAndReceiptsMigration, UserNutritionFoodsMigration,
+                    NutritionFoodAdditionReceiptsMigration, NutritionRecipeAdditionReceiptsMigration],
                 await dbContext.Database.GetAppliedMigrationsAsync());
             var columns = await ReadUserColumnsAsync(databasePath);
             Assert.Contains("RegisteredAt", columns);
@@ -76,12 +78,14 @@ public sealed class RegistrationMigrationTests
     }
 
     [Fact]
-    public async Task NutritionFoodAdditionMigrationBackfillsExistingLogEntries()
+    public async Task NutritionReceiptMigrationsBackfillLogsAndPreserveRecipeReceipts()
     {
         var databasePath = NewDatabasePath();
         const string userId = "nutrition-receipt-user";
         var mealId = Guid.NewGuid();
         var entryId = Guid.NewGuid();
+        var recipeId = Guid.NewGuid();
+        var recipeRequestId = Guid.NewGuid();
         try
         {
             await using (var dbContext = CreateContext(databasePath))
@@ -101,6 +105,10 @@ public sealed class RegistrationMigrationTests
                         $userId, 'Nutrition user', 1, 'nutrition@example.test', 'NUTRITION@EXAMPLE.TEST',
                         'nutrition@example.test', 'NUTRITION@EXAMPLE.TEST', 1, 'password-hash',
                         'security-stamp', 'user-stamp', NULL, 0, 0, NULL, 1, 0);
+                    INSERT INTO NutritionRecipes (Id, UserId, Name, Portions, CreatedAtUtc, CreatedFromDate, CreatedFromSlot)
+                    VALUES ($recipeId, $userId, 'Frokost', 1, '2026-09-26 12:00:00', '2026-09-26', 2);
+                    INSERT INTO NutritionRecipeAdditions (UserId, RequestId, RecipeId, Date, Slot, Portions)
+                    VALUES ($userId, $recipeRequestId, $recipeId, '2026-09-27', 4, 1.5);
                     INSERT INTO NutritionMeals (Id, UserId, Date, Slot)
                     VALUES ($mealId, $userId, '2026-09-26', 2);
                     INSERT INTO NutritionFoodEntries (
@@ -111,6 +119,8 @@ public sealed class RegistrationMigrationTests
                         125.5, 52, 0.3, 11.4, 0.2, 10.3);
                     """;
                 command.Parameters.AddWithValue("$userId", userId);
+                command.Parameters.AddWithValue("$recipeId", recipeId.ToString());
+                command.Parameters.AddWithValue("$recipeRequestId", recipeRequestId.ToString());
                 command.Parameters.AddWithValue("$mealId", mealId.ToString());
                 command.Parameters.AddWithValue("$entryId", entryId.ToString());
                 await command.ExecuteNonQueryAsync();
@@ -125,6 +135,13 @@ public sealed class RegistrationMigrationTests
                 Assert.Equal(new DateOnly(2026, 9, 26), receipt.Date);
                 Assert.Equal(NutritionMealSlot.Lunch, receipt.Slot);
                 Assert.Equal(125.5m, receipt.Grams);
+                var recipeReceipt = await dbContext.NutritionRecipeAdditions.AsNoTracking().SingleAsync();
+                Assert.Equal(userId, recipeReceipt.UserId);
+                Assert.Equal(recipeRequestId, recipeReceipt.RequestId);
+                Assert.Equal(recipeId, recipeReceipt.RecipeId);
+                Assert.Equal(new DateOnly(2026, 9, 27), recipeReceipt.Date);
+                Assert.Equal(NutritionMealSlot.Dinner, recipeReceipt.Slot);
+                Assert.Equal(1.5m, recipeReceipt.Portions);
             }
         }
         finally

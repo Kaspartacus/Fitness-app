@@ -800,8 +800,6 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
 
                     b.HasKey("UserId", "RequestId");
 
-                    b.HasIndex("RecipeId");
-
                     b.ToTable("NutritionRecipeAdditions");
                 });
 
@@ -1302,12 +1300,6 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionRecipeAddition", b =>
                 {
-                    b.HasOne("FitnessApp.Infrastructure.Nutrition.NutritionRecipe", null)
-                        .WithMany()
-                        .HasForeignKey("RecipeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
