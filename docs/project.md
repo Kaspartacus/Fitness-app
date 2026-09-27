@@ -14,7 +14,7 @@ Visual implementation evidence and its limits are owned by the Client in [its de
 
 - A .NET 10 solution in `FitnessApp.slnx` with six projects under `src/` and an integration-test project under `tests/`.
 - A standalone Blazor WebAssembly client served by the ASP.NET Core server from the same origin.
-- EF Core SQLite persistence in Infrastructure with the initial Identity/session migration; database files live outside `wwwroot` and are ignored by Git.
+- EF Core SQLite persistence in Infrastructure with tracked migrations; the hosted server applies pending migrations automatically only in Development, while other environments require an explicit migration step. Database files live outside `wwwroot` and are ignored by Git.
 - ASP.NET Core Identity users, password hashing and policy, `Admin` and `User` roles, lockout, and `Pending`, `Approved`, and `Rejected` account states.
 - An explicit local command that creates the first Approved administrator from User Secrets once, refuses existing-account elevation, and is safe to rerun.
 - Signed HS256 JWT login through ASP.NET Core JwtBearer, approximately 15-minute access tokens, strict issuer/audience/algorithm/signature/expiry checks, login rate limiting, and generic Danish failures.
@@ -72,7 +72,7 @@ Persistence entities are never shared with the client.
 
 ## Deferred decisions and scope
 
-SQLite, Identity, JWT access tokens, registration, administrator approval, password reset, strength-program management, the running vertical slice, and Profile/Settings are implemented within the existing projects. Running migration `20260910221108_AddRunningModule` is generated and reviewed but has not been applied to any database. Email ownership verification remains operationally incomplete. Refresh tokens, remember-me behavior, production signing-key rotation, Docker/Raspberry Pi deployment, remote-access design, real Garmin authorization/synchronization, browser push, notification email delivery, deployment automation, vault selection, log shipping, and the remaining fitness product modules remain deferred.
+SQLite, Identity, JWT access tokens, registration, administrator approval, password reset, strength-program management, the running vertical slice, and Profile/Settings are implemented within the existing projects. Running migration `20260910221108_AddRunningModule` is generated and reviewed; Development startup applies it automatically, while other environments require an explicit migration step. Email ownership verification remains operationally incomplete. Refresh tokens, remember-me behavior, production signing-key rotation, Docker/Raspberry Pi deployment, remote-access design, real Garmin authorization/synchronization, browser push, notification email delivery, deployment automation, vault selection, log shipping, and the remaining fitness product modules remain deferred.
 
 Paid infrastructure and paid SaaS dependencies are out of scope. Future choices must remain compatible with Linux/ARM64 unless a documented decision changes that constraint.
 

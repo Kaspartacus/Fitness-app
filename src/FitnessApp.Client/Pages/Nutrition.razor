@@ -76,7 +76,9 @@
 <ModalDialog IsOpen="@foodDialog" Title="Tilføj mad" Description="Søg i DTU Frida-kataloget eller opret din egen madvare. Værdier er pr. 100 g." DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CloseFood">
     @if (selectedFood is null && !creatingCustomFood)
     {
-        <input class="nutrition-search" value="@foodQuery" @oninput="FoodQueryChangedAsync" placeholder="Søg efter madvare" aria-label="Søg efter madvare" />
+        <div class="nutrition-search-field">
+            <input class="nutrition-search" value="@foodQuery" @oninput="FoodQueryChangedAsync" placeholder="Søg efter madvare" aria-label="Søg efter madvare" />
+        </div>
         @if (searching) { <p class="strength-muted-copy" role="status">Søger …</p> }
         @if (searchError is not null) { <p class="strength-error" role="alert">@searchError</p><button class="strength-secondary-button" type="button" @onclick="SearchChangedAsync" disabled="@searching">Prøv igen</button> }
         @if (!searching && searchError is null && foodQuery.Trim().Length >= 2 && searchResults.Count == 0) { <p class="strength-muted-copy">Ingen fødevarer matcher din søgning.</p> }

@@ -73,7 +73,7 @@ dotnet tool restore
 dotnet restore FitnessApp.slnx
 ```
 
-Apply the tracked migration to the configured local SQLite database:
+Development startup applies pending migrations to the configured local SQLite database automatically. For an explicit migration step in another environment, run:
 
 ```bash
 dotnet tool run dotnet-ef database update \
@@ -97,7 +97,7 @@ Trust the development certificate once if needed:
 dotnet dev-certs https --trust
 ```
 
-Start the hosted application:
+Start the hosted application (the `https` launch profile uses Development, so pending migrations are applied on startup):
 
 ```bash
 dotnet run --project src/FitnessApp.Server --launch-profile https

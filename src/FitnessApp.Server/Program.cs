@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 var bootstrapAdministrator = args.Length == 1 && args[0] == "bootstrap-admin";
@@ -152,6 +153,20 @@ if (importFrida)
 {
     Environment.ExitCode = await FridaImportCommand.RunAsync(app, args, CancellationToken.None);
     return;
+}
+
+if (app.Environment.IsDevelopment())
+{
+    await using var migrationScope = app.Services.CreateAsyncScope();
+    var dbContext = migrationScope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+    var pendingMigrations = (await dbContext.Database.GetPendingMigrationsAsync()).ToArray();
+    if (pendingMigrations.Length > 0)
+    {
+        app.Logger.LogInformation(
+            "Applying {MigrationCount} pending database migrations in Development.",
+            pendingMigrations.Length);
+        await dbContext.Database.MigrateAsync();
+    }
 }
 
 if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
