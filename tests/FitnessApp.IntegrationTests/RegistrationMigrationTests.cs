@@ -213,8 +213,12 @@ public sealed class RegistrationMigrationTests
             {
                 await dbContext.GetService<IMigrator>().MigrateAsync(NutritionFoodAdditionReceiptsMigration);
                 Assert.Empty(await dbContext.NutritionRecipeAdditions.AsNoTracking().ToListAsync());
-                Assert.Equal(secondUserId, await dbContext.NutritionRecipes.AsNoTracking()
-                    .Where(recipe => recipe.Id == recipeId).Select(recipe => recipe.UserId).SingleAsync());
+                await dbContext.Database.OpenConnectionAsync();
+                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                command.CommandText = "SELECT COUNT(*) FROM NutritionRecipes WHERE Id = $recipeId AND UserId = $secondUserId";
+                command.Parameters.Add(new SqliteParameter("$recipeId", recipeId.ToString()));
+                command.Parameters.Add(new SqliteParameter("$secondUserId", secondUserId));
+                Assert.Equal(1L, (long)(await command.ExecuteScalarAsync())!);
             }
         }
         finally
