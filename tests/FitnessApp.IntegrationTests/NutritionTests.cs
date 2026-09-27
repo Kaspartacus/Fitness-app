@@ -247,7 +247,7 @@ public sealed class NutritionTests
         Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/nutrition/entries", request)).StatusCode);
         var dayWithEntry = (await client.GetFromJsonAsync<NutritionDayResponse>("/api/nutrition/days/2026-09-26"))!;
         var entry = Assert.Single(dayWithEntry.Meals.Single(meal => meal.Slot == NutritionMealSlot.Lunch).Entries);
-        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/nutrition/entries/{entry.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.DeleteAsync($"/api/nutrition/entries/{entry.Id}")).StatusCode);
 
         Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/nutrition/entries", request)).StatusCode);
         var dayAfterRetry = (await client.GetFromJsonAsync<NutritionDayResponse>("/api/nutrition/days/2026-09-26"))!;
