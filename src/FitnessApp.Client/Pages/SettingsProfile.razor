@@ -1,0 +1,206 @@
+@page "/indstillinger/profil"
+@attribute [Authorize]
+@using System.Globalization
+@using FitnessApp.Client.Settings
+@using FitnessApp.Contracts.Settings
+@inject SettingsClient SettingsApi
+@inject AuthenticationClient Authentication
+
+<PageTitle>Mine oplysninger</PageTitle>
+
+<main class="strength-app settings-app strength-with-bottom-nav" aria-labelledby="profile-settings-title">
+    <header class="strength-back-header settings-page-header">
+        <a class="strength-icon-button" href="/indstillinger" aria-label="Tilbage til indstillinger" title="Tilbage til indstillinger">←</a>
+        <div>
+            <p class="strength-overline">Konto</p>
+            <h1 id="profile-settings-title">Mine oplysninger</h1>
+        </div>
+        <span class="strength-header-spacer" aria-hidden="true"></span>
+    </header>
+
+    <div class="settings-page-content">
+        @if (isLoading)
+        {
+            <p class="strength-feedback" role="status">Indlæser dine oplysninger…</p>
+        }
+        else if (loadError is not null)
+        {
+            <section class="strength-status-card" role="alert">
+                <p>@loadError</p>
+                <button class="strength-secondary-button" type="button" @onclick="LoadAsync" disabled="@isSaving">Prøv igen</button>
+            </section>
+        }
+        else
+        {
+            <form class="settings-form" @onsubmit="SaveAsync" @onsubmit:preventDefault>
+                <section class="strength-editor-card">
+                    <p class="strength-overline">Profil</p>
+                    <h2>Oplysninger om dig</h2>
+                    <p class="settings-form-intro">De bruges kun på din konto. Højde og vægt deles ikke med andre brugere.</p>
+
+                    <label class="strength-input-label" for="settings-display-name">Navn</label>
+                    <input class="strength-input" id="settings-display-name" autocomplete="name" maxlength="100" required
+                           @bind="displayName" @bind:event="oninput" disabled="@isSaving" />
+
+                    <div class="settings-input-grid">
+                        <div>
+                            <label class="strength-input-label" for="settings-height">Højde</label>
+                            <div class="settings-input-with-unit">
+                                <input class="strength-input" id="settings-height" inputmode="decimal" autocomplete="off"
+                                       @bind="heightCmText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 175" />
+                                <span class="settings-input-unit" aria-hidden="true">cm</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="strength-input-label" for="settings-weight">Vægt</label>
+                            <div class="settings-input-with-unit">
+                                <input class="strength-input" id="settings-weight" inputmode="decimal" autocomplete="off"
+                                       @bind="weightKgText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 72,5" />
+                                <span class="settings-input-unit" aria-hidden="true">kg</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (validationError is not null)
+                    {
+                        <p class="strength-field-error" role="alert">@validationError</p>
+                    }
+                    @if (saveError is not null)
+                    {
+                        <p class="strength-field-error" role="alert">@saveError</p>
+                    }
+                    @if (saveMessage is not null)
+                    {
+                        <p class="settings-save-status" role="status">@saveMessage</p>
+                    }
+
+                    <div class="strength-form-actions">
+                        <a class="strength-outline-button" href="/indstillinger">Annuller</a>
+                        <button class="strength-primary-button" type="submit" disabled="@isSaving">@(isSaving ? "Gemmer…" : "Gem ændringer")</button>
+                    </div>
+                </section>
+            </form>
+        }
+    </div>
+
+    <StrengthBottomNavigation Active="settings" />
+</main>
+
+@code {
+    private static readonly CultureInfo DanishCulture = CultureInfo.GetCultureInfo("da-DK");
+    private ProfileSettingsResponse? profile;
+    private string displayName = string.Empty;
+    private string heightCmText = string.Empty;
+    private string weightKgText = string.Empty;
+    private bool isLoading = true;
+    private bool isSaving;
+    private string? loadError;
+    private string? validationError;
+    private string? saveError;
+    private string? saveMessage;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (isLoading && profile is not null || isSaving)
+        {
+            return;
+        }
+
+        isLoading = true;
+        loadError = null;
+        var result = await SettingsApi.GetOverviewAsync();
+        isLoading = false;
+        if (!result.Succeeded || result.Value is null)
+        {
+            loadError = result.Error ?? "Dine oplysninger kunne ikke indlæses. Prøv igen.";
+            return;
+        }
+
+        profile = result.Value.Profile;
+        displayName = profile.DisplayName;
+        heightCmText = FormatNumber(profile.HeightCm);
+        weightKgText = FormatNumber(profile.WeightKg);
+        validationError = null;
+        saveError = null;
+        saveMessage = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (isSaving || profile is null)
+        {
+            return;
+        }
+
+        if (!TryCreateRequest(out var request))
+        {
+            return;
+        }
+
+        isSaving = true;
+        saveError = null;
+        saveMessage = null;
+        var result = await SettingsApi.UpdateProfileAsync(request);
+        isSaving = false;
+        if (!result.Succeeded || result.Value is null)
+        {
+            saveError = result.Error ?? "Dine oplysninger kunne ikke gemmes. Prøv igen.";
+            return;
+        }
+
+        profile = result.Value;
+        displayName = profile.DisplayName;
+        heightCmText = FormatNumber(profile.HeightCm);
+        weightKgText = FormatNumber(profile.WeightKg);
+        saveMessage = "Dine oplysninger er gemt.";
+        await Authentication.GetCurrentUserAsync();
+    }
+
+    private bool TryCreateRequest(out UpdateProfileSettingsRequest request)
+    {
+        validationError = null;
+        var trimmedName = displayName.Trim();
+        decimal? heightCm = null;
+        decimal? weightKg = null;
+        if (string.IsNullOrWhiteSpace(trimmedName))
+        {
+            validationError = "Skriv dit navn.";
+        }
+        else if (trimmedName.Length > 100)
+        {
+            validationError = "Navnet må højst have 100 tegn.";
+        }
+        else if (!SettingsDecimalInput.TryParseOptional(heightCmText, out heightCm))
+        {
+            validationError = "Angiv højden som et tal, for eksempel 175.";
+        }
+        else if (heightCm is < 50m or > 300m)
+        {
+            validationError = "Højden skal være mellem 50 og 300 cm.";
+        }
+        else if (!SettingsDecimalInput.TryParseOptional(weightKgText, out weightKg))
+        {
+            validationError = "Angiv vægten som et tal, for eksempel 72,5.";
+        }
+        else if (weightKg is < 20m or > 500m)
+        {
+            validationError = "Vægten skal være mellem 20 og 500 kg.";
+        }
+
+        if (validationError is not null)
+        {
+            request = default!;
+            return false;
+        }
+
+        request = new UpdateProfileSettingsRequest(
+            trimmedName,
+            heightCm,
+            weightKg);
+        return true;
+    }
+
+    private static string FormatNumber(decimal? value) => value?.ToString("0.##", DanishCulture) ?? string.Empty;
+}
