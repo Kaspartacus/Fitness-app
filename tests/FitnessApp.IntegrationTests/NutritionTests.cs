@@ -284,7 +284,7 @@ public sealed class NutritionTests
 
         Assert.All(responses, response => Assert.Equal(HttpStatusCode.Created, response.StatusCode));
         var day = (await client.GetFromJsonAsync<NutritionDayResponse>($"/api/nutrition/days/{date:yyyy-MM-dd}"))!;
-        var breakfast = Assert.Single(day.Meals.Where(meal => meal.Slot == NutritionMealSlot.Breakfast));
+        var breakfast = Assert.Single(day.Meals, meal => meal.Slot == NutritionMealSlot.Breakfast);
         Assert.Equal(2, breakfast.Entries.Count);
         Assert.Equal(130m, day.Totals.EnergyKcal);
         await using var scope = factory.Services.CreateAsyncScope();

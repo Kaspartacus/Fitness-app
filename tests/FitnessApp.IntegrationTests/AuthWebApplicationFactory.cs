@@ -29,6 +29,7 @@ internal sealed class AuthWebApplicationFactory : WebApplicationFactory<Program>
     private readonly TestAppStorage storage;
     private readonly bool ownsStorage;
     private readonly IReadOnlyDictionary<string, string?> configurationOverrides;
+    private readonly SaveChangesInterceptor? saveChangesInterceptor;
 
     public AuthWebApplicationFactory(
         int loginPermitLimit = 10,
@@ -50,6 +51,7 @@ internal sealed class AuthWebApplicationFactory : WebApplicationFactory<Program>
         ownsStorage = storage is null;
         EmailSender = emailSender ?? new RecordingEmailSender();
         this.configurationOverrides = configurationOverrides ?? new Dictionary<string, string?>();
+        this.saveChangesInterceptor = saveChangesInterceptor;
     }
 
     public RecordingEmailSender EmailSender { get; }
