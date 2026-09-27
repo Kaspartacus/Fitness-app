@@ -41,6 +41,7 @@ internal static class NutritionEndpoints
     {
         NutritionOperationStatus.Saved => created ? Results.Created("/api/nutrition/recipes", null) : Results.NoContent(),
         NutritionOperationStatus.NotFound => Results.NotFound(new { title = "Måltidet blev ikke fundet." }),
+        NutritionOperationStatus.Conflict => Results.Conflict(new { title = "Måltidet blev ændret i en anden fane." }),
         _ => Invalid("Ernæring", "Kontrollér de indtastede oplysninger.")
     };
     private static IResult Invalid(string key, string message) => Results.ValidationProblem(new Dictionary<string, string[]> { [key] = [message] }, title: "Kontrollér de indtastede oplysninger.");
