@@ -152,16 +152,39 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
             meal.Entries.Add(Snapshot(request.Id, food, request.Grams));
         }
         try { await db.SaveChangesAsync(cancellationToken); return new(NutritionOperationStatus.Saved, await GetDayAsync(userId, request.Date, cancellationToken)); }
-        catch (DbUpdateException) { db.ChangeTracker.Clear(); return new(NutritionOperationStatus.Conflict); }
+        catch (DbUpdateException)
+        {
+            db.ChangeTracker.Clear();
+            var racedEntry = await db.NutritionFoodEntries.AsNoTracking().Include(entry => entry.Meal)
+                .SingleOrDefaultAsync(entry => entry.Id == request.Id, cancellationToken);
+            if (racedEntry is null) return new(NutritionOperationStatus.Conflict);
+            if (racedEntry.Meal.UserId != userId) return new(NutritionOperationStatus.NotFound);
+            return Matches(racedEntry, userId, request)
+                ? new(NutritionOperationStatus.Saved, await GetDayAsync(userId, racedEntry.Meal.Date, cancellationToken))
+                : new(NutritionOperationStatus.Conflict);
+        }
     }
 
     public async Task<NutritionOperationResult> UpdateFoodAsync(string userId, Guid entryId, UpdateNutritionFoodInput request, CancellationToken cancellationToken)
     {
-        if (entryId == Guid.Empty || request is null || !ValidGrams(request.Grams)) return new(NutritionOperationStatus.Invalid);
-        var entry = await db.NutritionFoodEntries.Include(item => item.Meal).SingleOrDefaultAsync(item => item.Id == entryId && item.Meal.UserId == userId, cancellationToken);
-        if (entry is null) return new(NutritionOperationStatus.NotFound);
-        entry.Grams = request.Grams; await db.SaveChangesAsync(cancellationToken);
-        return new(NutritionOperationStatus.Saved, await GetDayAsync(userId, entry.Meal.Date, cancellationToken));
+        if (entryId == Guid.Empty || request is null || !ValidGrams(request.ExpectedGrams) || !ValidGrams(request.Grams)) return new(NutritionOperationStatus.Invalid);
+        var date = await db.NutritionFoodEntries.AsNoTracking()
+            .Where(item => item.Id == entryId && item.Meal.UserId == userId)
+            .Select(item => (DateOnly?)item.Meal.Date)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (date is null) return new(NutritionOperationStatus.NotFound);
+
+        var updated = await db.NutritionFoodEntries
+            .Where(item => item.Id == entryId && item.Meal.UserId == userId && item.Grams == request.ExpectedGrams)
+            .ExecuteUpdateAsync(updates => updates.SetProperty(item => item.Grams, request.Grams), cancellationToken);
+        if (updated == 0)
+        {
+            var stillExists = await db.NutritionFoodEntries.AsNoTracking()
+                .AnyAsync(item => item.Id == entryId && item.Meal.UserId == userId, cancellationToken);
+            return new(stillExists ? NutritionOperationStatus.Conflict : NutritionOperationStatus.NotFound);
+        }
+
+        return new(NutritionOperationStatus.Saved, await GetDayAsync(userId, date.Value, cancellationToken));
     }
 
     public async Task<NutritionOperationResult> DeleteFoodAsync(string userId, Guid entryId, CancellationToken cancellationToken)
@@ -186,6 +209,17 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
         var recipes = await db.NutritionRecipes.AsNoTracking().Include(recipe => recipe.Ingredients).Where(recipe => recipe.UserId == userId)
             .OrderBy(recipe => recipe.Name).ToListAsync(cancellationToken);
         return recipes.Select(recipe => new NutritionRecipeData(recipe.Id, recipe.Name, recipe.Portions, Sum(recipe.Ingredients.Select(Map)), recipe.Ingredients.Count)).ToArray();
+    }
+
+    public async Task<NutritionOperationStatus> DeleteRecipeAsync(string userId, Guid recipeId, CancellationToken cancellationToken)
+    {
+        var recipe = await db.NutritionRecipes.SingleOrDefaultAsync(
+            item => item.Id == recipeId && item.UserId == userId, cancellationToken);
+        if (recipe is null) return NutritionOperationStatus.NotFound;
+
+        db.NutritionRecipes.Remove(recipe);
+        await db.SaveChangesAsync(cancellationToken);
+        return NutritionOperationStatus.Saved;
     }
 
     public async Task<NutritionOperationStatus> CreateRecipeAsync(string userId, CreateNutritionRecipeInput request, CancellationToken cancellationToken)
@@ -243,9 +277,11 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
             .Where(item => item.UserId == userId && item.Date == request.Date && item.Slot == request.MealSlot)
             .Select(item => item.Id).SingleOrDefaultAsync(cancellationToken);
         var entries = scaledIngredients.Select(item => Snapshot(Guid.NewGuid(), item.Ingredient, item.Grams)).ToArray();
+        var newMealId = Guid.Empty;
         if (mealId == Guid.Empty)
         {
             var meal = new NutritionMeal { Id = Guid.NewGuid(), UserId = userId, Date = request.Date, Slot = request.MealSlot };
+            newMealId = meal.Id;
             meal.Entries.AddRange(entries);
             db.NutritionMeals.Add(meal);
         }
@@ -275,10 +311,21 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
             db.ChangeTracker.Clear();
             var racedAddition = await db.NutritionRecipeAdditions.AsNoTracking()
                 .SingleOrDefaultAsync(addition => addition.UserId == userId && addition.RequestId == request.Id, cancellationToken);
-            if (racedAddition is null) throw;
-            return Matches(racedAddition, recipeId, request)
-                ? new(NutritionOperationStatus.Saved, await GetDayAsync(userId, racedAddition.Date, cancellationToken))
-                : new(NutritionOperationStatus.Conflict);
+            if (racedAddition is not null)
+                return Matches(racedAddition, recipeId, request)
+                    ? new(NutritionOperationStatus.Saved, await GetDayAsync(userId, racedAddition.Date, cancellationToken))
+                    : new(NutritionOperationStatus.Conflict);
+
+            if (newMealId != Guid.Empty)
+            {
+                var competingMealId = await db.NutritionMeals.AsNoTracking()
+                    .Where(item => item.UserId == userId && item.Date == request.Date && item.Slot == request.MealSlot)
+                    .Select(item => item.Id).SingleOrDefaultAsync(cancellationToken);
+                if (competingMealId != Guid.Empty && competingMealId != newMealId)
+                    return new(NutritionOperationStatus.Conflict);
+            }
+
+            throw;
         }
     }
 
@@ -315,6 +362,9 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
     private static string EscapeLikeTerm(string term) => term.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
     private static bool Matches(NutritionRecipeAddition addition, Guid recipeId, AddNutritionRecipeInput request) =>
         addition.RecipeId == recipeId && addition.Date == request.Date && addition.Slot == request.MealSlot && addition.Portions == request.Portions;
+    private static bool Matches(NutritionFoodEntry entry, string userId, AddNutritionFoodInput request) =>
+        entry.Meal.UserId == userId && entry.Meal.Date == request.Date && entry.Meal.Slot == request.MealSlot &&
+        entry.FoodId == request.FoodId && entry.CustomFoodId == request.CustomFoodId && entry.Grams == request.Grams;
     private static bool Matches(NutritionRecipe recipe, string userId, CreateNutritionRecipeInput request) =>
         recipe.UserId == userId && recipe.Name == request.Name!.Trim() && recipe.Portions == request.Portions &&
         recipe.CreatedFromDate == request.Date && recipe.CreatedFromSlot == request.MealSlot;

@@ -221,5 +221,5 @@
         sugarText = FormatNumber(goals.SugarTargetGrams);
     }
 
-    private static string FormatNumber(decimal? value) => value?.ToString("0.#", DanishCulture) ?? string.Empty;
+    private static string FormatNumber(decimal? value) => value?.ToString("G", DanishCulture) ?? string.Empty;
 }

@@ -46,6 +46,7 @@ public sealed class CreateCustomNutritionFoodRequest
 
 public sealed class UpdateNutritionFoodRequest
 {
+    public decimal ExpectedGrams { get; set; }
     public decimal Grams { get; set; }
 }
 

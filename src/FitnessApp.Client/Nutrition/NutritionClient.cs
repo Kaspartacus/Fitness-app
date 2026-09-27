@@ -12,7 +12,7 @@ public sealed class NutritionClient(IHttpClientFactory clients)
     public async Task<NutritionClientResult<FoodSearchPageResponse>> SearchAsync(string query, int page, CancellationToken ct) => await SendAsync<FoodSearchPageResponse>(Client.GetAsync($"api/nutrition/foods?query={Uri.EscapeDataString(query)}&page={page}&pageSize=20", ct), ct);
     public async Task<NutritionClientResult<FoodSearchResponse>> CreateCustomFoodAsync(CreateCustomNutritionFoodRequest request, CancellationToken ct) => await SendAsync<FoodSearchResponse>(Client.PostAsJsonAsync("api/nutrition/foods/custom", request, ct), ct);
     public async Task<NutritionClientResult<NutritionDayResponse>> AddAsync(AddNutritionFoodRequest request, CancellationToken ct) => await SendAsync<NutritionDayResponse>(Client.PostAsJsonAsync("api/nutrition/entries", request, ct), ct);
-    public async Task<NutritionClientResult<NutritionDayResponse>> UpdateAsync(Guid id, decimal grams, CancellationToken ct) => await SendAsync<NutritionDayResponse>(Client.PutAsJsonAsync($"api/nutrition/entries/{id}", new UpdateNutritionFoodRequest { Grams = grams }, ct), ct);
+    public async Task<NutritionClientResult<NutritionDayResponse>> UpdateAsync(Guid id, decimal expectedGrams, decimal grams, CancellationToken ct) => await SendAsync<NutritionDayResponse>(Client.PutAsJsonAsync($"api/nutrition/entries/{id}", new UpdateNutritionFoodRequest { ExpectedGrams = expectedGrams, Grams = grams }, ct), ct);
     public async Task<NutritionClientResult<NutritionDayResponse>> DeleteAsync(Guid id, CancellationToken ct) => await SendAsync<NutritionDayResponse>(Client.DeleteAsync($"api/nutrition/entries/{id}", ct), ct);
     public async Task<NutritionClientResult<IReadOnlyList<NutritionRecipeResponse>>> RecipesAsync(CancellationToken ct) => await SendAsync<IReadOnlyList<NutritionRecipeResponse>>(Client.GetAsync("api/nutrition/recipes", ct), ct);
     public async Task<NutritionClientResult<bool>> SaveRecipeAsync(CreateNutritionRecipeRequest request, CancellationToken ct)
@@ -34,6 +34,7 @@ public sealed class NutritionClient(IHttpClientFactory clients)
         }
     }
     public async Task<NutritionClientResult<NutritionDayResponse>> AddRecipeAsync(Guid recipeId, AddNutritionRecipeRequest request, CancellationToken ct) => await SendAsync<NutritionDayResponse>(Client.PostAsJsonAsync($"api/nutrition/recipes/{recipeId}/entries", request, ct), ct);
+    public async Task<NutritionClientResult<bool>> DeleteRecipeAsync(Guid recipeId, CancellationToken ct) => await SendAsync<bool>(Client.DeleteAsync($"api/nutrition/recipes/{recipeId}", ct), ct);
 
     private static async Task<NutritionClientResult<T>> SendAsync<T>(Task<HttpResponseMessage> operation, CancellationToken ct)
     {

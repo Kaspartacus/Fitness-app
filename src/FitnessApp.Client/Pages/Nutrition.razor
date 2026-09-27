@@ -116,8 +116,8 @@
 </ModalDialog>
 
 <ModalDialog IsOpen="@recipeDialog" Title="Gem som måltid" Description="Opskriften gemmer et snapshot af de aktuelle ingredienser." DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CloseSaveRecipe">
-    <label>Navn<input value="@recipeName" maxlength="160" @oninput="RecipeNameChanged" /></label>
-    <label>Antal portioner<input type="text" inputmode="decimal" value="@recipePortions.ToString("0.#", Danish)" @oninput="RecipePortionsChanged" /></label>
+    <label>Navn<input class="nutrition-input" value="@recipeName" maxlength="160" @oninput="RecipeNameChanged" /></label>
+    <label>Antal portioner<input class="nutrition-input" type="text" inputmode="decimal" value="@recipePortions.ToString("0.#", Danish)" @oninput="RecipePortionsChanged" /></label>
     @if (!recipePortionsValid) { <p class="strength-field-error" role="alert">Angiv mellem 0,1 og 100 portioner.</p> }
     @if (saveRecipeError is not null) { <p class="strength-error" role="alert">@saveRecipeError</p> }
     <div class="app-modal-actions"><button class="strength-secondary-button" @onclick="CloseSaveRecipe" disabled="@busy">Annuller</button><button class="strength-primary-button" @onclick="SaveRecipeAsync" disabled="@(busy || !recipePortionsValid || string.IsNullOrWhiteSpace(recipeName))">@(busy ? "Gemmer …" : "Gem måltid")</button></div>
@@ -129,16 +129,29 @@
     else if (recipes.Count == 0) { <p class="strength-muted-copy">Du har endnu ikke gemt et måltid.</p> }
     else
     {
-        <div class="nutrition-search-results">@foreach (var recipe in recipes) { <button type="button" class="@(selectedRecipe?.Id == recipe.Id ? "is-selected" : null)" @onclick="() => SelectRecipe(recipe)" disabled="@busy"><span><strong>@recipe.Name</strong><small>@recipe.IngredientCount ingredienser · @Number(recipe.Totals.EnergyKcal) kcal pr. opskrift</small></span><b>@(selectedRecipe?.Id == recipe.Id ? "✓" : "＋")</b></button> }</div>
+        <div class="nutrition-search-results">
+            @foreach (var recipe in recipes)
+            {
+                <div class="nutrition-recipe-row">
+                    <button type="button" class="nutrition-recipe-select @(selectedRecipe?.Id == recipe.Id ? "is-selected" : null)" @onclick="() => SelectRecipe(recipe)" disabled="@busy"><span><strong>@recipe.Name</strong><small>@recipe.IngredientCount ingredienser · @Number(recipe.Totals.EnergyKcal) kcal pr. opskrift</small></span><b>@(selectedRecipe?.Id == recipe.Id ? "✓" : "＋")</b></button>
+                    <button class="nutrition-recipe-delete" type="button" @onclick="() => AskDeleteRecipe(recipe)" disabled="@busy" aria-label="Slet gemt måltid @recipe.Name">Slet</button>
+                </div>
+            }
+        </div>
         @if (selectedRecipe is not null)
         {
-            <label>Portioner<input type="text" inputmode="decimal" value="@addRecipePortions.ToString("0.#", Danish)" @oninput="AddRecipePortionsChanged" disabled="@busy" /></label>
+            <label>Portioner<input class="nutrition-input" type="text" inputmode="decimal" value="@addRecipePortions.ToString("0.#", Danish)" @oninput="AddRecipePortionsChanged" disabled="@busy" /></label>
             <p class="strength-muted-copy">@Number(addRecipePortions) portioner af @selectedRecipe.Name</p>
             @if (!addRecipePortionsValid) { <p class="strength-field-error" role="alert">Angiv mellem 0,1 og 100 portioner.</p> }
             @if (addRecipeError is not null) { <p class="strength-error" role="alert">@addRecipeError</p> }
             <div class="app-modal-actions"><button class="strength-primary-button" type="button" @onclick="AddRecipeAsync" disabled="@(busy || !addRecipePortionsValid)">@(busy ? "Tilføjer …" : $"Tilføj til {SlotName(openSlot)}")</button></div>
         }
     }
+</ModalDialog>
+
+<ModalDialog IsOpen="@(recipeToDelete is not null)" Title="Slet gemt måltid?" Description="@RecipeDeleteDescription" InitialFocusSelector="[data-modal-cancel]" Destructive="true" DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CancelDeleteRecipe">
+    @if (recipeDeleteError is not null) { <p class="strength-error" role="alert">@recipeDeleteError</p> }
+    <div class="app-modal-actions"><button data-modal-cancel class="strength-secondary-button" type="button" @onclick="CancelDeleteRecipe" disabled="@busy">Annuller</button><button class="strength-danger-button" type="button" @onclick="DeleteRecipeAsync" disabled="@busy">@(busy ? "Sletter …" : "Slet måltid")</button></div>
 </ModalDialog>
 
 @code {
@@ -149,7 +162,7 @@
     private bool loading = true, busy, foodDialog, searching, creatingCustomFood, recipeDialog, recipesDialog, recipesLoading;
     private bool gramsValid = true, recipePortionsValid = true, addRecipePortionsValid = true, searchHasMore;
     private int loadSequence, searchPage;
-    private string? error, operationError, searchError, customFoodError, saveRecipeError, recipeListError, addRecipeError;
+    private string? error, operationError, searchError, customFoodError, saveRecipeError, recipeListError, addRecipeError, recipeDeleteError;
     private string foodQuery = string.Empty, recipeName = string.Empty;
     private string customFoodName = string.Empty, customEnergyText = string.Empty, customProteinText = string.Empty;
     private string customCarbohydrateText = string.Empty, customFatText = string.Empty, customSugarText = string.Empty;
@@ -157,6 +170,7 @@
     private FoodSearchResponse? selectedFood;
     private NutritionFoodEntryResponse? entryToDelete;
     private NutritionRecipeResponse? selectedRecipe;
+    private NutritionRecipeResponse? recipeToDelete;
     private readonly Dictionary<(DateOnly Date, NutritionMealSlot Slot, int? FoodId, Guid? CustomFoodId, decimal Grams), Guid> pendingFoodRequests = [];
     private readonly Dictionary<(string Name, decimal Energy, decimal Protein, decimal Carbohydrate, decimal Fat, decimal Sugar), Guid> pendingCustomFoodRequests = [];
     private readonly Dictionary<(DateOnly Date, NutritionMealSlot Slot, string Name, decimal Portions), Guid> pendingRecipeCreations = [];
@@ -382,10 +396,10 @@
     {
         var value = Math.Clamp(entry.Grams + amount, .1m, 10000m);
         busy = true;
-        var result = await NutritionClient.UpdateAsync(entry.Id, value, CancellationToken.None);
+        var result = await NutritionClient.UpdateAsync(entry.Id, entry.Grams, value, CancellationToken.None);
         busy = false;
         if (result.IsSuccess) { day = result.Value; operationError = null; }
-        else operationError = result.Error;
+        else { operationError = result.Error; await LoadAsync(); }
     }
 
     private void AskDelete(NutritionFoodEntryResponse entry) { operationError = null; entryToDelete = entry; }
@@ -490,6 +504,46 @@
     }
 
     private void CloseRecipes() { if (!busy) recipesDialog = false; }
+
+    private void AskDeleteRecipe(NutritionRecipeResponse recipe)
+    {
+        if (busy) return;
+        recipeDeleteError = null;
+        recipeToDelete = recipe;
+        recipesDialog = false;
+    }
+
+    private void CancelDeleteRecipe()
+    {
+        if (busy) return;
+        recipeToDelete = null;
+        recipeDeleteError = null;
+        recipesDialog = true;
+    }
+
+    private async Task DeleteRecipeAsync()
+    {
+        if (recipeToDelete is null || busy) return;
+        var recipe = recipeToDelete;
+        busy = true;
+        recipeDeleteError = null;
+        var result = await NutritionClient.DeleteRecipeAsync(recipe.Id, CancellationToken.None);
+        busy = false;
+        if (!result.IsSuccess)
+        {
+            recipeDeleteError = result.Error ?? "Måltidet kunne ikke slettes. Prøv igen.";
+            return;
+        }
+
+        recipes.RemoveAll(item => item.Id == recipe.Id);
+        if (selectedRecipe?.Id == recipe.Id) selectedRecipe = null;
+        recipeToDelete = null;
+        recipesDialog = true;
+    }
+
+    private string RecipeDeleteDescription => recipeToDelete is { } recipe
+        ? $"{recipe.Name} fjernes fra dine gemte måltider. Mad, der allerede er registreret på en dag, bevares."
+        : "Måltidet fjernes fra dine gemte måltider.";
 
     private static decimal? MealEnergy(NutritionMealResponse meal)
     {

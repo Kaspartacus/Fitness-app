@@ -8,7 +8,7 @@ public sealed record FoodSearchData(int? FoodId, Guid? CustomFoodId, string Name
 public sealed record FoodSearchPageData(IReadOnlyList<FoodSearchData> Items, int Page, int PageSize, bool HasMore);
 public sealed record CreateCustomNutritionFoodInput(Guid Id, string? Name, decimal EnergyKcalPer100g, decimal ProteinPer100g, decimal CarbohydratePer100g, decimal FatPer100g, decimal SugarPer100g);
 public sealed record AddNutritionFoodInput(Guid Id, DateOnly Date, NutritionMealSlot MealSlot, int? FoodId, Guid? CustomFoodId, decimal Grams);
-public sealed record UpdateNutritionFoodInput(decimal Grams);
+public sealed record UpdateNutritionFoodInput(decimal ExpectedGrams, decimal Grams);
 public sealed record NutritionFoodEntryData(Guid Id, int? FoodId, string Name, string FoodGroup, decimal Grams, decimal? EnergyKcal, decimal? Protein, decimal? Carbohydrate, decimal? Fat, decimal? Sugar);
 public sealed record NutritionMealData(NutritionMealSlot Slot, string Name, IReadOnlyList<NutritionFoodEntryData> Entries);
 public sealed record NutritionTotalsData(decimal? EnergyKcal, decimal? Protein, decimal? Carbohydrate, decimal? Fat, decimal? Sugar);
@@ -30,5 +30,6 @@ public interface INutritionService
     Task<NutritionTargetData?> GetTargetAsync(string userId, CancellationToken cancellationToken);
     Task<IReadOnlyList<NutritionRecipeData>> ListRecipesAsync(string userId, CancellationToken cancellationToken);
     Task<NutritionOperationStatus> CreateRecipeAsync(string userId, CreateNutritionRecipeInput request, CancellationToken cancellationToken);
+    Task<NutritionOperationStatus> DeleteRecipeAsync(string userId, Guid recipeId, CancellationToken cancellationToken);
     Task<NutritionOperationResult> AddRecipeAsync(string userId, Guid recipeId, AddNutritionRecipeInput request, CancellationToken cancellationToken);
 }

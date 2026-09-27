@@ -196,14 +196,77 @@ public sealed class NutritionTests
     }
 
     [Fact]
+    public async Task SavedRecipesCanBeDeletedOnlyByTheirOwnerWithoutChangingDailyLogs()
+    {
+        using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync(); await SeedCatalogue(factory);
+        var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        var other = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        using var ownerClient = await Login(factory, owner);
+        using var otherClient = await Login(factory, other);
+        using var anonymousClient = factory.CreateHttpsClient();
+        var date = new DateOnly(2026, 9, 26);
+
+        Assert.Equal(HttpStatusCode.Created, (await ownerClient.PostAsJsonAsync("/api/nutrition/entries", new AddNutritionFoodRequest
+        {
+            Id = Guid.NewGuid(), Date = date, MealSlot = NutritionMealSlot.Lunch, FoodId = 1, Grams = 100
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await ownerClient.PostAsJsonAsync("/api/nutrition/recipes", new CreateNutritionRecipeRequest
+        {
+            Id = Guid.NewGuid(), Date = date, MealSlot = NutritionMealSlot.Lunch, Name = "Frokost", Portions = 1
+        })).StatusCode);
+        var recipe = Assert.Single((await ownerClient.GetFromJsonAsync<NutritionRecipeResponse[]>("/api/nutrition/recipes"))!);
+        Assert.Equal(HttpStatusCode.Created, (await ownerClient.PostAsJsonAsync($"/api/nutrition/recipes/{recipe.Id}/entries", new AddNutritionRecipeRequest
+        {
+            Id = Guid.NewGuid(), Date = date, MealSlot = NutritionMealSlot.Dinner, Portions = 1
+        })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymousClient.DeleteAsync($"/api/nutrition/recipes/{recipe.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await otherClient.DeleteAsync($"/api/nutrition/recipes/{recipe.Id}")).StatusCode);
+        Assert.Single((await ownerClient.GetFromJsonAsync<NutritionRecipeResponse[]>("/api/nutrition/recipes"))!);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await ownerClient.DeleteAsync($"/api/nutrition/recipes/{recipe.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await ownerClient.DeleteAsync($"/api/nutrition/recipes/{recipe.Id}")).StatusCode);
+        Assert.Empty((await ownerClient.GetFromJsonAsync<NutritionRecipeResponse[]>("/api/nutrition/recipes"))!);
+        var day = (await ownerClient.GetFromJsonAsync<NutritionDayResponse>($"/api/nutrition/days/{date:yyyy-MM-dd}"))!;
+        Assert.Equal(104m, day.Totals.EnergyKcal);
+        Assert.Equal("Æble, rå", Assert.Single(day.Meals.Single(meal => meal.Slot == NutritionMealSlot.Lunch).Entries).Name);
+        Assert.Equal("Æble, rå", Assert.Single(day.Meals.Single(meal => meal.Slot == NutritionMealSlot.Dinner).Entries).Name);
+    }
+
+    [Fact]
     public async Task FoodEntriesAreOwnerScoped()
     {
         using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync(); await SeedCatalogue(factory);
         using var owner = await Login(factory); using var other = await Login(factory); var date = new DateOnly(2026, 9, 26);
         var created = await owner.PostAsJsonAsync("/api/nutrition/entries", new AddNutritionFoodRequest { Id = Guid.NewGuid(), Date = date, MealSlot = NutritionMealSlot.Dinner, FoodId = 1, Grams = 100 });
         var day = (await created.Content.ReadFromJsonAsync<NutritionDayResponse>())!; var entry = Assert.Single(day.Meals.Single(meal => meal.Slot == NutritionMealSlot.Dinner).Entries);
-        Assert.Equal(HttpStatusCode.NotFound, (await other.PutAsJsonAsync($"/api/nutrition/entries/{entry.Id}", new UpdateNutritionFoodRequest { Grams = 300 })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.PutAsJsonAsync($"/api/nutrition/entries/{entry.Id}", new UpdateNutritionFoodRequest { ExpectedGrams = 100, Grams = 300 })).StatusCode);
         Assert.Empty((await other.GetFromJsonAsync<NutritionDayResponse>($"/api/nutrition/days/{date:yyyy-MM-dd}"))!.Meals.SelectMany(meal => meal.Entries));
+    }
+
+    [Fact]
+    public async Task StaleFoodEntryUpdatesDoNotOverwriteAnotherChange()
+    {
+        using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync(); await SeedCatalogue(factory);
+        using var client = await Login(factory);
+        var date = new DateOnly(2026, 9, 26);
+        var added = await client.PostAsJsonAsync("/api/nutrition/entries", new AddNutritionFoodRequest
+        {
+            Id = Guid.NewGuid(), Date = date, MealSlot = NutritionMealSlot.Lunch, FoodId = 1, Grams = 100
+        });
+        var dayAfterAdd = (await added.Content.ReadFromJsonAsync<NutritionDayResponse>())!;
+        var entry = Assert.Single(dayAfterAdd.Meals.Single(meal => meal.Slot == NutritionMealSlot.Lunch).Entries);
+
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync($"/api/nutrition/entries/{entry.Id}", new UpdateNutritionFoodRequest
+        {
+            ExpectedGrams = 100, Grams = 110
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PutAsJsonAsync($"/api/nutrition/entries/{entry.Id}", new UpdateNutritionFoodRequest
+        {
+            ExpectedGrams = 100, Grams = 120
+        })).StatusCode);
+        var currentDay = (await client.GetFromJsonAsync<NutritionDayResponse>($"/api/nutrition/days/{date:yyyy-MM-dd}"))!;
+        Assert.Equal(110m, Assert.Single(currentDay.Meals.Single(meal => meal.Slot == NutritionMealSlot.Lunch).Entries).Grams);
     }
 
     private static async Task SeedCatalogue(AuthWebApplicationFactory factory)
