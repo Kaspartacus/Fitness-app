@@ -34,7 +34,7 @@
     else if (day is not null)
     {
         <section class="nutrition-summary" aria-label="Dagens ernæring">
-            <div class="nutrition-ring"><strong>@Number(day.Totals.EnergyKcal)</strong><span>af @Number(day.Target?.EnergyKcal) kcal</span><small>@Number(RemainingCalories) kcal tilbage</small></div>
+            <div class="nutrition-ring @(ProgressPercent(day.Totals.EnergyKcal, day.Target?.EnergyKcal) is null ? "is-unavailable" : null)" style="@ProgressStyle(day.Totals.EnergyKcal, day.Target?.EnergyKcal)"><strong>@Number(day.Totals.EnergyKcal)</strong><span>af @Number(day.Target?.EnergyKcal) kcal</span><small>@Number(RemainingCalories) kcal tilbage</small></div>
             <a class="nutrition-target-link" href="/indstillinger/ernaeringsmaal">@(day.Target is null ? "Sæt ernæringsmål" : "Redigér ernæringsmål")</a>
         </section>
         <section class="nutrition-macros" aria-label="Makronæringsstoffer">
@@ -501,5 +501,33 @@
     private decimal? RemainingCalories => day?.Target?.EnergyKcal is null || day.Totals.EnergyKcal is null ? null : day.Target.EnergyKcal - day.Totals.EnergyKcal;
     private static string Number(decimal? value) => value is null ? "—" : Math.Round(value.Value, 1, MidpointRounding.AwayFromZero).ToString("0.#", Danish);
     private static string SlotName(NutritionMealSlot slot) => slot switch { NutritionMealSlot.Breakfast => "morgenmad", NutritionMealSlot.MorningSnack => "formiddagssnack", NutritionMealSlot.Lunch => "frokost", NutritionMealSlot.AfternoonSnack => "eftermiddagssnack", NutritionMealSlot.Dinner => "aftensmad", _ => "aftenssnack" };
-    private RenderFragment Macro(string name, decimal? actual, decimal? goal, string css) => @<div class="nutrition-macro @css"><span>@name</span><strong>@Number(actual) / @Number(goal) g</strong><i style="--progress:@(goal is > 0 && actual is not null ? Math.Min(100, actual.Value / goal.Value * 100) : 0)%"></i></div>;
+    private RenderFragment Macro(string name, decimal? actual, decimal? goal, string css)
+    {
+        var progress = ProgressPercent(actual, goal);
+        return @<div class="nutrition-macro @css">
+            <span>@name</span>
+            <strong>@Number(actual) / @Number(goal) g</strong>
+            <div class="nutrition-macro-track" role="@(progress is null ? null : "progressbar")" aria-label="@(progress is null ? null : name)" aria-valuemin="@(progress is null ? null : "0")" aria-valuemax="@(progress is null ? null : Invariant(goal))" aria-valuenow="@(progress is null ? null : Invariant(Math.Min(actual!.Value, goal!.Value)))" aria-valuetext="@(progress is null ? null : $"{Number(actual)} af {Number(goal)} g")">
+                @if (progress is { } value)
+                {
+                    <span style="@ProgressWidth(value)"></span>
+                }
+            </div>
+        </div>;
+    }
+
+    private static decimal? ProgressPercent(decimal? actual, decimal? goal) =>
+        actual is not null && goal is > 0m
+            ? Math.Clamp(actual.Value / goal.Value * 100m, 0m, 100m)
+            : null;
+
+    private static string? ProgressStyle(decimal? actual, decimal? goal) =>
+        ProgressPercent(actual, goal) is { } value
+            ? $"--progress: {value.ToString("0.##", CultureInfo.InvariantCulture)}%"
+            : null;
+
+    private static string ProgressWidth(decimal percent) =>
+        $"width: {percent.ToString("0.##", CultureInfo.InvariantCulture)}%";
+
+    private static string? Invariant(decimal? value) => value?.ToString(CultureInfo.InvariantCulture);
 }
