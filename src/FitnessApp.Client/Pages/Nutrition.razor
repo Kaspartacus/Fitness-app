@@ -1,6 +1,7 @@
 @page "/kost"
 @attribute [Authorize]
 @using System.Globalization
+@using FitnessApp.Client.Nutrition
 @using FitnessApp.Client.Running
 @using FitnessApp.Client.Settings
 @inject NutritionClient NutritionClient
@@ -14,9 +15,9 @@
     </header>
 
     <div class="nutrition-date-control" aria-label="Skift dag">
-        <button type="button" @onclick="PreviousDay" aria-label="Forrige dag">‹</button>
-        <button type="button" @onclick="Today"><strong>@(SelectedDate == RunningPresentation.CopenhagenToday ? "I dag" : SelectedDate.ToString("dddd", Danish))</strong><span>@SelectedDate.ToString("dddd d. MMMM", Danish)</span></button>
-        <button type="button" @onclick="NextDay" aria-label="Næste dag">›</button>
+        <button type="button" @onclick="PreviousDay" aria-label="Forrige dag" disabled="@busy">‹</button>
+        <button type="button" @onclick="Today" disabled="@busy"><strong>@(SelectedDate == RunningPresentation.CopenhagenToday ? "I dag" : SelectedDate.ToString("dddd", Danish))</strong><span>@SelectedDate.ToString("dddd d. MMMM", Danish)</span></button>
+        <button type="button" @onclick="NextDay" aria-label="Næste dag" disabled="@busy">›</button>
     </div>
 
     @if (operationError is not null)
@@ -382,24 +383,36 @@
     private async Task AddFoodAsync()
     {
         if (selectedFood is null || !gramsValid || busy) return;
-        var payload = (SelectedDate, openSlot, selectedFood.FoodId, selectedFood.CustomFoodId, grams);
+        var requestDate = SelectedDate;
+        var requestSequence = loadSequence;
+        var payload = (requestDate, openSlot, selectedFood.FoodId, selectedFood.CustomFoodId, grams);
         if (!pendingFoodRequests.TryGetValue(payload, out var requestId)) pendingFoodRequests[payload] = requestId = Guid.NewGuid();
         busy = true;
         searchError = null;
-        var result = await NutritionClient.AddAsync(new() { Id = requestId, Date = SelectedDate, MealSlot = openSlot, FoodId = selectedFood.FoodId, CustomFoodId = selectedFood.CustomFoodId, Grams = grams }, CancellationToken.None);
+        var result = await NutritionClient.AddAsync(new() { Id = requestId, Date = requestDate, MealSlot = openSlot, FoodId = selectedFood.FoodId, CustomFoodId = selectedFood.CustomFoodId, Grams = grams }, CancellationToken.None);
         busy = false;
-        if (result.IsSuccess) { day = result.Value; operationError = null; pendingFoodRequests.Remove(payload); CloseFood(); }
-        else searchError = result.Error;
+        if (result.IsSuccess)
+        {
+            if (IsCurrentDayRequest(requestDate, requestSequence)) { day = result.Value; operationError = null; }
+            pendingFoodRequests.Remove(payload);
+            CloseFood();
+        }
+        else if (IsCurrentDayRequest(requestDate, requestSequence)) searchError = result.Error;
     }
 
     private async Task AdjustAsync(NutritionFoodEntryResponse entry, decimal amount)
     {
+        var requestDate = SelectedDate;
+        var requestSequence = loadSequence;
         var value = Math.Clamp(entry.Grams + amount, .1m, 10000m);
         busy = true;
         var result = await NutritionClient.UpdateAsync(entry.Id, entry.Grams, value, CancellationToken.None);
         busy = false;
-        if (result.IsSuccess) { day = result.Value; operationError = null; }
-        else { operationError = result.Error; await LoadAsync(); }
+        if (result.IsSuccess)
+        {
+            if (IsCurrentDayRequest(requestDate, requestSequence)) { day = result.Value; operationError = null; }
+        }
+        else if (IsCurrentDayRequest(requestDate, requestSequence)) { operationError = result.Error; await LoadAsync(); }
     }
 
     private void AskDelete(NutritionFoodEntryResponse entry) { operationError = null; entryToDelete = entry; }
@@ -408,11 +421,17 @@
     private async Task DeleteAsync()
     {
         if (entryToDelete is null || busy) return;
+        var requestDate = SelectedDate;
+        var requestSequence = loadSequence;
         busy = true;
         var result = await NutritionClient.DeleteAsync(entryToDelete.Id, CancellationToken.None);
         busy = false;
-        if (result.IsSuccess) { day = result.Value; entryToDelete = null; operationError = null; }
-        else operationError = result.Error;
+        if (result.IsSuccess)
+        {
+            if (IsCurrentDayRequest(requestDate, requestSequence)) { day = result.Value; operationError = null; }
+            entryToDelete = null;
+        }
+        else if (IsCurrentDayRequest(requestDate, requestSequence)) operationError = result.Error;
     }
 
     private void OpenSaveRecipe(NutritionMealSlot slot)
@@ -493,17 +512,27 @@
     private async Task AddRecipeAsync()
     {
         if (selectedRecipe is null || !addRecipePortionsValid || busy) return;
-        var payload = (selectedRecipe.Id, SelectedDate, openSlot, addRecipePortions);
+        var requestDate = SelectedDate;
+        var requestSequence = loadSequence;
+        var payload = (selectedRecipe.Id, requestDate, openSlot, addRecipePortions);
         if (!pendingRecipeAdditions.TryGetValue(payload, out var requestId)) pendingRecipeAdditions[payload] = requestId = Guid.NewGuid();
         busy = true;
         addRecipeError = null;
-        var result = await NutritionClient.AddRecipeAsync(selectedRecipe.Id, new() { Id = requestId, Date = SelectedDate, MealSlot = openSlot, Portions = addRecipePortions }, CancellationToken.None);
+        var result = await NutritionClient.AddRecipeAsync(selectedRecipe.Id, new() { Id = requestId, Date = requestDate, MealSlot = openSlot, Portions = addRecipePortions }, CancellationToken.None);
         busy = false;
-        if (result.IsSuccess) { day = result.Value; recipesDialog = false; pendingRecipeAdditions.Remove(payload); operationError = null; }
-        else addRecipeError = result.Error;
+        if (result.IsSuccess)
+        {
+            if (IsCurrentDayRequest(requestDate, requestSequence)) { day = result.Value; operationError = null; }
+            recipesDialog = false;
+            pendingRecipeAdditions.Remove(payload);
+        }
+        else if (IsCurrentDayRequest(requestDate, requestSequence)) addRecipeError = result.Error;
     }
 
     private void CloseRecipes() { if (!busy) recipesDialog = false; }
+
+    private bool IsCurrentDayRequest(DateOnly requestDate, int requestSequence) =>
+        NutritionDayResponseGuard.IsCurrent(requestDate, requestSequence, SelectedDate, loadSequence);
 
     private void AskDeleteRecipe(NutritionRecipeResponse recipe)
     {
