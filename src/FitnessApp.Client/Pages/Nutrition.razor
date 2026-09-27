@@ -106,7 +106,7 @@
     {
         var food = selectedFood!;
         @if (searchError is not null) { <p class="strength-error" role="alert">@searchError</p> }
-        <div class="nutrition-food-detail"><p class="strength-overline">NÆRINGSINDHOLD PR. 100 G</p><h3>@food.Name</h3><dl><div><dt>Kalorier</dt><dd>@Number(food.EnergyKcalPer100g) kcal</dd></div><div><dt>Protein</dt><dd>@Number(food.ProteinPer100g) g</dd></div><div><dt>Kulhydrat</dt><dd>@Number(food.CarbohydratePer100g) g</dd></div><div><dt>Fedt</dt><dd>@Number(food.FatPer100g) g</dd></div><div><dt>Sukker</dt><dd>@Number(food.SugarPer100g) g</dd></div></dl><label for="nutrition-grams">MÆNGDE</label><div class="nutrition-grams"><input id="nutrition-grams" type="text" inputmode="decimal" value="@grams.ToString("0.#", Danish)" @oninput="GramsChanged" /><span>g</span></div>@if (!gramsValid) { <p class="strength-field-error" role="alert">Angiv en mængde mellem 0,1 og 10.000 g.</p> }<p class="nutrition-calculated">Beregnet <strong>@Number(CalculatedEnergy) kcal</strong></p></div>
+        <div class="nutrition-food-detail"><p class="strength-overline">NÆRINGSINDHOLD PR. 100 G</p><h3>@food.Name</h3><dl><div><dt>Kalorier</dt><dd>@Number(food.EnergyKcalPer100g) kcal</dd></div><div><dt>Protein</dt><dd>@Number(food.ProteinPer100g) g</dd></div><div><dt>Kulhydrat</dt><dd>@Number(food.CarbohydratePer100g) g</dd></div><div><dt>Fedt</dt><dd>@Number(food.FatPer100g) g</dd></div><div><dt>Sukker</dt><dd>@Number(food.SugarPer100g) g</dd></div></dl><label for="nutrition-grams">MÆNGDE</label><div class="nutrition-grams"><input id="nutrition-grams" type="text" inputmode="decimal" value="@SettingsDecimalInput.Format(grams)" @oninput="GramsChanged" /><span>g</span></div>@if (!gramsValid) { <p class="strength-field-error" role="alert">Angiv en mængde mellem 0,1 og 10.000 g.</p> }<p class="nutrition-calculated">Beregnet <strong>@Number(CalculatedEnergy) kcal</strong></p></div>
         <div class="app-modal-actions"><button class="strength-secondary-button" @onclick="BackToFoodSearch" disabled="@busy">Tilbage</button><button class="strength-primary-button" @onclick="AddFoodAsync" disabled="@(busy || !gramsValid)">@(busy ? "Tilføjer …" : $"Tilføj til {SlotName(openSlot)}")</button></div>
     }
 </ModalDialog>
@@ -118,7 +118,7 @@
 
 <ModalDialog IsOpen="@recipeDialog" Title="Gem som måltid" Description="Opskriften gemmer et snapshot af de aktuelle ingredienser." DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CloseSaveRecipe">
     <label>Navn<input class="nutrition-input" value="@recipeName" maxlength="160" @oninput="RecipeNameChanged" /></label>
-    <label>Antal portioner<input class="nutrition-input" type="text" inputmode="decimal" value="@recipePortions.ToString("0.#", Danish)" @oninput="RecipePortionsChanged" /></label>
+    <label>Antal portioner<input class="nutrition-input" type="text" inputmode="decimal" value="@SettingsDecimalInput.Format(recipePortions)" @oninput="RecipePortionsChanged" /></label>
     @if (!recipePortionsValid) { <p class="strength-field-error" role="alert">Angiv mellem 0,1 og 100 portioner.</p> }
     @if (saveRecipeError is not null) { <p class="strength-error" role="alert">@saveRecipeError</p> }
     <div class="app-modal-actions"><button class="strength-secondary-button" @onclick="CloseSaveRecipe" disabled="@busy">Annuller</button><button class="strength-primary-button" @onclick="SaveRecipeAsync" disabled="@(busy || !recipePortionsValid || string.IsNullOrWhiteSpace(recipeName))">@(busy ? "Gemmer …" : "Gem måltid")</button></div>
@@ -141,7 +141,7 @@
         </div>
         @if (selectedRecipe is not null)
         {
-            <label>Portioner<input class="nutrition-input" type="text" inputmode="decimal" value="@addRecipePortions.ToString("0.#", Danish)" @oninput="AddRecipePortionsChanged" disabled="@busy" /></label>
+            <label>Portioner<input class="nutrition-input" type="text" inputmode="decimal" value="@SettingsDecimalInput.Format(addRecipePortions)" @oninput="AddRecipePortionsChanged" disabled="@busy" /></label>
             <p class="strength-muted-copy">@Number(addRecipePortions) portioner af @selectedRecipe.Name</p>
             @if (!addRecipePortionsValid) { <p class="strength-field-error" role="alert">Angiv mellem 0,1 og 100 portioner.</p> }
             @if (addRecipeError is not null) { <p class="strength-error" role="alert">@addRecipeError</p> }

@@ -7,6 +7,8 @@ public static class SettingsDecimalInput
     private static readonly CultureInfo DanishCulture = CultureInfo.GetCultureInfo("da-DK");
     private const NumberStyles DecimalInputStyle = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint;
 
+    public static string Format(decimal value) => value.ToString("G", DanishCulture);
+
     public static bool TryParseOptional(string? value, out decimal? result)
     {
         result = null;

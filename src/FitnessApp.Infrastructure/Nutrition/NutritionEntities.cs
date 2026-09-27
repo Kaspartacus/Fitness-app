@@ -108,3 +108,14 @@ public sealed class NutritionRecipeAddition
     public NutritionMealSlot Slot { get; set; }
     public decimal Portions { get; set; }
 }
+
+public sealed class NutritionFoodAddition
+{
+    public string UserId { get; set; } = string.Empty;
+    public Guid RequestId { get; set; }
+    public DateOnly Date { get; set; }
+    public NutritionMealSlot Slot { get; set; }
+    public int? FoodId { get; set; }
+    public Guid? CustomFoodId { get; set; }
+    public decimal Grams { get; set; }
+}

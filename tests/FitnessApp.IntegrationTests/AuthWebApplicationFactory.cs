@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -37,7 +38,8 @@ internal sealed class AuthWebApplicationFactory : WebApplicationFactory<Program>
         int? passwordResetTokenLifetimeMilliseconds = null,
         TestAppStorage? storage = null,
         RecordingEmailSender? emailSender = null,
-        IReadOnlyDictionary<string, string?>? configurationOverrides = null)
+        IReadOnlyDictionary<string, string?>? configurationOverrides = null,
+        SaveChangesInterceptor? saveChangesInterceptor = null)
     {
         this.loginPermitLimit = loginPermitLimit;
         this.registrationPermitLimit = registrationPermitLimit;
@@ -122,7 +124,13 @@ internal sealed class AuthWebApplicationFactory : WebApplicationFactory<Program>
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(EmailSender);
             services.AddDbContext<FitnessDbContext>(options =>
-                options.UseSqlite($"Data Source={storage.DatabasePath}"));
+            {
+                options.UseSqlite($"Data Source={storage.DatabasePath}");
+                if (saveChangesInterceptor is not null)
+                {
+                    options.AddInterceptors(saveChangesInterceptor);
+                }
+            });
         });
     }
 

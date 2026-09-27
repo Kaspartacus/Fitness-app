@@ -1,4 +1,5 @@
 using FitnessApp.Domain.Users;
+using FitnessApp.Domain.Nutrition;
 using FitnessApp.Infrastructure.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +24,7 @@ public sealed class RegistrationMigrationTests
     private const string NutritionModuleMigration = "20260926193048_AddNutritionModule";
     private const string ConsolidateNutritionGoalsAndReceiptsMigration = "20260927083716_ConsolidateNutritionGoalsAndReceipts";
     private const string UserNutritionFoodsMigration = "20260927104634_AddUserNutritionFoods";
+    private const string NutritionFoodAdditionReceiptsMigration = "20260927152000_AddNutritionFoodAdditionReceipts";
 
     [Fact]
     public async Task LatestMigrationAppliesToEmptyDatabase()
@@ -39,7 +41,7 @@ public sealed class RegistrationMigrationTests
                     StrengthTrainingFlowMigration, CompletedWorkoutCompletionIdMigration, RunningModuleMigration,
                     CalendarOccurrenceMovesMigration, SettingsAndInAppNotificationsMigration,
                     CompletedWorkoutOccurrenceLinkMigration, NutritionModuleMigration,
-                    ConsolidateNutritionGoalsAndReceiptsMigration, UserNutritionFoodsMigration],
+                    ConsolidateNutritionGoalsAndReceiptsMigration, UserNutritionFoodsMigration, NutritionFoodAdditionReceiptsMigration],
                 await dbContext.Database.GetAppliedMigrationsAsync());
             var columns = await ReadUserColumnsAsync(databasePath);
             Assert.Contains("RegisteredAt", columns);
@@ -64,7 +66,66 @@ public sealed class RegistrationMigrationTests
             Assert.Contains("SourceKey", await ReadColumnsAsync(databasePath, "InAppNotifications"));
             Assert.Contains("CreatedFromDate", await ReadColumnsAsync(databasePath, "NutritionRecipes"));
             Assert.Contains("RequestId", await ReadColumnsAsync(databasePath, "NutritionRecipeAdditions"));
+            Assert.Contains("RequestId", await ReadColumnsAsync(databasePath, "NutritionFoodAdditions"));
             Assert.DoesNotContain("NutritionTargets", await ReadTableNamesAsync(databasePath));
+        }
+        finally
+        {
+            DeleteDatabase(databasePath);
+        }
+    }
+
+    [Fact]
+    public async Task NutritionFoodAdditionMigrationBackfillsExistingLogEntries()
+    {
+        var databasePath = NewDatabasePath();
+        const string userId = "nutrition-receipt-user";
+        var mealId = Guid.NewGuid();
+        var entryId = Guid.NewGuid();
+        try
+        {
+            await using (var dbContext = CreateContext(databasePath))
+                await dbContext.GetService<IMigrator>().MigrateAsync(UserNutritionFoodsMigration);
+
+            await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+            {
+                await connection.OpenAsync();
+                var command = connection.CreateCommand();
+                command.CommandText = """
+                    INSERT INTO AspNetUsers (
+                        Id, DisplayName, ApprovalStatus, UserName, NormalizedUserName,
+                        Email, NormalizedEmail, EmailConfirmed, PasswordHash,
+                        SecurityStamp, ConcurrencyStamp, PhoneNumber, PhoneNumberConfirmed,
+                        TwoFactorEnabled, LockoutEnd, LockoutEnabled, AccessFailedCount)
+                    VALUES (
+                        $userId, 'Nutrition user', 1, 'nutrition@example.test', 'NUTRITION@EXAMPLE.TEST',
+                        'nutrition@example.test', 'NUTRITION@EXAMPLE.TEST', 1, 'password-hash',
+                        'security-stamp', 'user-stamp', NULL, 0, 0, NULL, 1, 0);
+                    INSERT INTO NutritionMeals (Id, UserId, Date, Slot)
+                    VALUES ($mealId, $userId, '2026-09-26', 2);
+                    INSERT INTO NutritionFoodEntries (
+                        Id, MealId, FoodId, CustomFoodId, Name, FoodGroup, CatalogueVersion,
+                        Grams, EnergyKcalPer100g, ProteinPer100g, CarbohydratePer100g, FatPer100g, SugarPer100g)
+                    VALUES (
+                        $entryId, $mealId, 1, NULL, 'Æble, rå', 'Frugt', 'frida-5.5',
+                        125.5, 52, 0.3, 11.4, 0.2, 10.3);
+                    """;
+                command.Parameters.AddWithValue("$userId", userId);
+                command.Parameters.AddWithValue("$mealId", mealId.ToString());
+                command.Parameters.AddWithValue("$entryId", entryId.ToString());
+                await command.ExecuteNonQueryAsync();
+            }
+
+            await using (var dbContext = CreateContext(databasePath))
+            {
+                await dbContext.Database.MigrateAsync();
+                var receipt = await dbContext.NutritionFoodAdditions.AsNoTracking().SingleAsync();
+                Assert.Equal(userId, receipt.UserId);
+                Assert.Equal(entryId, receipt.RequestId);
+                Assert.Equal(new DateOnly(2026, 9, 26), receipt.Date);
+                Assert.Equal(NutritionMealSlot.Lunch, receipt.Slot);
+                Assert.Equal(125.5m, receipt.Grams);
+            }
         }
         finally
         {

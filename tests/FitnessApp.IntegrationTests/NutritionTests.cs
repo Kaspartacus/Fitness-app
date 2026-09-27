@@ -8,6 +8,7 @@ using FitnessApp.Domain.Users;
 using FitnessApp.Infrastructure.Nutrition;
 using FitnessApp.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FitnessApp.IntegrationTests;
@@ -234,6 +235,65 @@ public sealed class NutritionTests
     }
 
     [Fact]
+    public async Task DeletedFoodEntriesKeepTheirIdempotencyReceipt()
+    {
+        using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync(); await SeedCatalogue(factory);
+        using var client = await Login(factory);
+        var request = new AddNutritionFoodRequest
+        {
+            Id = Guid.NewGuid(), Date = new DateOnly(2026, 9, 26), MealSlot = NutritionMealSlot.Lunch, FoodId = 1, Grams = 100
+        };
+
+        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/nutrition/entries", request)).StatusCode);
+        var dayWithEntry = (await client.GetFromJsonAsync<NutritionDayResponse>("/api/nutrition/days/2026-09-26"))!;
+        var entry = Assert.Single(dayWithEntry.Meals.Single(meal => meal.Slot == NutritionMealSlot.Lunch).Entries);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/nutrition/entries/{entry.Id}")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/nutrition/entries", request)).StatusCode);
+        var dayAfterRetry = (await client.GetFromJsonAsync<NutritionDayResponse>("/api/nutrition/days/2026-09-26"))!;
+        Assert.Empty(dayAfterRetry.Meals.Single(meal => meal.Slot == NutritionMealSlot.Lunch).Entries);
+        Assert.Equal(0m, dayAfterRetry.Totals.EnergyKcal);
+
+        request.Grams = 200;
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync("/api/nutrition/entries", request)).StatusCode);
+        await using var scope = factory.Services.CreateAsyncScope();
+        Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<FitnessDbContext>().NutritionFoodAdditions.CountAsync());
+    }
+
+    [Fact]
+    public async Task ConcurrentFoodAddsCreateOneMealAndKeepBothEntries()
+    {
+        var saveInterceptor = new ConcurrentNutritionMealSaveInterceptor();
+        using var factory = new AuthWebApplicationFactory(saveChangesInterceptor: saveInterceptor);
+        await factory.InitializeDatabaseAsync();
+        await SeedCatalogue(factory);
+        using var client = await Login(factory);
+        var date = new DateOnly(2026, 9, 26);
+        var first = new AddNutritionFoodRequest
+        {
+            Id = Guid.NewGuid(), Date = date, MealSlot = NutritionMealSlot.Breakfast, FoodId = 1, Grams = 100
+        };
+        var second = new AddNutritionFoodRequest
+        {
+            Id = Guid.NewGuid(), Date = date, MealSlot = NutritionMealSlot.Breakfast, FoodId = 1, Grams = 150
+        };
+
+        var responses = await Task.WhenAll(
+            client.PostAsJsonAsync("/api/nutrition/entries", first),
+            client.PostAsJsonAsync("/api/nutrition/entries", second));
+
+        Assert.All(responses, response => Assert.Equal(HttpStatusCode.Created, response.StatusCode));
+        var day = (await client.GetFromJsonAsync<NutritionDayResponse>($"/api/nutrition/days/{date:yyyy-MM-dd}"))!;
+        var breakfast = Assert.Single(day.Meals.Where(meal => meal.Slot == NutritionMealSlot.Breakfast));
+        Assert.Equal(2, breakfast.Entries.Count);
+        Assert.Equal(130m, day.Totals.EnergyKcal);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+        Assert.Equal(1, await db.NutritionMeals.CountAsync());
+        Assert.Equal(2, await db.NutritionFoodAdditions.CountAsync());
+    }
+
+    [Fact]
     public async Task FoodEntriesAreOwnerScoped()
     {
         using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync(); await SeedCatalogue(factory);
@@ -287,5 +347,31 @@ public sealed class NutritionTests
         var client = factory.CreateHttpsClient();
         var response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest { Email = user.Email!, Password = factory.ValidPassword }); var login = (await response.Content.ReadFromJsonAsync<LoginResponse>())!;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.AccessToken); return client;
+    }
+
+    private sealed class ConcurrentNutritionMealSaveInterceptor : SaveChangesInterceptor
+    {
+        private readonly TaskCompletionSource bothMealCreatesReachedSave = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int mealCreatesAtSave;
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            var context = eventData.Context;
+            if (context?.ChangeTracker.Entries<NutritionMeal>().Any(entry => entry.State == EntityState.Added) == true &&
+                context.ChangeTracker.Entries<NutritionFoodEntry>().Any(entry => entry.State == EntityState.Added))
+            {
+                if (Interlocked.Increment(ref mealCreatesAtSave) == 2)
+                {
+                    bothMealCreatesReachedSave.TrySetResult();
+                }
+
+                await bothMealCreatesReachedSave.Task.WaitAsync(cancellationToken);
+            }
+
+            return result;
+        }
     }
 }

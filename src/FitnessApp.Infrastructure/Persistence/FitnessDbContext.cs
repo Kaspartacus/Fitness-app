@@ -34,6 +34,7 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
     public DbSet<NutritionRecipe> NutritionRecipes => Set<NutritionRecipe>();
     public DbSet<NutritionRecipeIngredient> NutritionRecipeIngredients => Set<NutritionRecipeIngredient>();
     public DbSet<NutritionRecipeAddition> NutritionRecipeAdditions => Set<NutritionRecipeAddition>();
+    public DbSet<NutritionFoodAddition> NutritionFoodAdditions => Set<NutritionFoodAddition>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<InAppNotification> InAppNotifications => Set<InAppNotification>();
 
@@ -226,6 +227,14 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
             entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(addition => addition.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<NutritionRecipe>().WithMany().HasForeignKey(addition => addition.RecipeId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<NutritionFoodAddition>(entity =>
+        {
+            entity.HasKey(addition => new { addition.UserId, addition.RequestId });
+            entity.Property(addition => addition.UserId).HasMaxLength(450).IsRequired();
+            entity.Property(addition => addition.Slot).HasConversion<int>();
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(addition => addition.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
