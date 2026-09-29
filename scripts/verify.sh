@@ -58,6 +58,20 @@ run_verify() {
   export DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER=1
   export MSBUILDDISABLENODEREUSE=1
 
+  status 'Checking for a single tracked solution'
+  solution_count=0
+  while IFS= read -r -d '' solution_path; do
+    if [ "$solution_path" != 'FitnessApp.slnx' ]; then
+      printf 'Unexpected solution file: %s\n' "$solution_path" >&2
+      return 1
+    fi
+    solution_count=$((solution_count + 1))
+  done < <(git -C "$repo_root" ls-files -z -- '*.sln' '*.slnx')
+  if [ "$solution_count" -ne 1 ]; then
+    printf 'Expected exactly one tracked solution: FitnessApp.slnx.\n' >&2
+    return 1
+  fi
+
   status 'Restoring repository-local tools'
   dotnet tool restore
 

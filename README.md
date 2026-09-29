@@ -15,7 +15,7 @@ No Node.js runtime, container engine, or cloud account is required.
 
 ## Repository structure
 
-The solution file is `FitnessApp.slnx`.
+The only solution file is `FitnessApp.slnx`. Run commands from the primary `Fitness-app` repository directory. Other Git worktrees are separate checkouts of this same application, not separate solutions; their default local databases are separate, so do not use them as the ordinary startup folder.
 
 There is one hosted application and one startup project: `FitnessApp.Server`. The Blazor WebAssembly client and ASP.NET Core API run together from the existing server host:
 
@@ -23,7 +23,7 @@ There is one hosted application and one startup project: `FitnessApp.Server`. Th
 dotnet run --project src/FitnessApp.Server --launch-profile https
 ```
 
-Strength training and running are features of this existing layered modular monolith; neither adds a solution, application, executable, web host, or independent startup process.
+Nutrition, strength training, running, calendar, and settings are features of this existing layered modular monolith; none adds a solution, application, executable, web host, or independent startup process.
 
 ```text
 src/

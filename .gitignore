@@ -16,6 +16,7 @@ appsettings.Local.json
 appsettings.*.local.json
 .codex/checkpoint.md
 .codex/cleanup-state.json
+.codex/local-archive/
 secrets.json
 *.db
 *.db-shm
@@ -69,6 +70,8 @@ bld/
 
 # Build results on 'Bin' directories
 **/[Bb]in/*
+# Some .NET tooling creates a literal backslash in this directory name on macOS.
+**/bin\\Debug/
 # Uncomment if you have tasks that rely on *.refresh files to move binaries
 # (https://github.com/github/gitignore/pull/3736)
 #!**/[Bb]in/*.refresh
