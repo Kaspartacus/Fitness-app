@@ -5,19 +5,29 @@
 @using FitnessApp.Client.Running
 @using FitnessApp.Client.Settings
 @inject NutritionClient NutritionClient
+@inject NavigationManager Navigation
 
 <PageTitle>Kost</PageTitle>
 
 <main class="strength-app strength-with-bottom-nav nutrition-page" aria-labelledby="nutrition-title">
-    <header class="strength-page-header nutrition-header">
+    <header class="strength-back-header calendar-page-header nutrition-header">
         <div><p class="strength-overline">DAGENS OVERBLIK</p><h1 id="nutrition-title">Kost</h1></div>
-        <ProfileSettingsLink />
+        <div class="calendar-header-actions">
+            <button class="calendar-header-today" type="button" @onclick="Today" disabled="@(busy || SelectedDate == RunningPresentation.CopenhagenToday)"
+                    aria-label="Gå til i dag">I dag</button>
+            <ProfileSettingsLink />
+        </div>
     </header>
 
-    <div class="nutrition-date-control" aria-label="Skift dag">
-        <button type="button" @onclick="PreviousDay" aria-label="Forrige dag" disabled="@busy">‹</button>
-        <button type="button" @onclick="Today" disabled="@busy"><strong>@(SelectedDate == RunningPresentation.CopenhagenToday ? "I dag" : SelectedDate.ToString("dddd", Danish))</strong><span>@SelectedDate.ToString("dddd d. MMMM", Danish)</span></button>
-        <button type="button" @onclick="NextDay" aria-label="Næste dag" disabled="@busy">›</button>
+    <div class="calendar-week-controls" role="group" aria-label="Skift dag">
+        <button class="running-calendar-control" type="button" @onclick="PreviousDay" aria-label="Forrige dag" title="Forrige dag"
+                disabled="@(busy || SelectedDate == DateOnly.MinValue)">‹</button>
+        <RunningDatePicker Id="nutrition-day-picker" Label="Vælg dag" ModalTitle="Vælg dag"
+                           Value="@SelectedDate" ValueChanged="SelectDateFromPickerAsync"
+                           Disabled="@busy" TriggerText="@RunningPresentation.Date(SelectedDate)"
+                           TriggerClass="calendar-week-trigger" CompactNavigation="true" ShowTodayAction="true" />
+        <button class="running-calendar-control" type="button" @onclick="NextDay" aria-label="Næste dag" title="Næste dag"
+                disabled="@(busy || SelectedDate == DateOnly.MaxValue)">›</button>
     </div>
 
     @if (operationError is not null)
@@ -163,6 +173,7 @@
     private DateOnly SelectedDate = RunningPresentation.CopenhagenToday;
     private NutritionMealSlot openSlot = NutritionMealSlot.Breakfast;
     private bool loading = true, busy, foodDialog, searching, creatingCustomFood, recipeDialog, recipesDialog, recipesLoading;
+    private bool hasRouteDate;
     private bool gramsValid = true, recipePortionsValid = true, addRecipePortionsValid = true, searchHasMore;
     private int loadSequence, searchPage;
     private string? error, operationError, searchError, customFoodError, saveRecipeError, recipeListError, addRecipeError, recipeDeleteError;
@@ -182,7 +193,22 @@
     private List<NutritionRecipeResponse> recipes = [];
     private CancellationTokenSource? searchCts;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    [SupplyParameterFromQuery(Name = "dato")] public string? RequestedDate { get; set; }
+
+    protected override Task OnParametersSetAsync()
+    {
+        var nextDate = RunningPresentation.CopenhagenToday;
+        if (DateOnly.TryParseExact(RequestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var requested))
+        {
+            nextDate = requested;
+        }
+
+        if (hasRouteDate && nextDate == SelectedDate) return Task.CompletedTask;
+        hasRouteDate = true;
+        SelectedDate = nextDate;
+        operationError = null;
+        return LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -196,9 +222,19 @@
         loading = false;
     }
 
-    private async Task PreviousDay() { SelectedDate = SelectedDate.AddDays(-1); await LoadAsync(); }
-    private async Task NextDay() { SelectedDate = SelectedDate.AddDays(1); await LoadAsync(); }
-    private async Task Today() { SelectedDate = RunningPresentation.CopenhagenToday; await LoadAsync(); }
+    private Task PreviousDay() => SelectedDate > DateOnly.MinValue ? SetSelectedDateAsync(SelectedDate.AddDays(-1)) : Task.CompletedTask;
+    private Task NextDay() => SelectedDate < DateOnly.MaxValue ? SetSelectedDateAsync(SelectedDate.AddDays(1)) : Task.CompletedTask;
+    private Task Today() => SetSelectedDateAsync(RunningPresentation.CopenhagenToday);
+    private Task SelectDateFromPickerAsync(DateOnly? date) => date is { } selected ? SetSelectedDateAsync(selected) : Task.CompletedTask;
+
+    private async Task SetSelectedDateAsync(DateOnly nextDate)
+    {
+        if (busy || nextDate == SelectedDate) return;
+        SelectedDate = nextDate;
+        operationError = null;
+        Navigation.NavigateTo($"/kost?dato={SelectedDate:yyyy-MM-dd}", replace: true);
+        await LoadAsync();
+    }
     private void Toggle(NutritionMealSlot slot) => openSlot = openSlot == slot ? (NutritionMealSlot)(-1) : slot;
 
     private void OpenFood(NutritionMealSlot slot)

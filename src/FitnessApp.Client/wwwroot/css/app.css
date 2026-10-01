@@ -777,11 +777,6 @@ a:focus-visible {
 .strength-bottom-nav button:disabled { color: #6f8195; opacity: 1; cursor: default; }
 .nutrition-page { width: min(calc(100% - 2rem), 27rem); }
 .nutrition-header { margin-bottom: 1rem; }
-.nutrition-date-control { display: grid; grid-template-columns: 2.8rem minmax(0, 1fr) 2.8rem; min-height: 4.4rem; margin-bottom: 1.25rem; border: 1px solid var(--strength-border); border-radius: 1rem; overflow: hidden; background: var(--strength-surface); }
-.nutrition-date-control button { border: 0; background: transparent; color: var(--strength-text); font: inherit; cursor: pointer; }
-.nutrition-date-control > button:first-child, .nutrition-date-control > button:last-child { color: var(--strength-accent); font-size: 1.9rem; }
-.nutrition-date-control > button:nth-child(2) { display: grid; gap: .1rem; place-content: center; }
-.nutrition-date-control span { color: var(--strength-muted); font-size: .72rem; text-transform: capitalize; }
 .nutrition-summary { display: grid; justify-items: center; margin-bottom: 1rem; border: 1px solid var(--strength-border); border-radius: 1rem; padding: 1rem; background: var(--strength-surface); }
 .nutrition-ring { --progress: 0%; display: grid; width: 10.8rem; height: 10.8rem; place-content: center; border: .7rem solid transparent; border-radius: 50%; background: linear-gradient(var(--strength-surface), var(--strength-surface)) padding-box, conic-gradient(from -90deg, #6fa7e6 0 var(--progress), #24558b var(--progress) 100%) border-box; text-align: center; }
 .nutrition-ring.is-unavailable { background: linear-gradient(var(--strength-surface), var(--strength-surface)) padding-box, #34465a border-box; }
