@@ -26,6 +26,7 @@ public sealed class RegistrationMigrationTests
     private const string UserNutritionFoodsMigration = "20260927104634_AddUserNutritionFoods";
     private const string NutritionFoodAdditionReceiptsMigration = "20260927152000_AddNutritionFoodAdditionReceipts";
     private const string NutritionRecipeAdditionReceiptsMigration = "20260927165000_DetachNutritionRecipeAdditionReceipts";
+    private const string NutritionRecipeCreationReceiptsMigration = "20261001195000_AddNutritionRecipeCreationReceipts";
 
     [Fact]
     public async Task LatestMigrationAppliesToEmptyDatabase()
@@ -43,7 +44,8 @@ public sealed class RegistrationMigrationTests
                     CalendarOccurrenceMovesMigration, SettingsAndInAppNotificationsMigration,
                     CompletedWorkoutOccurrenceLinkMigration, NutritionModuleMigration,
                     ConsolidateNutritionGoalsAndReceiptsMigration, UserNutritionFoodsMigration,
-                    NutritionFoodAdditionReceiptsMigration, NutritionRecipeAdditionReceiptsMigration],
+                    NutritionFoodAdditionReceiptsMigration, NutritionRecipeAdditionReceiptsMigration,
+                    NutritionRecipeCreationReceiptsMigration],
                 await dbContext.Database.GetAppliedMigrationsAsync());
             var columns = await ReadUserColumnsAsync(databasePath);
             Assert.Contains("RegisteredAt", columns);
@@ -68,6 +70,7 @@ public sealed class RegistrationMigrationTests
             Assert.Contains("SourceKey", await ReadColumnsAsync(databasePath, "InAppNotifications"));
             Assert.Contains("CreatedFromDate", await ReadColumnsAsync(databasePath, "NutritionRecipes"));
             Assert.Contains("RequestId", await ReadColumnsAsync(databasePath, "NutritionRecipeAdditions"));
+            Assert.Contains("RequestId", await ReadColumnsAsync(databasePath, "NutritionRecipeCreations"));
             Assert.Contains("RequestId", await ReadColumnsAsync(databasePath, "NutritionFoodAdditions"));
             Assert.DoesNotContain("NutritionTargets", await ReadTableNamesAsync(databasePath));
         }
@@ -142,6 +145,13 @@ public sealed class RegistrationMigrationTests
                 Assert.Equal(new DateOnly(2026, 9, 27), recipeReceipt.Date);
                 Assert.Equal(NutritionMealSlot.Dinner, recipeReceipt.Slot);
                 Assert.Equal(1.5m, recipeReceipt.Portions);
+                var creationReceipt = await dbContext.NutritionRecipeCreations.AsNoTracking().SingleAsync();
+                Assert.Equal(userId, creationReceipt.UserId);
+                Assert.Equal(recipeId, creationReceipt.RequestId);
+                Assert.Equal("Frokost", creationReceipt.Name);
+                Assert.Equal(new DateOnly(2026, 9, 26), creationReceipt.Date);
+                Assert.Equal(NutritionMealSlot.Lunch, creationReceipt.Slot);
+                Assert.Equal(1m, creationReceipt.Portions);
             }
         }
         finally

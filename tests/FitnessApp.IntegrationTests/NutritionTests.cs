@@ -211,10 +211,11 @@ public sealed class NutritionTests
         {
             Id = Guid.NewGuid(), Date = date, MealSlot = NutritionMealSlot.Lunch, FoodId = 1, Grams = 100
         })).StatusCode);
-        Assert.Equal(HttpStatusCode.Created, (await ownerClient.PostAsJsonAsync("/api/nutrition/recipes", new CreateNutritionRecipeRequest
+        var createRecipeRequest = new CreateNutritionRecipeRequest
         {
             Id = Guid.NewGuid(), Date = date, MealSlot = NutritionMealSlot.Lunch, Name = "Frokost", Portions = 1
-        })).StatusCode);
+        };
+        Assert.Equal(HttpStatusCode.Created, (await ownerClient.PostAsJsonAsync("/api/nutrition/recipes", createRecipeRequest)).StatusCode);
         var recipe = Assert.Single((await ownerClient.GetFromJsonAsync<NutritionRecipeResponse[]>("/api/nutrition/recipes"))!);
         var addRecipeRequest = new AddNutritionRecipeRequest
         {
@@ -229,11 +230,20 @@ public sealed class NutritionTests
         Assert.Equal(HttpStatusCode.NoContent, (await ownerClient.DeleteAsync($"/api/nutrition/recipes/{recipe.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await ownerClient.DeleteAsync($"/api/nutrition/recipes/{recipe.Id}")).StatusCode);
         Assert.Empty((await ownerClient.GetFromJsonAsync<NutritionRecipeResponse[]>("/api/nutrition/recipes"))!);
+        Assert.Equal(HttpStatusCode.Created, (await ownerClient.PostAsJsonAsync("/api/nutrition/recipes", createRecipeRequest)).StatusCode);
+        Assert.Empty((await ownerClient.GetFromJsonAsync<NutritionRecipeResponse[]>("/api/nutrition/recipes"))!);
+        Assert.Equal(HttpStatusCode.Conflict, (await ownerClient.PostAsJsonAsync("/api/nutrition/recipes", new CreateNutritionRecipeRequest
+        {
+            Id = createRecipeRequest.Id, Date = date, MealSlot = NutritionMealSlot.Lunch, Name = "Ændret navn", Portions = 1
+        })).StatusCode);
         Assert.Equal(HttpStatusCode.Created, (await ownerClient.PostAsJsonAsync($"/api/nutrition/recipes/{recipe.Id}/entries", addRecipeRequest)).StatusCode);
         var day = (await ownerClient.GetFromJsonAsync<NutritionDayResponse>($"/api/nutrition/days/{date:yyyy-MM-dd}"))!;
         Assert.Equal(104m, day.Totals.EnergyKcal);
         Assert.Equal("Æble, rå", Assert.Single(day.Meals.Single(meal => meal.Slot == NutritionMealSlot.Lunch).Entries).Name);
         Assert.Equal("Æble, rå", Assert.Single(day.Meals.Single(meal => meal.Slot == NutritionMealSlot.Dinner).Entries).Name);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+        Assert.Equal(1, await db.NutritionRecipeCreations.CountAsync(item => item.UserId == owner.Id && item.RequestId == recipe.Id));
     }
 
     [Fact]

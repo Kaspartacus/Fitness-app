@@ -303,6 +303,11 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
     public async Task<NutritionOperationStatus> CreateRecipeAsync(string userId, CreateNutritionRecipeInput request, CancellationToken cancellationToken)
     {
         if (request is null || request.Id == Guid.Empty || !IsValidDate(request.Date) || !IsValidSlot(request.MealSlot) || string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length > 160 || request.Portions is < .1m or > 100) return NutritionOperationStatus.Invalid;
+        var creation = await db.NutritionRecipeCreations.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.UserId == userId && item.RequestId == request.Id, cancellationToken);
+        if (creation is not null)
+            return Matches(creation, request) ? NutritionOperationStatus.Saved : NutritionOperationStatus.Conflict;
+
         var existingRecipe = await db.NutritionRecipes.AsNoTracking().SingleOrDefaultAsync(recipe => recipe.Id == request.Id, cancellationToken);
         if (existingRecipe is not null)
             return Matches(existingRecipe, userId, request) ? NutritionOperationStatus.Saved : NutritionOperationStatus.Conflict;
@@ -321,6 +326,15 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
         };
         recipe.Ingredients.AddRange(entries.Select(Snapshot));
         db.NutritionRecipes.Add(recipe);
+        db.NutritionRecipeCreations.Add(new NutritionRecipeCreation
+        {
+            UserId = userId,
+            RequestId = request.Id,
+            Name = recipe.Name,
+            Portions = request.Portions,
+            Date = request.Date,
+            Slot = request.MealSlot
+        });
         try
         {
             await db.SaveChangesAsync(cancellationToken);
@@ -329,6 +343,11 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
         catch (DbUpdateException)
         {
             db.ChangeTracker.Clear();
+            var racedCreation = await db.NutritionRecipeCreations.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.UserId == userId && item.RequestId == request.Id, cancellationToken);
+            if (racedCreation is not null)
+                return Matches(racedCreation, request) ? NutritionOperationStatus.Saved : NutritionOperationStatus.Conflict;
+
             var racedRecipe = await db.NutritionRecipes.AsNoTracking().SingleOrDefaultAsync(item => item.Id == request.Id, cancellationToken);
             return racedRecipe is not null && Matches(racedRecipe, userId, request)
                 ? NutritionOperationStatus.Saved
@@ -453,5 +472,8 @@ public sealed class NutritionService(FitnessDbContext db, TimeProvider timeProvi
     private static bool Matches(NutritionRecipe recipe, string userId, CreateNutritionRecipeInput request) =>
         recipe.UserId == userId && recipe.Name == request.Name!.Trim() && recipe.Portions == request.Portions &&
         recipe.CreatedFromDate == request.Date && recipe.CreatedFromSlot == request.MealSlot;
+    private static bool Matches(NutritionRecipeCreation creation, CreateNutritionRecipeInput request) =>
+        creation.Name == request.Name!.Trim() && creation.Portions == request.Portions &&
+        creation.Date == request.Date && creation.Slot == request.MealSlot;
     private static TimeZoneInfo FindCopenhagenTimeZone() { try { return TimeZoneInfo.FindSystemTimeZoneById("Europe/Copenhagen"); } catch (TimeZoneNotFoundException) { return TimeZoneInfo.FindSystemTimeZoneById("Romance Standard Time"); } }
 }

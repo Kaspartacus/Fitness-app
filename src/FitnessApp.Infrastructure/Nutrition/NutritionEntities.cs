@@ -99,6 +99,16 @@ public sealed class NutritionRecipeIngredient
     public decimal? SugarPer100g { get; set; }
 }
 
+public sealed class NutritionRecipeCreation
+{
+    public string UserId { get; set; } = string.Empty;
+    public Guid RequestId { get; set; }
+    public DateOnly Date { get; set; }
+    public NutritionMealSlot Slot { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Portions { get; set; }
+}
+
 public sealed class NutritionRecipeAddition
 {
     public string UserId { get; set; } = string.Empty;
