@@ -3,6 +3,7 @@ using FitnessApp.Server.Calendar;
 using FitnessApp.Server.Running;
 using FitnessApp.Server.Settings;
 using FitnessApp.Server.Strength;
+using FitnessApp.Server.Nutrition;
 using FitnessApp.Application.Authentication;
 using FitnessApp.Infrastructure;
 using FitnessApp.Infrastructure.Persistence;
@@ -12,9 +13,11 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 var bootstrapAdministrator = args.Length == 1 && args[0] == "bootstrap-admin";
+var importFrida = args.Length > 0 && args[0] == "import-frida";
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Logging.ClearProviders();
@@ -146,6 +149,26 @@ if (bootstrapAdministrator)
     return;
 }
 
+if (importFrida)
+{
+    Environment.ExitCode = await FridaImportCommand.RunAsync(app, args, CancellationToken.None);
+    return;
+}
+
+if (app.Environment.IsDevelopment())
+{
+    await using var migrationScope = app.Services.CreateAsyncScope();
+    var dbContext = migrationScope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+    var pendingMigrations = (await dbContext.Database.GetPendingMigrationsAsync()).ToArray();
+    if (pendingMigrations.Length > 0)
+    {
+        app.Logger.LogInformation(
+            "Applying {MigrationCount} pending database migrations in Development.",
+            pendingMigrations.Length);
+        await dbContext.Database.MigrateAsync();
+    }
+}
+
 if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
 {
     app.UseHsts();
@@ -194,6 +217,7 @@ app.Use(async (context, next) =>
         context.Request.Path.StartsWithSegments("/api/strength") ||
         context.Request.Path.StartsWithSegments("/api/running") ||
         context.Request.Path.StartsWithSegments("/api/calendar") ||
+        context.Request.Path.StartsWithSegments("/api/nutrition") ||
         context.Request.Path.StartsWithSegments("/api/settings"))
     {
         AuthenticationHttpResponses.SetNoStore(context.Response);
@@ -217,6 +241,7 @@ app.MapUserAdministrationEndpoints();
 app.MapStrengthProgramEndpoints();
 app.MapRunningEndpoints();
 app.MapCalendarEndpoints();
+app.MapNutritionEndpoints();
 app.MapSettingsEndpoints();
 app.MapStaticAssets();
 app.UseEndpoints(_ => { });

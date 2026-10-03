@@ -5,12 +5,12 @@
         </span>
         <span class="strength-bottom-nav-label">Hjem</span>
     </a>
-    <button class="strength-bottom-nav-item" type="button" disabled aria-label="Kost kommer snart" title="Kost kommer snart">
+    <a class="strength-bottom-nav-item @(Active == "nutrition" ? "is-active" : null)" href="/kost" aria-current="@(Active == "nutrition" ? "page" : null)" aria-label="Kost" title="Kost">
         <span class="strength-bottom-nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M6 3v7M3.75 3v4.5A2.25 2.25 0 0 0 6 9.75 2.25 2.25 0 0 0 8.25 7.5V3M6 9.75V21M15.75 3v18M15.75 3c2.75 1.25 3.75 3.7 3.75 7.35v2.4h-3.75" /></svg>
         </span>
         <span class="strength-bottom-nav-label">Kost</span>
-    </button>
+    </a>
     <a class="strength-bottom-nav-item @(Active == "strength" ? "is-active" : null)" href="/styrke" aria-current="@(Active == "strength" ? "page" : null)" aria-label="Træning" title="Træning">
         <span class="strength-bottom-nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M3.5 9v6M6.5 7v10M9.5 10.5h5M14.5 7v10M17.5 9v6M3.5 12h17" /></svg>
