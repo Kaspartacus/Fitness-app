@@ -2,7 +2,7 @@
 
 FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, account administration and authentication, password reset by email, private strength-program management, and personal running plans and results through the Danish UI.
 
-This README is the public developer setup and operational guide. Repository workflow, verification, and Codex support are documented in [docs/development-workflow.md](docs/development-workflow.md). Client visual evidence lives in [src/FitnessApp.Client/docs/design-reference.md](src/FitnessApp.Client/docs/design-reference.md). Durable product context and technical decisions live in the private Obsidian vault, reached through [AGENTS.md](AGENTS.md).
+This README is the public developer setup and operational guide. Repository workflow, verification, and Codex support are documented in [docs/development-workflow.md](docs/development-workflow.md). Client visual evidence lives in [src/FitnessApp.Client/docs/design-reference.md](src/FitnessApp.Client/docs/design-reference.md). Recurring implementation context lives in [.ai/context](.ai/context/overview.md); broader product memory and decision history can live in the private Obsidian vault. [AGENTS.md](AGENTS.md) routes Codex without requiring vault access.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ No Node.js runtime, container engine, or cloud account is required.
 
 ## Repository structure
 
-The only solution file is `FitnessApp.slnx`. Run commands from the primary `Fitness app` repository directory. Other Git worktrees are separate checkouts of this same application, not separate solutions; their default local databases are separate, so do not use them as the ordinary startup folder.
+The only solution file is `FitnessApp.slnx`. Run commands from the inner `Desktop/Fitness app/Fitness-app` repository directory; the outer `Fitness app` is its container. Other Git worktrees are separate checkouts of this same application, not separate solutions; their default local databases are separate, so do not use them as the ordinary startup folder.
 
 There is one hosted application and one startup project: `FitnessApp.Server`. The Blazor WebAssembly client and ASP.NET Core API run together from the existing server host:
 

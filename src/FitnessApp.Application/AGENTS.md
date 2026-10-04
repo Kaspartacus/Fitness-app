@@ -5,4 +5,4 @@ This project owns application-facing service contracts and models. It references
 - Keep use-case orchestration contracts here and express business concepts with Domain types where appropriate.
 - Do not introduce HTTP, UI, EF Core, Identity, SQLite, configuration, or infrastructure-provider dependencies.
 - Keep interfaces concrete to an existing use case; do not add generic abstraction layers for future work.
-- When a change affects a product invariant, follow the root second-brain guidance and read only the relevant Fitness App vault note. `$fitness-feature` covers coordinated vertical-slice work.
+- When a change affects a product invariant, read the relevant `.ai/context` note and, when accessible, the relevant Fitness App vault note. `$fitness-feature` covers coordinated vertical-slice work.

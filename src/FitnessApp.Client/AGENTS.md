@@ -5,4 +5,4 @@ This project is the Blazor WebAssembly UI. It owns pages, layouts, browser-facin
 - Keep UI text Danish and reuse the existing CSS tokens, shared components, and interaction patterns before adding new primitives.
 - Send transport DTOs through the established same-origin HTTP clients. Keep access tokens memory-only and let the server decide identity, ownership, and authorization.
 - Cover loading, empty, validation, success, denied, and recoverable-error states when the changed flow needs them.
-- Read [client design evidence](docs/design-reference.md) for visual work. For durable behavior and invariants, follow the root second-brain guidance and read only the relevant Fitness App vault note. Use `$fitness-design-check` for UI verification and `$fitness-feature` for end-to-end work.
+- Read [client design evidence](docs/design-reference.md) for visual work. For durable behavior and invariants, read the relevant `.ai/context` note and, when accessible, the relevant Fitness App vault note. Use `$fitness-design-check` for UI verification and `$fitness-feature` for end-to-end work.

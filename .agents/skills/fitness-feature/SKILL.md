@@ -10,12 +10,12 @@ Deliver one reviewable vertical slice without prebuilding future architecture.
 ## Inputs
 
 - The user's requested outcome, constraints, and acceptance criteria.
-- The root and applicable nested `AGENTS.md` files, the relevant Fitness App note in the `personal` Obsidian vault, and a local checkpoint only when a task hand-off needs one.
+- The root and applicable nested `AGENTS.md` files, the relevant `.ai/context` note and optional Fitness App note in the `personal` Obsidian vault, and a local checkpoint only when a task hand-off needs one.
 - Existing implementation, tests, migrations, styling, and current design evidence.
 
 ## Workflow
 
-1. Start in the primary `Fitness app` checkout, confirm its Git root and status, and inspect relevant code before proposing abstractions. Use a branch there; do not create a sibling worktree unless the owner explicitly requests isolation. Preserve unrelated and in-progress work.
+1. Start in the inner `Desktop/Fitness app/Fitness-app` checkout, confirm its Git root and status, and inspect relevant code before proposing abstractions. Use a branch there; do not create a sibling worktree unless the owner explicitly requests isolation. Preserve unrelated and in-progress work.
 2. Translate the request into observable acceptance criteria. Ask only when a missing decision would materially change scope, security, or stored data; make routine implementation choices yourself.
 3. Inspect the relevant current design source. Record whether the result is directly verified, a consistent extension, or unavailable evidence.
 4. Trace the slice through the existing `FitnessApp.slnx` projects. Keep HTTP contracts in Contracts, orchestration contracts in Application, business rules in Domain, persistence in Infrastructure, composition and APIs in the one Server host, and UI in Client. Do not add a feature-specific solution or host.
@@ -25,7 +25,7 @@ Deliver one reviewable vertical slice without prebuilding future architecture.
 8. Verify with `./scripts/verify.sh verify` when available. Run `./scripts/verify.sh audit` when dependencies change or before a release-quality handoff.
 9. Exercise changed UI in the actual HTTPS app at mobile and desktop sizes when browser tooling is available.
 10. Remove superseded code paths, unused imports or dependencies, stale tests, obsolete configuration, dead UI, generated output, and temporary tooling in the changed scope. Retain an item only when it has a concrete documented purpose.
-11. Update the relevant Fitness App vault note and local module documentation when a change makes durable facts inaccurate. Record task-specific hand-off state only in the ignored local `.codex/checkpoint.md` when needed.
+11. Update affected `.ai/context` and local module documentation when durable implementation facts change; update a relevant vault note when accessible and broader product memory changes. Record task-specific hand-off state only in the ignored local `.codex/checkpoint.md` when needed.
 
 ## Guardrails
 
