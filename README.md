@@ -2,7 +2,7 @@
 
 FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, account administration and authentication, password reset by email, private strength-program management, and personal running plans and results through the Danish UI.
 
-This README is the public developer setup and operational guide. Repository workflow, verification, and Codex support are documented in [docs/development-workflow.md](docs/development-workflow.md). Client visual evidence lives in [src/FitnessApp.Client/docs/design-reference.md](src/FitnessApp.Client/docs/design-reference.md). The private Obsidian vault is the active home for durable Fitness App product and architecture knowledge. [.ai/context](.ai/context/overview.md) provides concise recurring implementation context and fallback when vault access fails; code and tests remain authoritative for executable behavior. [AGENTS.md](AGENTS.md) routes Codex to both.
+This README is the public developer setup and operational guide. The private `Kasper` Obsidian vault is the source of truth for Fitness App project documentation, including `30 Udvikling/Repository-workflow.md`, `30 Udvikling/Design-evidens.md`, and `20 Arkitektur/Nutrition-implementering.md`. [.ai/context](.ai/context/overview.md) routes Codex to relevant vault notes; [AGENTS.md](AGENTS.md) is its repository entrypoint. Code, configuration, migrations, and tests remain authoritative for implemented behavior.
 
 ## Prerequisites
 
@@ -240,7 +240,7 @@ The client attaches the bearer token only to same-origin `/api/` requests and re
 
 ## Development workflow
 
-Repository-native Codex skills, read-only reviewer agents, the opt-in resume hook, and the shared local/CI verification entrypoint are documented in [docs/development-workflow.md](docs/development-workflow.md). Project hooks require explicit review and trust through `/hooks`; the repository does not bypass that protection.
+Repository-native Codex skills are under `.agents/skills/`, read-only reviewer agents under `.codex/agents/`, and the shared local/CI verification entrypoint is `./scripts/verify.sh`. Their workflow is documented in the private vault note `30 Udvikling/Repository-workflow.md`. Project hooks require explicit review and trust through `/hooks`; the repository does not bypass that protection.
 
 ## Verification
 
