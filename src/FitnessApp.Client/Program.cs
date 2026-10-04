@@ -1,6 +1,7 @@
 using FitnessApp.Client;
 using FitnessApp.Client.Authentication;
 using FitnessApp.Client.Calendar;
+using FitnessApp.Client.Nutrition;
 using FitnessApp.Client.Settings;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
@@ -25,6 +26,7 @@ builder.Services.AddScoped<UserAdministrationClient>();
 builder.Services.AddScoped<FitnessApp.Client.Strength.StrengthProgramClient>();
 builder.Services.AddScoped<FitnessApp.Client.Running.RunningClient>();
 builder.Services.AddScoped<CalendarClient>();
+builder.Services.AddScoped<NutritionClient>();
 builder.Services.AddScoped<SettingsClient>();
 
 await builder.Build().RunAsync();

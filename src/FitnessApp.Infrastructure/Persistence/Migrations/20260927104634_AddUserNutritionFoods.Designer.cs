@@ -3,6 +3,7 @@ using System;
 using FitnessApp.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FitnessApp.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FitnessDbContext))]
-    partial class FitnessDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260927104634_AddUserNutritionFoods")]
+    partial class AddUserNutritionFoods
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.3");
@@ -800,66 +803,9 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
 
                     b.HasKey("UserId", "RequestId");
 
+                    b.HasIndex("RecipeId");
+
                     b.ToTable("NutritionRecipeAdditions");
-                });
-
-            modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionRecipeCreation", b =>
-                {
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("RequestId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly>("Date")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal>("Portions")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Slot")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("UserId", "RequestId");
-
-                    b.ToTable("NutritionRecipeCreations");
-                });
-
-            modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionFoodAddition", b =>
-                {
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("RequestId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly>("Date")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int?>("FoodId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<Guid?>("CustomFoodId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal>("Grams")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Slot")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("UserId", "RequestId");
-
-                    b.ToTable("NutritionFoodAdditions");
                 });
 
             modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionRecipeIngredient", b =>
@@ -1329,24 +1275,12 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionRecipeAddition", b =>
                 {
-                    b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
+                    b.HasOne("FitnessApp.Infrastructure.Nutrition.NutritionRecipe", null)
                         .WithMany()
-                        .HasForeignKey("UserId")
+                        .HasForeignKey("RecipeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
 
-            modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionRecipeCreation", b =>
-                {
-                    b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionFoodAddition", b =>
-                {
                     b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")

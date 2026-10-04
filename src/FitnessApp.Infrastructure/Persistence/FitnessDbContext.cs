@@ -5,6 +5,7 @@ using FitnessApp.Domain.Calendar;
 using FitnessApp.Domain.Running;
 using FitnessApp.Domain.Settings;
 using FitnessApp.Domain.Strength;
+using FitnessApp.Infrastructure.Nutrition;
 
 namespace FitnessApp.Infrastructure.Persistence;
 
@@ -25,6 +26,16 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
     public DbSet<RunningSession> RunningSessions => Set<RunningSession>();
     public DbSet<RunningResult> RunningResults => Set<RunningResult>();
     public DbSet<CalendarOccurrenceMove> CalendarOccurrenceMoves => Set<CalendarOccurrenceMove>();
+    public DbSet<FridaFood> FridaFoods => Set<FridaFood>();
+    public DbSet<NutritionCustomFood> NutritionCustomFoods => Set<NutritionCustomFood>();
+    public DbSet<FridaCatalogueRelease> FridaCatalogueReleases => Set<FridaCatalogueRelease>();
+    public DbSet<NutritionMeal> NutritionMeals => Set<NutritionMeal>();
+    public DbSet<NutritionFoodEntry> NutritionFoodEntries => Set<NutritionFoodEntry>();
+    public DbSet<NutritionRecipe> NutritionRecipes => Set<NutritionRecipe>();
+    public DbSet<NutritionRecipeIngredient> NutritionRecipeIngredients => Set<NutritionRecipeIngredient>();
+    public DbSet<NutritionRecipeCreation> NutritionRecipeCreations => Set<NutritionRecipeCreation>();
+    public DbSet<NutritionRecipeAddition> NutritionRecipeAdditions => Set<NutritionRecipeAddition>();
+    public DbSet<NutritionFoodAddition> NutritionFoodAdditions => Set<NutritionFoodAddition>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<InAppNotification> InAppNotifications => Set<InAppNotification>();
 
@@ -146,6 +157,92 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
             entity.HasIndex(move => new { move.UserId, move.Kind, move.OriginalDate });
             entity.HasIndex(move => new { move.UserId, move.Kind, move.TargetDate });
             entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(move => move.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<FridaFood>(entity =>
+        {
+            entity.HasKey(food => food.FoodId);
+            entity.Property(food => food.DanishName).HasMaxLength(500).IsRequired();
+            entity.Property(food => food.FoodGroup).HasMaxLength(300).IsRequired();
+            entity.Property(food => food.SearchName).HasMaxLength(700).IsRequired();
+            entity.Property(food => food.PublishedNutrientsJson).IsRequired();
+            entity.HasIndex(food => food.SearchName);
+        });
+        builder.Entity<NutritionCustomFood>(entity =>
+        {
+            entity.HasKey(food => food.Id);
+            entity.Property(food => food.UserId).HasMaxLength(450).IsRequired();
+            entity.Property(food => food.Name).HasMaxLength(120).IsRequired();
+            entity.Property(food => food.SearchName).HasMaxLength(200).IsRequired();
+            entity.Property(food => food.CreatedAtUtc).IsRequired();
+            entity.HasIndex(food => new { food.UserId, food.SearchName });
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(food => food.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<FridaCatalogueRelease>(entity =>
+        {
+            entity.HasKey(release => release.Id);
+            entity.Property(release => release.Version).HasMaxLength(32).IsRequired();
+            entity.Property(release => release.SourceUrl).HasMaxLength(1024).IsRequired();
+            entity.Property(release => release.Checksum).HasMaxLength(64).IsRequired();
+        });
+        builder.Entity<NutritionMeal>(entity =>
+        {
+            entity.HasKey(meal => meal.Id);
+            entity.Property(meal => meal.UserId).HasMaxLength(450).IsRequired();
+            entity.Property(meal => meal.Slot).HasConversion<int>();
+            entity.HasIndex(meal => new { meal.UserId, meal.Date, meal.Slot }).IsUnique();
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(meal => meal.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(meal => meal.Entries).WithOne(entry => entry.Meal).HasForeignKey(entry => entry.MealId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<NutritionFoodEntry>(entity =>
+        {
+            entity.HasKey(entry => entry.Id);
+            entity.Property(entry => entry.Name).HasMaxLength(500).IsRequired();
+            entity.Property(entry => entry.FoodGroup).HasMaxLength(300).IsRequired();
+            entity.Property(entry => entry.CatalogueVersion).HasMaxLength(32).IsRequired();
+        });
+        builder.Entity<NutritionRecipe>(entity =>
+        {
+            entity.HasKey(recipe => recipe.Id);
+            entity.Property(recipe => recipe.UserId).HasMaxLength(450).IsRequired();
+            entity.Property(recipe => recipe.Name).HasMaxLength(160).IsRequired();
+            entity.Property(recipe => recipe.CreatedFromSlot).HasConversion<int>();
+            entity.HasIndex(recipe => new { recipe.UserId, recipe.Name });
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(recipe => recipe.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(recipe => recipe.Ingredients).WithOne(ingredient => ingredient.Recipe)
+                .HasForeignKey(ingredient => ingredient.RecipeId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<NutritionRecipeIngredient>(entity =>
+        {
+            entity.HasKey(ingredient => ingredient.Id);
+            entity.Property(ingredient => ingredient.Name).HasMaxLength(500).IsRequired();
+            entity.Property(ingredient => ingredient.FoodGroup).HasMaxLength(300).IsRequired();
+            entity.Property(ingredient => ingredient.CatalogueVersion).HasMaxLength(32).IsRequired();
+        });
+        builder.Entity<NutritionRecipeCreation>(entity =>
+        {
+            entity.HasKey(creation => new { creation.UserId, creation.RequestId });
+            entity.Property(creation => creation.UserId).HasMaxLength(450).IsRequired();
+            entity.Property(creation => creation.Slot).HasConversion<int>();
+            entity.Property(creation => creation.Name).HasMaxLength(160).IsRequired();
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(creation => creation.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<NutritionRecipeAddition>(entity =>
+        {
+            entity.HasKey(addition => new { addition.UserId, addition.RequestId });
+            entity.Property(addition => addition.UserId).HasMaxLength(450).IsRequired();
+            entity.Property(addition => addition.Slot).HasConversion<int>();
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(addition => addition.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<NutritionFoodAddition>(entity =>
+        {
+            entity.HasKey(addition => new { addition.UserId, addition.RequestId });
+            entity.Property(addition => addition.UserId).HasMaxLength(450).IsRequired();
+            entity.Property(addition => addition.Slot).HasConversion<int>();
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(addition => addition.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

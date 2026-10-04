@@ -9,6 +9,7 @@ Read this file, then only the guidance and documentation relevant to the task. D
 - Keep code, identifiers, technical documentation, and comments in English; keep application UI in Danish.
 - Preserve unrelated work. Do not discard, push, merge, deploy, change Figma, or add dependencies without the user's current authorization.
 - Keep implementation small and concrete. Do not add speculative projects, modules, abstractions, generic repositories, MediatR, CQRS frameworks, message buses, or microservices.
+- For ordinary feature work, use the existing primary `Fitness app` checkout and extend `FitnessApp.slnx` and its current projects. Do not create a sibling worktree, another solution, or another host unless the owner explicitly requests one. Check the repository root before editing; see [checkout and data guidance](docs/development-workflow.md).
 - Protected data is owner-scoped from the server-derived identity. Clients never establish ownership or roles with submitted IDs. Preserve historical recorded values when plans, goals, or definitions change.
 - Keep secrets out of Git, database files out of `wwwroot`, and dependencies compatible with future Linux/ARM64 deployment.
 - Remove superseded code, tests, configuration, generated output, and temporary artifacts in the changed scope.
@@ -25,7 +26,7 @@ Read this file, then only the guidance and documentation relevant to the task. D
 
 ## Project second brain
 
-For non-trivial implementation, modification, deletion, architecture, security, product, data, API, or integration work, use Obsidian MCP with the `personal` vault. Start at `10 Projekter/Fitness App/00 Projektoversigt.md`, then read only the notes relevant to the task.
+For non-trivial implementation, modification, deletion, architecture, security, product, data, API, or integration work, use Obsidian MCP with the configured `personal` vault. Start at `10 Projekter/Fitness App/00 Projektoversigt.md`, then read only the notes relevant to the task.
 
 - Repository code, configuration, and tests are authoritative for executable behavior. Investigate any conflict with the vault rather than copying it into code.
 - Update the relevant vault note when work changes durable architecture, product knowledge, a technical decision, development practice, or current project understanding. Keep temporary task state in the ignored local `.codex/checkpoint.md` instead.

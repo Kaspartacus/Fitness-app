@@ -15,6 +15,12 @@ public sealed class SettingsDecimalInputTests
         Assert.Equal(20.5m, value!.Value);
     }
 
+    [Fact]
+    public void FormatsEditableNutritionDecimalsWithoutRounding()
+    {
+        Assert.Equal("100,25", SettingsDecimalInput.Format(100.25m));
+    }
+
     [Theory]
     [InlineData("1.000,5")]
     [InlineData("1,000.5")]
