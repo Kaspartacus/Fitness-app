@@ -1,6 +1,6 @@
 # Development workflow
 
-`AGENTS.md` files provide concise, durable routing and rules. [Project facts](project.md) explains shared architecture and product invariants; client design evidence lives with the client. Keep task status out of those documents.
+`AGENTS.md` files provide concise, durable routing and rules. For non-trivial work, the root instruction directs agents to the relevant note in the `personal` Obsidian vault; client design evidence lives with the Client. Keep task status out of repository guidance and use the vault only for durable project understanding.
 
 ## Focused changes and review
 

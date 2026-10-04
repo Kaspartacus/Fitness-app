@@ -10,7 +10,7 @@ Deliver one reviewable vertical slice without prebuilding future architecture.
 ## Inputs
 
 - The user's requested outcome, constraints, and acceptance criteria.
-- The root and applicable nested `AGENTS.md` files, `docs/project.md`, and a local checkpoint only when a task hand-off needs one.
+- The root and applicable nested `AGENTS.md` files, the relevant Fitness App note in the `personal` Obsidian vault, and a local checkpoint only when a task hand-off needs one.
 - Existing implementation, tests, migrations, styling, and current design evidence.
 
 ## Workflow
@@ -25,7 +25,7 @@ Deliver one reviewable vertical slice without prebuilding future architecture.
 8. Verify with `./scripts/verify.sh verify` when available. Run `./scripts/verify.sh audit` when dependencies change or before a release-quality handoff.
 9. Exercise changed UI in the actual HTTPS app at mobile and desktop sizes when browser tooling is available.
 10. Remove superseded code paths, unused imports or dependencies, stale tests, obsolete configuration, dead UI, generated output, and temporary tooling in the changed scope. Retain an item only when it has a concrete documented purpose.
-11. Update durable product facts in `docs/project.md` and local module documentation when the change makes those facts inaccurate. Record task-specific hand-off state only in the ignored local `.codex/checkpoint.md` when needed.
+11. Update the relevant Fitness App vault note and local module documentation when a change makes durable facts inaccurate. Record task-specific hand-off state only in the ignored local `.codex/checkpoint.md` when needed.
 
 ## Guardrails
 
