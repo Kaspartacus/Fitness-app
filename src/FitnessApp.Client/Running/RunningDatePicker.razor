@@ -140,10 +140,16 @@
         {
             var firstDay = new DateOnly(displayedMonth.Year, displayedMonth.Month, 1);
             var mondayOffset = ((int)firstDay.DayOfWeek + 6) % 7;
-            var start = firstDay.AddDays(-mondayOffset);
+            var startDayNumber = Math.Max(DateOnly.MinValue.DayNumber, firstDay.DayNumber - mondayOffset);
             for (var index = 0; index < 42; index++)
             {
-                yield return start.AddDays(index);
+                var dayNumber = startDayNumber + index;
+                if (dayNumber > DateOnly.MaxValue.DayNumber)
+                {
+                    yield break;
+                }
+
+                yield return DateOnly.FromDayNumber(dayNumber);
             }
         }
     }
@@ -309,12 +315,12 @@
     {
         var target = args.Key switch
         {
-            "ArrowLeft" => current.AddDays(-1),
-            "ArrowRight" => current.AddDays(1),
-            "ArrowUp" => current.AddDays(-7),
-            "ArrowDown" => current.AddDays(7),
-            "Home" => current.AddDays(-((int)current.DayOfWeek + 6) % 7),
-            "End" => current.AddDays(6 - ((int)current.DayOfWeek + 6) % 7),
+            "ArrowLeft" => AddDays(current, -1),
+            "ArrowRight" => AddDays(current, 1),
+            "ArrowUp" => AddDays(current, -7),
+            "ArrowDown" => AddDays(current, 7),
+            "Home" => AddDays(current, -(((int)current.DayOfWeek + 6) % 7)),
+            "End" => AddDays(current, 6 - (((int)current.DayOfWeek + 6) % 7)),
             "PageUp" => AddMonths(current, args.ShiftKey ? -12 : -1),
             "PageDown" => AddMonths(current, args.ShiftKey ? 12 : 1),
             _ => null
@@ -329,6 +335,14 @@
         keyboardFocusDate = nextDate;
         pendingFocusDate = nextDate;
         return Task.CompletedTask;
+    }
+
+    private static DateOnly? AddDays(DateOnly value, int days)
+    {
+        var dayNumber = (long)value.DayNumber + days;
+        return dayNumber >= DateOnly.MinValue.DayNumber && dayNumber <= DateOnly.MaxValue.DayNumber
+            ? DateOnly.FromDayNumber((int)dayNumber)
+            : null;
     }
 
     private static DateOnly? AddMonths(DateOnly value, int months)

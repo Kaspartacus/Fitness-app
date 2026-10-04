@@ -1,11 +1,11 @@
 namespace FitnessApp.Application.Settings;
 
 public sealed record NutritionGoalsData(
-    int? DailyCaloriesTarget,
-    int? ProteinTargetGrams,
-    int? CarbohydrateTargetGrams,
-    int? FatTargetGrams,
-    int? SugarTargetGrams);
+    decimal? DailyCaloriesTarget,
+    decimal? ProteinTargetGrams,
+    decimal? CarbohydrateTargetGrams,
+    decimal? FatTargetGrams,
+    decimal? SugarTargetGrams);
 
 public sealed record ProfileSettingsData(
     string DisplayName,
@@ -34,11 +34,11 @@ public sealed record UpdateProfileSettingsInput(
     decimal? WeightKg);
 
 public sealed record UpdateNutritionGoalsInput(
-    int? DailyCaloriesTarget,
-    int? ProteinTargetGrams,
-    int? CarbohydrateTargetGrams,
-    int? FatTargetGrams,
-    int? SugarTargetGrams);
+    decimal? DailyCaloriesTarget,
+    decimal? ProteinTargetGrams,
+    decimal? CarbohydrateTargetGrams,
+    decimal? FatTargetGrams,
+    decimal? SugarTargetGrams);
 
 public sealed record UpdateNotificationPreferencesInput(
     bool TrainingRemindersEnabled,

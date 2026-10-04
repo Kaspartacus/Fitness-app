@@ -14,7 +14,7 @@ Visual implementation evidence and its limits are owned by the Client in [its de
 
 - A .NET 10 solution in `FitnessApp.slnx` with six projects under `src/` and an integration-test project under `tests/`.
 - A standalone Blazor WebAssembly client served by the ASP.NET Core server from the same origin.
-- EF Core SQLite persistence in Infrastructure with the initial Identity/session migration; database files live outside `wwwroot` and are ignored by Git.
+- EF Core SQLite persistence in Infrastructure with tracked migrations; the hosted server applies pending migrations automatically only in Development, while other environments require an explicit migration step. Database files live outside `wwwroot` and are ignored by Git.
 - ASP.NET Core Identity users, password hashing and policy, `Admin` and `User` roles, lockout, and `Pending`, `Approved`, and `Rejected` account states.
 - An explicit local command that creates the first Approved administrator from User Secrets once, refuses existing-account elevation, and is safe to rerun.
 - Signed HS256 JWT login through ASP.NET Core JwtBearer, approximately 15-minute access tokens, strict issuer/audience/algorithm/signature/expiry checks, login rate limiting, and generic Danish failures.
@@ -27,6 +27,7 @@ Visual implementation evidence and its limits are owned by the Client in [its de
 - A lightweight pull-request workflow for restore, build, and tests with read-only permissions and no deployment or production secrets.
 - Real SQLite integration coverage for authentication, bootstrap, registration, administration, concurrency, and empty/upgrade migration cases.
 - A neutral Danish password-reset flow for Approved accounts using Identity's dedicated one-hour reset tokens, a trusted configured HTTPS origin, persisted cooldown, IP rate limiting, bounded asynchronous email delivery, and atomic all-session revocation.
+- Owner-scoped Nutrition logging with six fixed daily meal sections, gram-based food entries, nutrition targets, and reusable recipes. Food entries and recipe ingredients snapshot their source values so historical values remain stable. The shared SQLite catalogue is imported explicitly from the pinned DTU Frida 5.5 release and supports private, owner-scoped custom foods; see `nutrition.md` for the licensed source, checksum, nutrient mappings, and local import command.
 - Configurable Brevo SMTP delivery through MailKit with required STARTTLS and a Development/Test-only private pickup transport. An explicit local Development opt-in can skip revocation checking for macOS compatibility; startup and actual listener checks prevent using it on nonlocal or non-Development instances, and all other certificate checks remain enabled. SMTP secrets remain server-side and real delivery is a separate manual check.
 - An explicit `FitnessApp` Data Protection application identity with a persistent, private key-ring path so normal restarts preserve reset-token validity.
 - Private strength programs for Approved users, with ordered workouts and exercises, planned weight, sets, repetitions and optional notes; weekly scheduling; actual completed-workout history; ownership isolation; and optimistic concurrency for program changes. Warm-up is an ordinary exercise rather than a stored boolean.
@@ -71,7 +72,7 @@ Persistence entities are never shared with the client.
 
 ## Deferred decisions and scope
 
-SQLite, Identity, JWT access tokens, registration, administrator approval, password reset, strength-program management, the running vertical slice, and Profile/Settings are implemented within the existing projects. Running migration `20260910221108_AddRunningModule` is generated and reviewed but has not been applied to any database. Email ownership verification remains operationally incomplete. Refresh tokens, remember-me behavior, production signing-key rotation, Docker/Raspberry Pi deployment, remote-access design, real Garmin authorization/synchronization, browser push, notification email delivery, deployment automation, vault selection, log shipping, and the remaining fitness product modules remain deferred.
+SQLite, Identity, JWT access tokens, registration, administrator approval, password reset, strength-program management, the running vertical slice, and Profile/Settings are implemented within the existing projects. Running migration `20260910221108_AddRunningModule` is generated and reviewed; Development startup applies it automatically, while other environments require an explicit migration step. Email ownership verification remains operationally incomplete. Refresh tokens, remember-me behavior, production signing-key rotation, Docker/Raspberry Pi deployment, remote-access design, real Garmin authorization/synchronization, browser push, notification email delivery, deployment automation, vault selection, log shipping, and the remaining fitness product modules remain deferred.
 
 Paid infrastructure and paid SaaS dependencies are out of scope. Future choices must remain compatible with Linux/ARM64 unless a documented decision changes that constraint.
 

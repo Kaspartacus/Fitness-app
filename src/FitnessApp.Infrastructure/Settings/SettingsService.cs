@@ -250,9 +250,6 @@ internal sealed class SettingsService(
     private static bool IsWithinRange(decimal? value, decimal minimum, decimal maximum) =>
         value is null || value >= minimum && value <= maximum;
 
-    private static bool IsWithinRange(int? value, int minimum, int maximum) =>
-        value is null || value >= minimum && value <= maximum;
-
     private static ProfileSettingsData MapProfile(string displayName, UserSettings settings) => new(
         displayName,
         settings.HeightCm,

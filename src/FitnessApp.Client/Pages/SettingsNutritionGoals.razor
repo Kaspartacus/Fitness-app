@@ -3,6 +3,7 @@
 @using FitnessApp.Client.Settings
 @using FitnessApp.Contracts.Settings
 @inject SettingsClient SettingsApi
+@inject NavigationManager Navigation
 
 <PageTitle>Ernæringsmål</PageTitle>
 
@@ -34,11 +35,11 @@
                 <section class="strength-editor-card">
                     <p class="strength-overline">Daglige mål</p>
                     <h2>Kalorier og makromål</h2>
-                    <p class="settings-form-intro">Målene gemmes på din konto. Kostsporing er endnu ikke en del af denne version.</p>
+                    <p class="settings-form-intro">Målene gemmes på din konto og bruges i <a href="/kost">dagens kostoverblik</a>.</p>
 
                     <label class="strength-input-label" for="nutrition-calories">Kalorier</label>
                     <div class="settings-input-with-unit">
-                        <input class="strength-input" id="nutrition-calories" inputmode="numeric" autocomplete="off" @bind="dailyCaloriesText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 2200" />
+                        <input class="strength-input" id="nutrition-calories" inputmode="decimal" autocomplete="off" @bind="dailyCaloriesText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 2200" />
                         <span class="settings-input-unit" aria-hidden="true">kcal</span>
                     </div>
 
@@ -46,28 +47,28 @@
                         <div>
                             <label class="strength-input-label" for="nutrition-protein">Protein</label>
                             <div class="settings-input-with-unit">
-                                <input class="strength-input" id="nutrition-protein" inputmode="numeric" autocomplete="off" @bind="proteinText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 130" />
+                                <input class="strength-input" id="nutrition-protein" inputmode="decimal" autocomplete="off" @bind="proteinText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 130" />
                                 <span class="settings-input-unit" aria-hidden="true">g</span>
                             </div>
                         </div>
                         <div>
                             <label class="strength-input-label" for="nutrition-carbohydrates">Kulhydrat</label>
                             <div class="settings-input-with-unit">
-                                <input class="strength-input" id="nutrition-carbohydrates" inputmode="numeric" autocomplete="off" @bind="carbohydrateText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 240" />
+                                <input class="strength-input" id="nutrition-carbohydrates" inputmode="decimal" autocomplete="off" @bind="carbohydrateText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 240" />
                                 <span class="settings-input-unit" aria-hidden="true">g</span>
                             </div>
                         </div>
                         <div>
                             <label class="strength-input-label" for="nutrition-fat">Fedt</label>
                             <div class="settings-input-with-unit">
-                                <input class="strength-input" id="nutrition-fat" inputmode="numeric" autocomplete="off" @bind="fatText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 70" />
+                                <input class="strength-input" id="nutrition-fat" inputmode="decimal" autocomplete="off" @bind="fatText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 70" />
                                 <span class="settings-input-unit" aria-hidden="true">g</span>
                             </div>
                         </div>
                         <div>
                             <label class="strength-input-label" for="nutrition-sugar">Sukker</label>
                             <div class="settings-input-with-unit">
-                                <input class="strength-input" id="nutrition-sugar" inputmode="numeric" autocomplete="off" @bind="sugarText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 50" />
+                                <input class="strength-input" id="nutrition-sugar" inputmode="decimal" autocomplete="off" @bind="sugarText" @bind:event="oninput" disabled="@isSaving" placeholder="Fx 50" />
                                 <span class="settings-input-unit" aria-hidden="true">g</span>
                             </div>
                         </div>
@@ -99,6 +100,7 @@
 </main>
 
 @code {
+    private static readonly System.Globalization.CultureInfo DanishCulture = System.Globalization.CultureInfo.GetCultureInfo("da-DK");
     private NutritionGoalsResponse? nutritionGoals;
     private string dailyCaloriesText = string.Empty;
     private string proteinText = string.Empty;
@@ -163,36 +165,36 @@
 
         nutritionGoals = result.Value;
         ApplyNutritionGoals(nutritionGoals);
-        saveMessage = "Ernæringsmålene er gemt.";
+        Navigation.NavigateTo("/kost");
     }
 
     private bool TryCreateRequest(out UpdateNutritionGoalsRequest request)
     {
         validationError = null;
-        int? calories = null;
-        int? protein = null;
-        int? carbohydrates = null;
-        int? fat = null;
-        int? sugar = null;
-        if (!TryParseOptionalInt(dailyCaloriesText, out calories) || calories is < 500 or > 10000)
+        decimal? calories = null;
+        decimal? protein = null;
+        decimal? carbohydrates = null;
+        decimal? fat = null;
+        decimal? sugar = null;
+        if (!SettingsDecimalInput.TryParseOptional(dailyCaloriesText, out calories) || calories is < 500m or > 10000m)
         {
-            validationError = "Kaloriemålet skal være et helt tal mellem 500 og 10.000 kcal, eller stå tomt.";
+            validationError = "Kaloriemålet skal være mellem 500 og 10.000 kcal, eller stå tomt.";
         }
-        else if (!TryParseOptionalInt(proteinText, out protein) || protein is < 0 or > 1000)
+        else if (!SettingsDecimalInput.TryParseOptional(proteinText, out protein) || protein is < 0m or > 1000m)
         {
-            validationError = "Protein skal være et helt tal mellem 0 og 1.000 g, eller stå tomt.";
+            validationError = "Protein skal være mellem 0 og 1.000 g, eller stå tomt.";
         }
-        else if (!TryParseOptionalInt(carbohydrateText, out carbohydrates) || carbohydrates is < 0 or > 1000)
+        else if (!SettingsDecimalInput.TryParseOptional(carbohydrateText, out carbohydrates) || carbohydrates is < 0m or > 1000m)
         {
-            validationError = "Kulhydrat skal være et helt tal mellem 0 og 1.000 g, eller stå tomt.";
+            validationError = "Kulhydrat skal være mellem 0 og 1.000 g, eller stå tomt.";
         }
-        else if (!TryParseOptionalInt(fatText, out fat) || fat is < 0 or > 1000)
+        else if (!SettingsDecimalInput.TryParseOptional(fatText, out fat) || fat is < 0m or > 1000m)
         {
-            validationError = "Fedt skal være et helt tal mellem 0 og 1.000 g, eller stå tomt.";
+            validationError = "Fedt skal være mellem 0 og 1.000 g, eller stå tomt.";
         }
-        else if (!TryParseOptionalInt(sugarText, out sugar) || sugar is < 0 or > 1000)
+        else if (!SettingsDecimalInput.TryParseOptional(sugarText, out sugar) || sugar is < 0m or > 1000m)
         {
-            validationError = "Sukker skal være et helt tal mellem 0 og 1.000 g, eller stå tomt.";
+            validationError = "Sukker skal være mellem 0 og 1.000 g, eller stå tomt.";
         }
 
         if (validationError is not null)
@@ -219,23 +221,5 @@
         sugarText = FormatNumber(goals.SugarTargetGrams);
     }
 
-    private static bool TryParseOptionalInt(string text, out int? value)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            value = null;
-            return true;
-        }
-
-        if (int.TryParse(text, out var parsed))
-        {
-            value = parsed;
-            return true;
-        }
-
-        value = null;
-        return false;
-    }
-
-    private static string FormatNumber(int? value) => value?.ToString() ?? string.Empty;
+    private static string FormatNumber(decimal? value) => value?.ToString("G", DanishCulture) ?? string.Empty;
 }
