@@ -2,7 +2,7 @@
 
 FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, account administration and authentication, password reset by email, private strength-program management, and personal running plans and results through the Danish UI.
 
-This README is the public developer setup and operational guide. Repository workflow, verification, and Codex support are documented in [docs/development-workflow.md](docs/development-workflow.md). Client visual evidence lives in [src/FitnessApp.Client/docs/design-reference.md](src/FitnessApp.Client/docs/design-reference.md). Recurring implementation context lives in [.ai/context](.ai/context/overview.md); broader product memory and decision history can live in the private Obsidian vault. [AGENTS.md](AGENTS.md) routes Codex without requiring vault access.
+This README is the public developer setup and operational guide. Repository workflow, verification, and Codex support are documented in [docs/development-workflow.md](docs/development-workflow.md). Client visual evidence lives in [src/FitnessApp.Client/docs/design-reference.md](src/FitnessApp.Client/docs/design-reference.md). The private Obsidian vault is the active home for durable Fitness App product and architecture knowledge. [.ai/context](.ai/context/overview.md) provides concise recurring implementation context and fallback when vault access fails; code and tests remain authoritative for executable behavior. [AGENTS.md](AGENTS.md) routes Codex to both.
 
 ## Prerequisites
 

@@ -1,6 +1,6 @@
 # FitnessApp context router
 
-Read only the area relevant to the task. This folder holds concise recurring implementation context; inspect source, tests, project files, and migrations for exact current behavior. The private Obsidian `personal` vault holds broader product memory and history when accessible, but is optional.
+For non-trivial work, first read `10 Projekter/Fitness App/00 Projektoversigt.md` in the private Obsidian `personal` vault, then only notes relevant to the task. The local vault path is `~/Desktop/Kaspers Vault`; use Obsidian MCP when available. This folder holds concise recurring implementation context and a fallback when vault access fails. Inspect source, tests, project files, and migrations for exact current behavior; report unavailable vault access rather than silently skipping it.
 
 - [Architecture](architecture.md): solution and responsibility boundaries.
 - [Data](data.md): persistence, ownership, history, and local checkout behavior.

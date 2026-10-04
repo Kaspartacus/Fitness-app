@@ -1,6 +1,6 @@
 # Development workflow
 
-`AGENTS.md` is the concise Codex router. `.ai/agent-os` describes task flow, `.ai/harness` basic rules, `.ai/context` recurring implementation context, `.ai/agents` role boundaries, and `.ai/skills` indexes Codex-native procedures. These Markdown files guide Codex; they do not implement an automatic orchestration runtime. The private `personal` Obsidian vault is optional broader project memory. Keep task status out of tracked guidance.
+`AGENTS.md` is the concise Codex router. `.ai/agent-os` describes task flow, `.ai/harness` basic rules, `.ai/context` recurring implementation context, `.ai/agents` role boundaries, and `.ai/skills` indexes Codex-native procedures. These Markdown files guide Codex; they do not implement an automatic orchestration runtime. For non-trivial work, actively read the Fitness App overview and relevant note in the private `personal` Obsidian vault. If it is unavailable, continue from repository evidence and report the gap. Keep task status out of tracked guidance.
 
 ## One checkout and one application
 
