@@ -10,7 +10,7 @@ Perform an evidence-based review. Prioritize defects that can change behavior, s
 ## Inputs
 
 - The requested review range or the current branch diff against its actual base.
-- The root and applicable nested `AGENTS.md` files, the relevant Fitness App vault note and `.ai/context` guidance (record unavailable vault access), relevant tests, and available verification output.
+- The root and applicable nested `AGENTS.md` files, the relevant Fitness App vault note (record unavailable vault access), relevant tests, and available verification output.
 
 ## Workflow
 

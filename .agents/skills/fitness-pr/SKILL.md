@@ -24,7 +24,7 @@ Prepare an honest review handoff without expanding the user's authorization.
 7. After creating or updating an open PR, and after every later agent-initiated push to its head branch, post one GitHub PR comment beginning with `@codex review` and including the current Review handoff focus. This starts the separate GitHub/Codex review; it is not direct messaging between Codex threads. Do not post duplicate triggers for the same head SHA.
 8. Read the latest check run and the current GitHub/Codex review comment rather than relying on older successful results. Report pending, failed, or unavailable review evidence accurately; do not fix, merge, or approve the PR as its implementation agent.
 9. Merge or deploy only under explicit current authorization and only after stated requirements are satisfied.
-10. After an authorized merge, inspect every worktree and its ignored local data. A verified clean linked worktree for the merged branch may be removed, but never remove the primary `Fitness app` checkout or its shared `.git`. Preserve unmerged branches and open PRs; branch deletion needs separate authorization and must not discard uncommitted work.
+10. After an authorized merge, inspect every worktree and its ignored local data. A verified clean linked worktree for the merged branch may be removed, but never remove the primary inner `Desktop/Fitness app/Fitness-app` checkout or its shared `.git`. Preserve unmerged branches and open PRs; branch deletion needs separate authorization and must not discard uncommitted work.
 
 ## Guardrails
 

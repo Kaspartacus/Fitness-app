@@ -1,22 +1,30 @@
-# FitnessApp Codex entrypoint
+# FitnessApp guidance
 
-Work in the existing repository at `Desktop/Fitness app/Fitness-app`. Confirm `git rev-parse --show-toplevel` before editing. Extend its single `FitnessApp.slnx`, six `src/` projects, and one Server host. Do not create another solution, application, or ordinary feature worktree. Preserve unrelated work.
+FitnessApp is one .NET 10 hosted Blazor WebAssembly modular monolith. The Client uses Contracts; Server is the only host and composes Application and Infrastructure; Application and Infrastructure depend on Domain. Extend the existing `FitnessApp.slnx` and six `src/` projects—never add another solution, app host, or ordinary feature worktree.
 
-Read only the guidance relevant to the task:
+## Start narrowly
 
-- [Agent OS](.ai/agent-os/workflow.md): task interpretation, routing, validation, and handoff.
-- [Harness](.ai/harness/development.md): basic development rules; also consult coding, testing, or safety guidance when relevant.
-- [Context](.ai/context/overview.md): selective project-specific implementation context.
-- [Agents](.ai/agents/README.md): role boundaries and Codex-native agent locations.
-- [Skills](.ai/skills/README.md): reusable Codex-native procedures.
-- Applicable nested `AGENTS.md` in the project or test directory being changed.
+Confirm `git rev-parse --show-toplevel` before editing and preserve unrelated work. Read only:
 
-For non-trivial product, architecture, data, security, API, integration, or feature work, start with the Fitness App overview in the private `personal` Obsidian vault (`10 Projekter/Fitness App/00 Projektoversigt.md`), then read only the relevant note. Use Obsidian MCP when available; the vault is at `~/Desktop/Kaspers Vault` for local file access. If unavailable, continue from repository context and state that limitation. Code, configuration, migrations, and tests establish current executable behavior. Never put secrets or personal data in repository guidance or vault notes.
+- The nested `AGENTS.md` for the changed project or test directory.
+- For non-trivial product, architecture, data, security, API, integration, or feature work: Obsidian vault `personal`, beginning with `10 Projekter/Fitness App/00 Projektoversigt.md`; use `20 Arkitektur/Kodekort-og-API.md` to locate the narrow code slice, then confirm paths with `rg`.
+- The one relevant repository skill in `.agents/skills/` when its outcome matches the task.
 
-Use the vault's `20 Arkitektur/Kodekort-og-API.md` task-to-file routing table to choose a narrow starting slice. Confirm paths and references against the current checkout with `rg`; the table is a locator, not a generated index and does not override executable code.
+The vault is durable project knowledge; code, configuration, migrations, and tests are executable truth. Investigate disagreements and update durable vault knowledge only when a task changes it. If vault access is unavailable, work from repository evidence and report the gap. Never put secrets or personal data in guidance or vault notes.
 
-Keep code and technical documentation English; keep application UI Danish. Derive ownership and roles from validated server identity. Preserve recorded history when definitions change. For full checkout, verification, and PR procedures, read `30 Udvikling/Repository-workflow.md` in the vault; `.ai/agent-os/workflow.md` retains the minimal in-repo task rules.
+## Working constraints
 
-When the entire user message is exactly `Sæt i gang`, use the `cleanup_maintainer` custom agent and `$fitness-cleanup-maintenance` skill. That exact trigger authorizes its cleanup branch, commit, push, and PR workflow, never merge or deployment. A longer message containing these words is not the trigger.
+- Keep code and technical documentation English; keep application UI Danish.
+- Derive ownership and roles from validated server identity; never trust submitted identity or role values. Preserve recorded history when definitions change.
+- Keep changes small and concrete. Do not add speculative abstractions, generic repositories, MediatR, CQRS frameworks, message buses, microservices, or dependencies without a concrete need and current authorization.
+- Commit, push, create PRs, merge, deploy, change Figma, or discard work only with current user authorization. Never force-push or reset to simplify history.
 
-Every feature PR follows `.agents/skills/fitness-pr-review/SKILL.md`. On each automatic review or `@codex review` request, review the latest PR head and post a new top-level GitHub comment using that procedure. The implementing agent follows `$fitness-pr` and posts one `@codex review` trigger after each agent-initiated PR push. Do not message another local Codex task for this handoff. Report demonstrated consequential defects; CI handles deterministic checks.
+## Local maps and procedures
+
+- [Client](src/FitnessApp.Client/AGENTS.md), [Server](src/FitnessApp.Server/AGENTS.md), [Application](src/FitnessApp.Application/AGENTS.md), [Domain](src/FitnessApp.Domain/AGENTS.md), [Infrastructure](src/FitnessApp.Infrastructure/AGENTS.md), [Contracts](src/FitnessApp.Contracts/AGENTS.md), and [integration tests](tests/FitnessApp.IntegrationTests/AGENTS.md).
+- Reusable procedures live in `.agents/skills/`; read only the applicable one. Read-only review roles live in `.codex/agents/`; use them for substantial diffs, and add the security reviewer for authentication, authorization, ownership, secrets, logging, dependencies, configuration, or deployment.
+- Use `./scripts/verify.sh` for shared verification. Keep optional handoff state only in ignored `.codex/checkpoint.md`.
+
+When the entire user message is exactly `Sæt i gang`, use `cleanup_maintainer` and `$fitness-cleanup-maintenance`; this authorizes only that workflow's branch, commit, push, and PR—not merge or deployment.
+
+Every feature PR follows `$fitness-pr-review`. After each agent-initiated PR push, `$fitness-pr` posts one `@codex review` trigger for the latest head. Report only demonstrated consequential defects; CI owns deterministic checks.
