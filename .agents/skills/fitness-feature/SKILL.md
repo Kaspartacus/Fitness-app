@@ -25,7 +25,7 @@ Deliver one reviewable vertical slice without prebuilding future architecture.
 8. Verify with `./scripts/verify.sh verify` when available. Run `./scripts/verify.sh audit` when dependencies change or before a release-quality handoff.
 9. Exercise changed UI in the actual HTTPS app at mobile and desktop sizes when browser tooling is available.
 10. Remove superseded code paths, unused imports or dependencies, stale tests, obsolete configuration, dead UI, generated output, and temporary tooling in the changed scope. Retain an item only when it has a concrete documented purpose.
-11. Update affected `.ai/context` and local module documentation when durable implementation facts change; update the relevant vault note when broader product or decision knowledge changes; if access fails, report the pending update. Record task-specific hand-off state only in the ignored local `.codex/checkpoint.md` when needed.
+11. Compare the final diff with the relevant vault notes. Update durable product, architecture, behavior, file-routing, or decision knowledge when it changed; update `.ai/context` and local module guidance only when their routing or instructions changed. If vault access fails, report the pending update. Record task-specific hand-off state only in the ignored local `.codex/checkpoint.md` when needed.
 
 ## Guardrails
 
