@@ -27,3 +27,5 @@
 
 - Base branch: `main`
 - Review focus: <!-- Specific behavior, risk, or changed boundary to inspect. -->
+
+@codex review

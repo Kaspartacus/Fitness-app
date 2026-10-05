@@ -1,43 +1,22 @@
-# FitnessApp guidance
+# FitnessApp Codex entrypoint
 
-FitnessApp is a private, mobile-first fitness application in a public repository. It is a .NET 10 modular monolith: the Blazor WebAssembly Client calls the ASP.NET Core Server over HTTP; Server composes Application and Infrastructure; Application and Infrastructure depend on Domain; Contracts contains shared transport DTOs. The Server's Client reference is only for static WebAssembly hosting.
+Work in the existing repository at `Desktop/Fitness app/Fitness-app`. Confirm `git rev-parse --show-toplevel` before editing. Extend its single `FitnessApp.slnx`, six `src/` projects, and one Server host. Do not create another solution, application, or ordinary feature worktree. Preserve unrelated work.
 
-Read this file, then only the guidance and documentation relevant to the task. Do not preload the whole documentation tree or unrelated module instructions.
+Read only the guidance relevant to the task:
 
-## Working conventions
+- [Agent OS](.ai/agent-os/workflow.md): task interpretation, routing, validation, and handoff.
+- [Harness](.ai/harness/development.md): basic development rules; also consult coding, testing, or safety guidance when relevant.
+- [Context](.ai/context/overview.md): selective project-specific implementation context.
+- [Agents](.ai/agents/README.md): role boundaries and Codex-native agent locations.
+- [Skills](.ai/skills/README.md): reusable Codex-native procedures.
+- Applicable nested `AGENTS.md` in the project or test directory being changed.
 
-- Keep code, identifiers, technical documentation, and comments in English; keep application UI in Danish.
-- Preserve unrelated work. Do not discard, push, merge, deploy, change Figma, or add dependencies without the user's current authorization.
-- Keep implementation small and concrete. Do not add speculative projects, modules, abstractions, generic repositories, MediatR, CQRS frameworks, message buses, or microservices.
-- For ordinary feature work, use the existing primary `Fitness-app` checkout and extend `FitnessApp.slnx` and its current projects. Do not create a sibling worktree, another solution, or another host unless the owner explicitly requests one. Check the repository root before editing; see [checkout and data guidance](docs/development-workflow.md).
-- Protected data is owner-scoped from the server-derived identity. Clients never establish ownership or roles with submitted IDs. Preserve historical recorded values when plans, goals, or definitions change.
-- Keep secrets out of Git, database files out of `wwwroot`, and dependencies compatible with future Linux/ARM64 deployment. See [project facts and invariants](docs/project.md) for the authoritative detail.
-- Remove superseded code, tests, configuration, generated output, and temporary artifacts in the changed scope.
+For non-trivial product, architecture, data, security, API, integration, or feature work, start with the Fitness App overview in the private `personal` Obsidian vault (`10 Projekter/Fitness App/00 Projektoversigt.md`), then read only the relevant note. Use Obsidian MCP when available; the vault is at `~/Desktop/Kaspers Vault` for local file access. If unavailable, continue from repository context and state that limitation. Code, configuration, migrations, and tests establish current executable behavior. Never put secrets or personal data in repository guidance or vault notes.
 
-## Instruction map
+Use the vault's `20 Arkitektur/Kodekort-og-API.md` task-to-file routing table to choose a narrow starting slice. Confirm paths and references against the current checkout with `rg`; the table is a locator, not a generated index and does not override executable code.
 
-- [Client](src/FitnessApp.Client/AGENTS.md): Blazor UI, browser calls, and design evidence.
-- [Server](src/FitnessApp.Server/AGENTS.md): HTTP API, authentication boundary, and composition root.
-- [Application](src/FitnessApp.Application/AGENTS.md): use-case contracts and orchestration boundaries.
-- [Domain](src/FitnessApp.Domain/AGENTS.md): dependency-free business rules.
-- [Infrastructure](src/FitnessApp.Infrastructure/AGENTS.md): Identity, EF Core, SQLite, and external implementations.
-- [Contracts](src/FitnessApp.Contracts/AGENTS.md): shared transport DTOs.
-- [Integration tests](tests/FitnessApp.IntegrationTests/AGENTS.md): real-SQLite end-to-end coverage.
+Keep code and technical documentation English; keep application UI Danish. Derive ownership and roles from validated server identity. Preserve recorded history when definitions change. For full checkout, verification, and PR procedures, read `30 Udvikling/Repository-workflow.md` in the vault; `.ai/agent-os/workflow.md` retains the minimal in-repo task rules.
 
-## Shared references
+When the entire user message is exactly `Sæt i gang`, use the `cleanup_maintainer` custom agent and `$fitness-cleanup-maintenance` skill. That exact trigger authorizes its cleanup branch, commit, push, and PR workflow, never merge or deployment. A longer message containing these words is not the trigger.
 
-- [Project facts, architecture, and product invariants](docs/project.md)
-- [Development workflow](docs/development-workflow.md), including verification, reviews, hooks, and pull requests
-- [Repository skills](.agents/skills/): reusable feature, design-check, review, and pull-request procedures
-
-## Exact cleanup trigger
-
-- When the entire user message is exactly `Sæt i gang`, use the `cleanup_maintainer` custom agent and `$fitness-cleanup-maintenance` skill. This exact trigger authorizes that skill's cleanup branch, commit, push, and pull-request workflow, but never a merge or deployment.
-- Do not treat `Sæt i gang` inside a longer message as a cleanup trigger.
-
-## Code Review Rules
-
-- Every feature PR follows the read-only procedure in `.agents/skills/fitness-pr-review/SKILL.md`; its GitHub comment is a handoff, not an approval or merge action.
-- On every automatic review run or `@codex review` request, review the PR's latest head and post one new top-level GitHub comment that follows that procedure. Do not edit or rely on an earlier review comment.
-- The implementing agent invokes that external review by following `$fitness-pr`: it posts one `@codex review` trigger after each agent-initiated PR push, using the PR's Review handoff focus. It never starts or messages another local Codex thread directly.
-- Report only demonstrated consequential defects with a file reference and triggering condition. Leave deterministic formatting, build, test, and dependency checks to CI.
+Every feature PR follows `.agents/skills/fitness-pr-review/SKILL.md`. On each automatic review or `@codex review` request, review the latest PR head and post a new top-level GitHub comment using that procedure. The implementing agent follows `$fitness-pr` and posts one `@codex review` trigger after each agent-initiated PR push. Do not message another local Codex task for this handoff. Report demonstrated consequential defects; CI handles deterministic checks.

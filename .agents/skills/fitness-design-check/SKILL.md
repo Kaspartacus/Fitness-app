@@ -10,7 +10,7 @@ Check the real application against the best available current source without ove
 ## Inputs
 
 - The changed routes, components, and expected user journey.
-- Existing CSS tokens, shared components, assets, screenshots, and documented design links.
+- Existing CSS tokens, shared components, assets, screenshots, and vault note `30 Udvikling/Design-evidens.md`.
 - The current design source only when it is available and relevant.
 
 ## Workflow

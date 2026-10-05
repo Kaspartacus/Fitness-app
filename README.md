@@ -2,7 +2,7 @@
 
 FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, account administration and authentication, password reset by email, private strength-program management, and personal running plans and results through the Danish UI.
 
-Product scope and the distinction between implemented and deferred work are documented in [docs/project.md](docs/project.md). Repository workflow, verification, and Codex support are documented in [docs/development-workflow.md](docs/development-workflow.md). Client visual evidence lives in [src/FitnessApp.Client/docs/design-reference.md](src/FitnessApp.Client/docs/design-reference.md).
+This README is the public developer setup and operational guide. The private `Kaspers Vault` Obsidian vault is the source of truth for Fitness App project documentation, including `30 Udvikling/Repository-workflow.md`, `30 Udvikling/Design-evidens.md`, and `20 Arkitektur/Nutrition-implementering.md`. [.ai/context](.ai/context/overview.md) routes Codex to relevant vault notes; [AGENTS.md](AGENTS.md) is its repository entrypoint. Code, configuration, migrations, and tests remain authoritative for implemented behavior.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ No Node.js runtime, container engine, or cloud account is required.
 
 ## Repository structure
 
-The only solution file is `FitnessApp.slnx`. Run commands from the primary `Fitness-app` repository directory. Other Git worktrees are separate checkouts of this same application, not separate solutions; their default local databases are separate, so do not use them as the ordinary startup folder.
+The only solution file is `FitnessApp.slnx`. Run commands from the inner `Desktop/Fitness app/Fitness-app` repository directory; the outer `Fitness app` is its container. Other Git worktrees are separate checkouts of this same application, not separate solutions; their default local databases are separate, so do not use them as the ordinary startup folder.
 
 There is one hosted application and one startup project: `FitnessApp.Server`. The Blazor WebAssembly client and ASP.NET Core API run together from the existing server host:
 
@@ -240,7 +240,7 @@ The client attaches the bearer token only to same-origin `/api/` requests and re
 
 ## Development workflow
 
-Repository-native Codex skills, read-only reviewer agents, the opt-in resume hook, and the shared local/CI verification entrypoint are documented in [docs/development-workflow.md](docs/development-workflow.md). Project hooks require explicit review and trust through `/hooks`; the repository does not bypass that protection.
+Repository-native Codex skills are under `.agents/skills/`, read-only reviewer agents under `.codex/agents/`, and the shared local/CI verification entrypoint is `./scripts/verify.sh`. Their workflow is documented in the private vault note `30 Udvikling/Repository-workflow.md`. Project hooks require explicit review and trust through `/hooks`; the repository does not bypass that protection.
 
 ## Verification
 

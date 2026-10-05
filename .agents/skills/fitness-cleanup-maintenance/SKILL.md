@@ -18,7 +18,7 @@ Never change architecture, functionality, security controls, migrations, databas
 ## Run setup
 
 1. From the repository root, fetch `origin --prune`, record `origin/main`, inspect `git status --short --branch`, remotes, local and remote branches, and worktrees. Stop if `origin/main` cannot be fetched or resolved. Include a branch overview in the run report; branch deletion is governed by the dedicated policy below.
-2. Use the primary `Fitness-app` checkout and preserve every unrelated tracked, untracked, ignored, or staged change. If it cannot be switched safely to a dedicated cleanup branch, do review work read-only and ask for direction instead of creating a sibling worktree by default. Never discard or relocate another user's work.
+2. Use the primary `Fitness app` checkout and preserve every unrelated tracked, untracked, ignored, or staged change. If it cannot be switched safely to a dedicated cleanup branch, do review work read-only and ask for direction instead of creating a sibling worktree by default. Never discard or relocate another user's work.
 3. Derive the application's listener ports from tracked configuration such as `Properties/launchSettings.json`; do not hardcode them. Before any cleanup, inspect those exact ports only. For each listener, verify the PID's command, working directory, and owner. Stop it with a graceful termination only when all three clearly identify this FitnessApp checkout; otherwise leave it running and report it. Do not use `sudo`, `pkill`, broad process matching, or forced termination.
 
 ## Review selection and local state
