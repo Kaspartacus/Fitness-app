@@ -18,7 +18,7 @@ Never change architecture, functionality, security controls, migrations, databas
 ## Run setup
 
 1. From the repository root, fetch `origin --prune`, record `origin/main`, inspect `git status --short --branch`, remotes, local and remote branches, and worktrees. Stop if `origin/main` cannot be fetched or resolved. Include a branch overview in the run report; branch deletion is governed by the dedicated policy below.
-2. Use the primary `Fitness app` checkout and preserve every unrelated tracked, untracked, ignored, or staged change. If it cannot be switched safely to a dedicated cleanup branch, do review work read-only and ask for direction instead of creating a sibling worktree by default. Never discard or relocate another user's work.
+2. Use the primary inner repository at `Desktop/Fitness app/Fitness-app` and preserve every unrelated tracked, untracked, ignored, or staged change. If it cannot be switched safely to a dedicated cleanup branch, do review work read-only and ask for direction instead of creating a sibling worktree by default. Never discard or relocate another user's work.
 3. Derive the application's listener ports from tracked configuration such as `Properties/launchSettings.json`; do not hardcode them. Before any cleanup, inspect those exact ports only. For each listener, verify the PID's command, working directory, and owner. Stop it with a graceful termination only when all three clearly identify this FitnessApp checkout; otherwise leave it running and report it. Do not use `sudo`, `pkill`, broad process matching, or forced termination.
 
 ## Review selection and local state
@@ -46,7 +46,7 @@ Do not add source inventories, paths, diffs, secrets, personal data, or PR metad
 4. Keep the existing hosted modular-monolith startup approach. Confirm that documentation has the canonical complete local startup command, `dotnet run --project src/FitnessApp.Server --launch-profile https`, rather than adding another host or startup project.
 5. Run a short solution build with build servers disabled. Run only tests directly relevant to behavior changed by the cleanup; no test is required for documentation-only changes. Do not start the application to verify cleanup, and do not leave application servers, file watchers, test hosts, or background build processes running.
 6. Check the derived listener ports again after cleanup. If this run started no application process, report their observed status; do not stop anything without the same command, working-directory, and owner proof.
-7. If changed files pass verification, inspect `git diff --check`, commit a focused cleanup commit, push the new branch without force, and open a normal PR targeting `main` using the repository PR template. Never create an empty commit or PR, and never merge or deploy. Then write the minimal state file with the successfully reviewed `origin/main` SHA and current UTC timestamp.
+7. Complete the root `AGENTS.md` **Project knowledge loop** for changed paths or removed conventions. If changed files pass verification, inspect `git diff --check` and use `$fitness-pr` for the authorized commit/push/PR handoff, reusing valid checks and preserving this cleanup skill's verification scope. Target `main`; never create an empty commit or PR, merge, or deploy. Then write the minimal state file with the successfully reviewed `origin/main` SHA and current UTC timestamp.
 
 ## Branch overview and deletion
 

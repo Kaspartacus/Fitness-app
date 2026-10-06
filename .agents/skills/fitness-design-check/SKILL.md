@@ -32,6 +32,7 @@ Check the real application against the best available current source without ove
 - Do not claim pixel parity for absent, stale, or failed design evidence.
 - Do not invent a new visual system when the repository already supplies one.
 - Keep UI text Danish and record environment failures separately from product defects.
+- Respect current task restrictions on app/browser access. A review-only request does not authorize UI or vault edits; when fixes are authorized, complete the root `AGENTS.md` **Project knowledge loop** for changed behavior or durable design evidence.
 
 ## Completion
 

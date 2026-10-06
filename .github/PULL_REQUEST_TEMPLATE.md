@@ -23,6 +23,13 @@
 
 <!-- N/A or remaining constraints, risks, and manual follow-up. -->
 
+## Project knowledge
+
+- Status: <!-- updated / not needed (reason) / pending (specific blocker) -->
+- Notes and scope: <!-- Relevant vault-relative paths; distinguish main from unmerged behavior. -->
+- Review context: <!-- Minimum non-sensitive, repository-supported intent/invariants needed without vault access. No private note dumps. -->
+- Pending reconciliation: <!-- None, or exact note correction and code/commit evidence for a later vault-enabled task. -->
+
 ## Review handoff
 
 - Base branch: `main`

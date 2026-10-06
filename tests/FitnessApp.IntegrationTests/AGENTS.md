@@ -1,8 +1,8 @@
 # Integration-test guidance
 
-This project verifies FitnessApp through the hosted Server using isolated real SQLite databases and the shared test factory.
+This project verifies FitnessApp through the hosted Server using isolated real SQLite databases and the shared test factory. It also contains focused direct Client tests for authentication, nutrition response guards, and settings input behavior.
 
 - Test observable API and persistence behavior, not implementation details. Cover success, denial, invalid input, race/duplicate behavior, and history preservation when relevant.
 - Keep test setup isolated; do not depend on a developer database, external email provider, or a running application process.
 - Update tests with the behavior they specify, and do not replace meaningful integration coverage with tautological unit tests.
-- Read vault note `30 Udvikling/Teststrategi.md` and use the executable `./scripts/verify.sh` from the repository root. For durable product invariants, read the relevant Fitness App vault note and `.ai/context` guidance; report unavailable vault access. Use `$fitness-review` when assessing test coverage for a substantial diff.
+- Read vault note `30 Udvikling/Teststrategi.md` and use the executable `./scripts/verify.sh` from the repository root. For durable product invariants, read the relevant Fitness App vault note; report unavailable vault access. Use `$fitness-review` when assessing test coverage for a substantial diff.

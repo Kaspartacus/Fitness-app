@@ -10,7 +10,7 @@ Perform an evidence-based review. Prioritize defects that can change behavior, s
 ## Inputs
 
 - The requested review range or the current branch diff against its actual base.
-- The root and applicable nested `AGENTS.md` files, the relevant Fitness App vault note and `.ai/context` guidance (record unavailable vault access), relevant tests, and available verification output.
+- The root and applicable nested `AGENTS.md` files, the relevant Fitness App vault note (record unavailable vault access), relevant tests, and available verification output.
 
 ## Workflow
 
@@ -24,6 +24,7 @@ Perform an evidence-based review. Prioritize defects that can change behavior, s
    - **Residual risks:** limitations that are real but not necessarily defects in this scope.
 6. Rank findings by impact. Do not manufacture a quota of findings.
 7. If no actionable defects remain, say so and identify the most important unverified areas.
+8. Assess the root `AGENTS.md` **Project knowledge loop** from the diff and available notes or PR handoff. Report stale guidance and unresolved knowledge impact; do not edit notes during review.
 
 ## Guardrails
 
