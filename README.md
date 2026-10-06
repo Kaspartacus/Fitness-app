@@ -1,6 +1,6 @@
 # FitnessApp
 
-FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, account administration and authentication, password reset by email, private strength-program management, and personal running plans and results through the Danish UI.
+FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, account administration and authentication, password reset by email, strength programs, running plans and results, a shared calendar, nutrition logging, and profile/settings through the Danish UI.
 
 This README is the public developer setup and operational guide. The private `Kaspers Vault` Obsidian vault is the source of truth for Fitness App project documentation, including `30 Udvikling/Repository-workflow.md`, `30 Udvikling/Design-evidens.md`, and `20 Arkitektur/Nutrition-implementering.md`. [AGENTS.md](AGENTS.md) is the concise Codex entrypoint; code, configuration, migrations, and tests remain authoritative for implemented behavior.
 
@@ -16,6 +16,8 @@ No Node.js runtime, container engine, or cloud account is required.
 ## Repository structure
 
 The only solution file is `FitnessApp.slnx`. Run commands from the inner `Desktop/Fitness app/Fitness-app` repository directory; the outer `Fitness app` is its container. Other Git worktrees are separate checkouts of this same application, not separate solutions; their default local databases are separate, so do not use them as the ordinary startup folder.
+
+In Codex, set this inner repository as the project's primary folder and start new tasks there. Changing a shell command's working directory does not retroactively load child skills or project configuration into an already-started task. Keep repository skills in `.agents/skills/`; do not copy them into the outer container. See [Codex project folders](https://learn.chatgpt.com/docs/projects) and [skill discovery](https://learn.chatgpt.com/docs/build-skills).
 
 There is one hosted application and one startup project: `FitnessApp.Server`. The Blazor WebAssembly client and ASP.NET Core API run together from the existing server host:
 
@@ -241,6 +243,8 @@ The client attaches the bearer token only to same-origin `/api/` requests and re
 ## Development workflow
 
 Repository-native Codex skills are under `.agents/skills/`, read-only reviewer agents under `.codex/agents/`, and the shared local/CI verification entrypoint is `./scripts/verify.sh`. Their workflow is documented in the private vault note `30 Udvikling/Repository-workflow.md`. Project hooks require explicit review and trust through `/hooks`; the repository does not bypass that protection.
+
+The [Project knowledge loop](AGENTS.md#project-knowledge-loop) governs relevant Obsidian updates during authorized change tasks, including the no-vault fallback and PR handoff. It is not a background synchronizer. A GitHub reviewer does not automatically receive a local vault; `.github/PULL_REQUEST_TEMPLATE.md` carries only the minimum non-sensitive review context and any pending knowledge reconciliation.
 
 ## Verification
 

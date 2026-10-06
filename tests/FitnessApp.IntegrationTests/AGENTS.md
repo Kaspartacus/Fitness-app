@@ -1,6 +1,6 @@
 # Integration-test guidance
 
-This project verifies FitnessApp through the hosted Server using isolated real SQLite databases and the shared test factory.
+This project verifies FitnessApp through the hosted Server using isolated real SQLite databases and the shared test factory. It also contains focused direct Client tests for authentication, nutrition response guards, and settings input behavior.
 
 - Test observable API and persistence behavior, not implementation details. Cover success, denial, invalid input, race/duplicate behavior, and history preservation when relevant.
 - Keep test setup isolated; do not depend on a developer database, external email provider, or a running application process.
