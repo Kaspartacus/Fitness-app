@@ -16,6 +16,11 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Generated build output must not be copied back as application content. -->
+    <Content Remove="bin/**;obj/**" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
