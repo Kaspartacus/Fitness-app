@@ -133,15 +133,7 @@ Planned sessions retain their type, target distance, pace range, and structure s
 
 Starting a non-future planned run records its server timestamp and is safe to repeat; a plan permits only one active, uncompleted run at a time, and a conflicting start takes the runner to that existing run. Cancellation clears only an active, uncompleted start. The active screen derives elapsed time from that recorded source and the current clock; it does not manufacture live distance, pace, heart rate, GPS, maps, background tracking, or sensor data. Recoverable load/save failures preserve entered values and offer Danish retry or cancel paths; a stale plan refreshes its version while preserving the setup draft, and destructive/replacement choices require confirmation. Future calendar days do not imply that a manual result can be registered early.
 
-### Applying the running migration
-
-`20260910221108_AddRunningModule` has been generated and reviewed. It has not been applied to a local database. Apply it deliberately when the environment is ready:
-
-```bash
-dotnet tool run dotnet-ef database update \
-  --project src/FitnessApp.Infrastructure \
-  --startup-project src/FitnessApp.Server
-```
+Running uses the shared EF migration history. Development startup applies pending migrations; other environments use the explicit procedure under [Restore, migrate, and bootstrap](#restore-migrate-and-bootstrap). Applied migration state belongs to each environment and is not recorded in this README.
 
 ## Password reset and email delivery
 
