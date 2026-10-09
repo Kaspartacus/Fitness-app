@@ -19,6 +19,25 @@ The only solution file is `FitnessApp.slnx`. Run commands from the inner `Deskto
 
 In Codex, set this inner repository as the project's primary folder and start new tasks there. Changing a shell command's working directory does not retroactively load child skills or project configuration into an already-started task. Keep repository skills in `.agents/skills/`; do not copy them into the outer container. See [Codex project folders](https://learn.chatgpt.com/docs/projects) and [skill discovery](https://learn.chatgpt.com/docs/build-skills).
 
+### AI workspace layout
+
+The similarly named folders have different native Codex roles; they are not competing harnesses:
+
+| Location | Responsibility |
+| --- | --- |
+| `AGENTS.md` and project/test-level `AGENTS.md` | Short shared rules and relevant layer constraints. |
+| `.agents/skills/<skill>/SKILL.md` | Reusable, task-specific procedures, loaded when selected. |
+| `.agents/skills/<skill>/agents/openai.yaml` | Skill UI metadata, not another executable agent. |
+| `.codex/agents/*.toml` | Specialist definitions: cleanup maintainer and read-only reviewers. |
+| `.codex/hooks.json` and `.codex/hooks/` | Optional, explicitly trusted session-context hook. |
+| Private Obsidian project notes | Durable decisions and project knowledge, not a duplicate procedure catalog. |
+
+Keep both `.agents/skills/` and `.codex/agents/` in these supported locations. There is no active `.ai/` tree; its legacy guidance was consolidated into the native locations and the vault. Git does not track empty directories, so old checkouts may retain empty `.ai` folders. Remove only verified-empty leftovers, never unknown contents. See [Codex skills](https://learn.chatgpt.com/docs/build-skills) and [custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents).
+
+Keep always-loaded guidance small: discover skill names/descriptions first, load only the selected workflow and relevant project notes, and inspect affected paths before widening the search. Do not copy the skill catalog, vault, or a full repository map into `AGENTS.md`. Checkpoints, cleanup state, and recovery archives stay local and ignored under `.codex/`; they are not permanent guidance. The exact-message shortcut `Sæt i gang` routes to the cleanup maintainer through `AGENTS.md`; a longer message containing those words does not trigger it.
+
+### Application layout
+
 There is one hosted application and one startup project: `FitnessApp.Server`. The Blazor WebAssembly client and ASP.NET Core API run together from the existing server host:
 
 ```bash
@@ -234,7 +253,7 @@ The client attaches the bearer token only to same-origin `/api/` requests and re
 
 ## Development workflow
 
-Repository-native Codex skills are under `.agents/skills/`, read-only reviewer agents under `.codex/agents/`, and the shared local/CI verification entrypoint is `./scripts/verify.sh`. Their workflow is documented in the private vault note `30 Udvikling/Repository-workflow.md`. Project hooks require explicit review and trust through `/hooks`; the repository does not bypass that protection.
+Use the [native AI workspace layout](#ai-workspace-layout) and shared local/CI verification entrypoint `./scripts/verify.sh`. The workflow is documented in the private vault note `30 Udvikling/Repository-workflow.md`. Project hooks require explicit review and trust through `/hooks`; the repository does not bypass that protection.
 
 The [Project knowledge loop](AGENTS.md#project-knowledge-loop) governs relevant Obsidian updates during authorized change tasks, including the no-vault fallback and PR handoff. It is not a background synchronizer. A GitHub reviewer does not automatically receive a local vault; `.github/PULL_REQUEST_TEMPLATE.md` carries only the minimum non-sensitive review context and any pending knowledge reconciliation.
 
