@@ -44,4 +44,4 @@ Obsidian owns durable intent, decisions, architecture, behavior explanations, an
 
 When the entire user message is exactly `Sæt i gang`, use `cleanup_maintainer` and `$fitness-cleanup-maintenance`; this authorizes only that workflow's branch, commit, push, and PR—not merge or deployment.
 
-Every feature PR follows `$fitness-pr-review` with task sizing. For standard/large unreviewed PR diffs, `$fitness-pr` posts one `@codex review` trigger after each agent-initiated push; small-only diffs get self-review without automatic AI-review requests unless the user asks. CI stays enabled. Report only demonstrated consequential defects.
+Every feature PR follows `$fitness-pr-review` with task sizing. For standard/large unreviewed PR diffs or an explicit user request for AI review of that PR, `$fitness-pr` posts one `@codex review` trigger per new head after each agent-initiated push. The request covers later heads of the same PR unless withdrawn. Small-only diffs otherwise get self-review without automatic AI-review requests. CI stays enabled. Report only demonstrated consequential defects.
