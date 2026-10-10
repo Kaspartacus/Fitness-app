@@ -25,7 +25,7 @@ Use root task sizing first. The primary agent implements small/standard work its
 6. Derive identity and ownership on the server. Never accept a client-supplied user ID or role as authorization.
 7. Add non-tautological tests for success, denial, invalid data, duplicate/race behavior, and history preservation as relevant.
 8. Assign verification to one owner. Select checks under root guidance and current user constraints; reuse results for unchanged inputs. Use `./scripts/verify.sh verify` for normal code changes and audit only when dependencies/advisory evidence require it, not simply because handoff is approaching.
-9. Exercise changed UI at relevant viewport sizes only when runtime/browser verification is in scope and permitted; report skipped evidence honestly.
+9. Changed UI puts runtime/browser verification in scope by default: exercise affected interactions in the actual HTTPS app at relevant mobile and desktop viewport sizes. Skip only when the required tooling is unavailable or the user explicitly prohibits app/browser execution; report the exact limitation and remaining manual checks. Task size alone does not waive this check.
 10. Remove superseded code paths, unused imports or dependencies, stale tests, obsolete configuration, dead UI, generated output, and temporary tooling in the changed scope. Retain an item only when it has a concrete documented purpose.
 11. Complete the root `AGENTS.md` **Project knowledge loop** against the final diff, including any relevant stale guidance found while implementing. Include its knowledge status in the handoff; task-specific progress belongs only in ignored `.codex/checkpoint.md` when needed.
 
