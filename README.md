@@ -28,13 +28,15 @@ The similarly named folders have different native Codex roles; they are not comp
 | `AGENTS.md` and project/test-level `AGENTS.md` | Short shared rules and relevant layer constraints. |
 | `.agents/skills/<skill>/SKILL.md` | Reusable, task-specific procedures, loaded when selected. |
 | `.agents/skills/<skill>/agents/openai.yaml` | Skill UI metadata, not another executable agent. |
-| `.codex/agents/*.toml` | Specialist definitions: cleanup maintainer and read-only reviewers. |
+| `.codex/agents/*.toml` | Specialist definitions: cleanup maintainer, large-task implementer and read-only reviewers. |
 | `.codex/hooks.json` and `.codex/hooks/` | Optional, explicitly trusted session-context hook. |
 | Private Obsidian project notes | Durable decisions and project knowledge, not a duplicate procedure catalog. |
 
 Keep both `.agents/skills/` and `.codex/agents/` in these supported locations. There is no active `.ai/` tree; its legacy guidance was consolidated into the native locations and the vault. Git does not track empty directories, so old checkouts may retain empty `.ai` folders. Remove only verified-empty leftovers, never unknown contents. See [Codex skills](https://learn.chatgpt.com/docs/build-skills) and [custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents).
 
 Keep always-loaded guidance small: discover skill names/descriptions first, load only the selected workflow and relevant project notes, and inspect affected paths before widening the search. Do not copy the skill catalog, vault, or a full repository map into `AGENTS.md`. Checkpoints, cleanup state, and recovery archives stay local and ignored under `.codex/`; they are not permanent guidance. The exact-message shortcut `Sæt i gang` routes to the cleanup maintainer through `AGENTS.md`; a longer message containing those words does not trigger it.
+
+Task size determines staffing, not a separate Agent OS. The primary agent handles small/standard work; large work separates coordination, implementation and read-only review. The detailed [lean orchestration procedure](.agents/skills/fitness-feature/SKILL.md#lean-orchestration) limits duplicated discovery, context transfer and verification. These are workflow safeguards, not enforced token limits or a measured cost/quality guarantee.
 
 ### Application layout
 
