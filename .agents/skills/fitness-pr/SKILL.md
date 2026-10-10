@@ -24,7 +24,26 @@ Prepare an honest review handoff without expanding the user's authorization.
 7. After creating or updating an open PR, and after every later agent-initiated push to its head branch, post one GitHub PR comment beginning with `@codex review` and including the current Review handoff focus. This starts the separate GitHub/Codex review; it is not direct messaging between Codex threads. Do not post duplicate triggers for the same head SHA.
 8. Read the latest checks and review for the current head rather than relying on older successes. Report pending, failed, or unavailable evidence accurately. Address confirmed findings when the implementation request authorizes fixes, then request review of the new head; never approve your own PR or treat AI review as owner approval.
 9. Merge or deploy only under explicit current authorization and only after stated requirements are satisfied.
-10. A merge does not authorize cleanup. Only with explicit cleanup authorization, inspect worktrees and their ignored local data before removing a verified clean linked checkout. Never remove the primary inner `Desktop/Fitness app/Fitness-app` checkout or its shared `.git`. Preserve unmerged branches and open PRs; branch deletion needs separate authorization and must not discard uncommitted work.
+10. When the task's PR is confirmed merged into main, complete **Branch lifecycle** below. This owner-requested policy authorizes deletion of that completed branch locally and on origin after the safety checks; it does not authorize merging, deleting unrelated branches, removing worktrees, or discarding work.
+
+## Branch lifecycle
+
+For new work, fetch origin and branch from the latest `origin/main` in the existing checkout, preserving unrelated work:
+
+- `feature/<short-kebab-case-description>`: new implementation or planned improvements, including tooling/documentation and behavior-preserving maintenance without a defect.
+- `hotfix/<short-kebab-case-description>`: an important defect already in main requiring immediate correction; keep the fix narrowly scoped.
+- `bugfix/<short-kebab-case-description>`: other unexpected behavior or defects without emergency priority.
+
+Use a unique suffix when needed. Target main for all three; urgency never bypasses review or verification. Do not create new `fix/` or `chore/` branches. Preserve an existing active PR's branch name rather than renaming it mid-review; retire it after merge under the same rules.
+
+At task completion, or the next authorized task that observes its completed PR, perform this cleanup without another routine confirmation:
+
+1. Fetch/prune origin. Verify the exact PR is **merged**, not merely closed, into main. Resolve its head branch and recorded head SHA; never target main, a default/protected branch, another remote, or an unknown ref. Inspect all worktrees and local/remote refs. Confirm no open PR references the branch as head or base; unavailable PR information blocks deletion.
+2. Require every existing target tip to equal the PR's recorded head and be an ancestor of current `origin/main`. A moved/reused branch, additional commits, squash/rebase merge without ancestry proof, or uncertain history is a blocker: preserve it and report the precise reason. Do not infer safety from the branch name or PR state alone.
+3. Preserve staged, unstaged, untracked and ignored user data. If the branch is checked out, require a clean tracked/untracked worktree and prove local main can fast-forward to origin/main before using `git switch --no-overwrite-ignore main` and `git merge --ff-only --no-overwrite-ignore origin/main`. Block on any ignored-file collision in either operation. Never reset, stash automatically, or delete a checkout to make cleanup possible. A branch checked out in another worktree blocks deletion until that checkout is safely handled with separate authorization. Never remove the primary checkout or shared `.git`.
+4. Report the exact local and remote targets. Recheck refs/PRs immediately before mutation. Use `git branch -d <exact-name>` locally, never `-D`. Guard remote deletion atomically with the verified PR-head SHA: `git push --force-with-lease=refs/heads/<exact-name>:<verified-sha> origin --delete <exact-name>`. Here the explicit lease is a compare-and-swap safety guard for deletion, not permission to rewrite history or delete unmerged work. Never fall back to unconditional deletion if the lease fails or is unavailable. Treat an already absent ref as complete; stop on changed evidence or command failure and report partial completion. Fetch/prune after deletion and verify both refs are absent.
+
+Do not run a background watcher or merge to trigger cleanup. If a task ends before merge, report cleanup pending; reconcile at the next task with access. Bulk cleanup of unrelated branches still requires explicit exact-name confirmation under `$fitness-cleanup-maintenance`. Never delete unmerged work or an active PR.
 
 ## Guardrails
 

@@ -13,7 +13,7 @@ Remove only confirmed dead code, unused imports or dependencies, obsolete files 
 
 Before deleting or changing an item, trace its references through source, project files, configuration, scripts, tests, documentation, generated outputs, reflection or convention-based loading, and public/API contracts as applicable. Preserve an item when use, ownership, runtime loading, data impact, or behavioral equivalence cannot be proved.
 
-Never change architecture, functionality, security controls, migrations, database data, approved design, public contracts, or API behavior. Do not introduce features, broad refactors, speculative cleanup, dependency upgrades, or unrelated formatting. Never expose secrets or inspect their values, delete user-owned files, merge, deploy, force-push, reset, or remove the primary checkout or an active worktree. This skill does not authorize worktree or branch deletion; a separate owner-requested folder consolidation must preserve unmerged branches and local data.
+Never change architecture, functionality, security controls, migrations, database data, approved design, public contracts, or API behavior. Do not introduce features, broad refactors, speculative cleanup, dependency upgrades, or unrelated formatting. Never expose secrets or inspect their values, delete user-owned files, merge, deploy, force-push, reset, or remove the primary checkout or an active worktree. Worktree removal needs separate authorization. Branch deletion follows the policy below, including the completed-task exception owned by `$fitness-pr`.
 
 ## Run setup
 
@@ -42,7 +42,7 @@ Do not add source inventories, paths, diffs, secrets, personal data, or PR metad
 
 1. Collect candidates from the selected review range, then prove each candidate unused before changing it. Prefer existing repository cleanup scripts or `dotnet clean` for generated output; do not delete ignored output simply because it is present.
 2. If no candidate survives the evidence check, make no branch, commit, or PR. Complete the applicable verification and port checks below, then record the successfully reviewed base. Report that no tracked changes were necessary and identify anything left unchanged because safety was unproven.
-3. Only when a change is needed and the primary checkout can be switched safely, create a unique `chore/code-cleanup-<suffix>` branch there from the latest fetched `origin/main`. Make the smallest evidence-backed edits there. Create an isolated linked worktree only if the owner explicitly requests it.
+3. Only when a change is needed and the primary checkout can be switched safely, create a unique branch from the latest fetched `origin/main` using `$fitness-pr` **Branch lifecycle** (for example `feature/code-cleanup-<suffix>` for behavior-preserving maintenance). This naming does not authorize product features. Make the smallest evidence-backed edits there. Create an isolated linked worktree only if the owner explicitly requests it.
 4. Keep the existing hosted modular-monolith startup approach. Confirm that documentation has the canonical complete local startup command, `dotnet run --project src/FitnessApp.Server --launch-profile https`, rather than adding another host or startup project.
 5. Follow root `AGENTS.md` and the current user's verification constraints. For code/build changes, run a short solution build with build servers disabled and only directly relevant tests. For instruction/documentation-only changes, validate affected syntax, references, and workflow decisions; no build or tests are required. For a no-change run, reuse applicable successful verification for the reviewed tree or check the affected areas proportionately. Record skipped checks honestly. Do not start the application to verify cleanup, and do not leave application servers, file watchers, test hosts, or background build processes running.
 6. Check the derived listener ports again after cleanup. If this run started no application process, report their observed status; do not stop anything without the same command, working-directory, and owner proof.
@@ -55,7 +55,7 @@ Inspect local and remote branches as part of every run. You may identify branche
 
 When useful, report each candidate with its branch name, local or remote scope, last commit SHA, last commit date, whether it is fully merged into `origin/main`, whether an open PR references it, and a recommended action. Use Git and GitHub read-only queries; do not infer open-PR status from a missing local tracking branch.
 
-Never delete branches during ordinary cleanup. Branch deletion is permitted only when the user explicitly requests branch cleanup. Before any deletion:
+For the task's own PR already merged into main, follow `$fitness-pr` **Branch lifecycle** for required local/remote deletion and its safety checks; no repeated routine confirmation is needed. This is not permission to sweep unrelated branches. For all other candidates, deletion requires an explicit branch-cleanup request. Before any such bulk/unrelated deletion:
 
 1. Fetch and prune `origin` again; verify the current branch list and PR state.
 2. Confirm every target is not `main`, resolves to known history, and is fully merged into the current `origin/main`.
