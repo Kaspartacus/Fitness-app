@@ -30,6 +30,7 @@ Obsidian owns durable intent, decisions, architecture, behavior explanations, an
 
 ## Local maps and procedures
 
+- Use `feature/` for new implementation, `hotfix/` for urgent defects in main, and `bugfix/` for other unexpected behavior. Follow `$fitness-pr` **Branch lifecycle** for naming and required safe local/remote deletion after merge; never delete main or unfinished work.
 - `.agents/skills/` owns procedures; `.codex/agents/` owns specialist roles. Use read-only `reviewer` for substantial diffs; add `security-reviewer` for authentication, authorization, ownership, private-data collection/export/retention/exposure, secrets, logging, dependencies, configuration, or deployment.
 - Use `./scripts/verify.sh` proportionately. Markdown-only changes need static checks, not app/build execution. Current task restrictions override skill defaults; record skipped checks and leave CI enabled.
 

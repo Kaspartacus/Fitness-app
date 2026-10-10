@@ -253,6 +253,8 @@ The client attaches the bearer token only to same-origin `/api/` requests and re
 
 ## Development workflow
 
+New work uses `feature/<description>`, urgent fixes to main use `hotfix/<description>`, and other unexpected behavior uses `bugfix/<description>`. The single detailed policy is [Branch lifecycle](.agents/skills/fitness-pr/SKILL.md#branch-lifecycle), including maintenance naming and safe retirement of existing legacy names. After a task's PR merges into main, Codex deletes its completed branch locally and on origin when it observes the merge and verifies safety. No watcher is installed: if the task ended before merge, cleanup remains pending until the next task. Main, unfinished work, active PRs, and uncertain history are preserved and reported rather than force-deleted.
+
 Use the [native AI workspace layout](#ai-workspace-layout) and shared local/CI verification entrypoint `./scripts/verify.sh`. The workflow is documented in the private vault note `30 Udvikling/Repository-workflow.md`. Project hooks require explicit review and trust through `/hooks`; the repository does not bypass that protection.
 
 The [Project knowledge loop](AGENTS.md#project-knowledge-loop) governs relevant Obsidian updates during authorized change tasks, including the no-vault fallback and PR handoff. It is not a background synchronizer. A GitHub reviewer does not automatically receive a local vault; `.github/PULL_REQUEST_TEMPLATE.md` carries only the minimum non-sensitive review context and any pending knowledge reconciliation.

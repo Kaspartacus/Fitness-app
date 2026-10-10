@@ -15,7 +15,7 @@ Deliver one reviewable vertical slice without prebuilding future architecture.
 
 ## Workflow
 
-1. Start in the inner `Desktop/Fitness app/Fitness-app` checkout, confirm its Git root and status, and inspect relevant code before proposing abstractions. Use a branch there; do not create a sibling worktree unless the owner explicitly requests isolation. Preserve unrelated and in-progress work.
+1. Start in the inner `Desktop/Fitness app/Fitness-app` checkout, confirm its Git root and status, and inspect relevant code before proposing abstractions. Select a branch using `$fitness-pr` **Branch lifecycle**; do not create a sibling worktree unless the owner explicitly requests isolation. Preserve unrelated and in-progress work.
 2. Translate the request into observable acceptance criteria. Ask only when a missing decision would materially change scope, security, or stored data; make routine implementation choices yourself.
 3. Inspect the relevant current design source. Record whether the result is directly verified, a consistent extension, or unavailable evidence.
 4. Trace the slice through the existing `FitnessApp.slnx` projects. Keep HTTP contracts in Contracts, orchestration contracts in Application, business rules in Domain, persistence in Infrastructure, composition and APIs in the one Server host, and UI in Client. Do not add a feature-specific solution or host.
