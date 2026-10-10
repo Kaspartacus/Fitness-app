@@ -11,7 +11,7 @@ Review one feature PR without changing its branch, repository configuration, vau
 
 1. Read the PR description, base and head refs, changed files, CI status, and diff against the PR base. Record unavailable evidence rather than guessing.
 2. Read the root `AGENTS.md` and only nested guidance governing changed paths. Follow the root **Project knowledge loop** in read-only mode: consult relevant vault notes when accessible, otherwise use the PR's **Project knowledge** handoff and repository evidence. Report missing intent or pending reconciliation, not invented access. Inspect direct code and tests needed to understand changed behavior.
-3. Only the coordinating task delegates: use the read-only `reviewer`; add `security-reviewer` for the sensitive scopes listed in root `AGENTS.md`, including private user data. A delegated reviewer inspects its assigned scope and returns findings to the coordinator without spawning further agents or issuing the final readiness decision. Evidence collection and the consolidated handoff belong to the coordinator; no additional explorer agent is needed.
+3. Follow root `AGENTS.md` task sizing for the whole unreviewed diff. Small: the primary agent reviews directly, with no subagents. Standard: delegate one bounded review only when a concrete risk justifies it. Large: split useful independent review scopes within the root concurrency limit. Use `reviewer` or `security-reviewer` according to the actual risk; do not duplicate their scopes. Only the coordinator delegates, gathers evidence and consolidates the decision; delegated reviewers return findings without further delegation. No additional explorer agent is needed.
 
 ## GitHub handoff
 
