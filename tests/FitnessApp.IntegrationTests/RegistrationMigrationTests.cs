@@ -66,7 +66,7 @@ public sealed class RegistrationMigrationTests
             Assert.Contains("CompletionId", await ReadColumnsAsync(databasePath, "CompletedWorkouts"));
             Assert.Contains("ScheduledOccurrenceDate", await ReadColumnsAsync(databasePath, "CompletedWorkouts"));
             Assert.Contains("TargetDate", await ReadColumnsAsync(databasePath, "CalendarOccurrenceMoves"));
-            Assert.Contains("TrainingRemindersEnabled", await ReadColumnsAsync(databasePath, "UserSettings"));
+            Assert.Contains("RunningNotificationsEnabled", await ReadColumnsAsync(databasePath, "UserSettings"));
             Assert.Contains("SourceKey", await ReadColumnsAsync(databasePath, "InAppNotifications"));
             Assert.Contains("CreatedFromDate", await ReadColumnsAsync(databasePath, "NutritionRecipes"));
             Assert.Contains("RequestId", await ReadColumnsAsync(databasePath, "NutritionRecipeAdditions"));

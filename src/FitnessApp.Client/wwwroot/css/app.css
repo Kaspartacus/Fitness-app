@@ -1221,3 +1221,13 @@ a:focus-visible {
     .settings-main-header, .settings-page-header { width: min(100%, 42rem); margin-inline: auto; }
     .settings-profile-card { margin-bottom: 2.25rem; }
 }
+
+/* Header notifications extend the existing profile control and shared centred modal. */
+.header-profile-actions { display: flex; align-items: center; gap: .4rem; flex-shrink: 0; }
+.notification-bell { position: relative; cursor: pointer; }
+.notification-bell .settings-notification-count { position: absolute; right: -3px; top: -3px; }
+.notification-timezone { display: block; width: 100%; max-width: 24rem; padding: .75rem; margin: .5rem 0; background: #182235; color: inherit; border: 1px solid #344155; border-radius: .6rem; }
+.settings-notification-copy p { white-space: normal; overflow-wrap: anywhere; }
+.settings-notification-card { min-width: 0; }
+.settings-notification-meta { flex-shrink: 0; font-size: .7rem; }
+@media (max-width: 390px) { .header-profile-actions { gap: .15rem; } .settings-notification-card { flex-wrap: wrap; } }

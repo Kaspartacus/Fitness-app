@@ -55,7 +55,8 @@ public static class DependencyInjection
         services.AddScoped<INutritionService, NutritionService>();
         services.AddScoped<FridaImportService>();
         services.AddScoped<ISettingsService, SettingsService>();
-        services.AddScoped<InAppNotificationGenerator>();
+        services.AddScoped<FitnessApp.Application.Notifications.INotificationService, FitnessApp.Infrastructure.Notifications.NotificationService>();
+        services.AddScoped<FitnessApp.Infrastructure.Notifications.NotificationScheduler>();
         services.AddScoped<IAuthenticationService, AuthenticationService>();
         services.AddScoped<IAdminBootstrapper, AdminBootstrapper>();
         services.AddScoped<IRegistrationService, RegistrationService>();

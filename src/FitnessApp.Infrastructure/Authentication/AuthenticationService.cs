@@ -114,6 +114,7 @@ internal sealed class AuthenticationService(
             return false;
         }
 
+        await dbContext.WebPushSubscriptions.Where(x => x.UserId == userId && x.SessionId == sessionId).ExecuteDeleteAsync(cancellationToken);
         session.RevokedAt = timeProvider.GetUtcNow();
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;

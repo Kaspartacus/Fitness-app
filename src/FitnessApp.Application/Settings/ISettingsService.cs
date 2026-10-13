@@ -14,9 +14,12 @@ public sealed record ProfileSettingsData(
     NutritionGoalsData NutritionGoals);
 
 public sealed record NotificationPreferencesData(
-    bool TrainingRemindersEnabled,
-    bool AdminRequestNotificationsEnabled,
-    bool IsAdministrator);
+    bool RunningNotificationsEnabled,
+    bool StrengthNotificationsEnabled,
+    bool MealRemindersEnabled,
+    bool NutritionProgressEnabled,
+    bool DetailedPushPreviews,
+    string TimeZoneId);
 
 public sealed record GarminMockConnectionData(
     bool IsConnected,
@@ -41,8 +44,12 @@ public sealed record UpdateNutritionGoalsInput(
     decimal? SugarTargetGrams);
 
 public sealed record UpdateNotificationPreferencesInput(
-    bool TrainingRemindersEnabled,
-    bool AdminRequestNotificationsEnabled);
+    bool RunningNotificationsEnabled,
+    bool StrengthNotificationsEnabled,
+    bool MealRemindersEnabled,
+    bool NutritionProgressEnabled,
+    bool DetailedPushPreviews,
+    string TimeZoneId);
 
 public enum SettingsSaveStatus
 {
@@ -76,12 +83,6 @@ public sealed record InAppNotificationData(
     DateTimeOffset CreatedAt,
     DateTimeOffset? ReadAt);
 
-public enum NotificationReadStatus
-{
-    Read,
-    NotFound
-}
-
 public interface ISettingsService
 {
     Task<SettingsOverviewData?> GetOverviewAsync(
@@ -113,14 +114,4 @@ public interface ISettingsService
         string userId,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyCollection<InAppNotificationData>> GetNotificationsAsync(
-        string userId,
-        bool isAdministrator,
-        CancellationToken cancellationToken);
-
-    Task<NotificationReadStatus> MarkNotificationReadAsync(
-        string userId,
-        bool isAdministrator,
-        Guid notificationId,
-        CancellationToken cancellationToken);
 }

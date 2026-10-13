@@ -78,7 +78,27 @@ public sealed class ClientAuthenticationTests
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Null(authenticationState.AccessToken);
-        Assert.Equal("https://fitness.test/login", navigation.Uri);
+        Assert.Equal("https://fitness.test/login?returnUrl=%2F", navigation.Uri);
+    }
+
+    [Fact]
+    public async Task LaterUnauthorizedResponsePreservesNotificationLoginDestination()
+    {
+        var state = CreateAuthenticatedState();
+        var navigation = new TestNavigationManager();
+        var destination = "/notifikationer/11111111-1111-1111-1111-111111111111";
+        navigation.NavigateTo(destination);
+        using var handler = new ApiAuthorizationHandler(state, navigation)
+        {
+            InnerHandler = new StubHttpMessageHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized)))
+        };
+        using var client = new HttpClient(handler) { BaseAddress = new Uri(navigation.BaseUri) };
+
+        using var first = await client.GetAsync("api/notifications/unread");
+        var loginDestination = navigation.Uri;
+        Assert.Equal("https://fitness.test/login?returnUrl=" + Uri.EscapeDataString(destination), loginDestination);
+        using var later = await client.GetAsync("api/notifications");
+        Assert.Equal(loginDestination, navigation.Uri);
     }
 
     [Fact]

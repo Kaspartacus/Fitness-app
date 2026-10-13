@@ -1,247 +1,180 @@
 @page "/indstillinger/notifikationer"
 @attribute [Authorize]
-@using System.Globalization
 @using FitnessApp.Client.Settings
 @using FitnessApp.Contracts.Settings
+@using FitnessApp.Contracts.Notifications
 @inject SettingsClient SettingsApi
-@inject NavigationManager Navigation
+@inject NotificationClient Notifications
+@inject IJSRuntime JS
 
 <PageTitle>Notifikationer</PageTitle>
-
 <main class="strength-app settings-app strength-with-bottom-nav" aria-labelledby="notifications-title">
     <header class="strength-back-header settings-page-header">
-        <a class="strength-icon-button" href="/indstillinger" aria-label="Tilbage til indstillinger" title="Tilbage til indstillinger">←</a>
-        <div>
-            <p class="strength-overline">App</p>
-            <h1 id="notifications-title">Notifikationer</h1>
-        </div>
-        <span class="strength-header-spacer" aria-hidden="true"></span>
+        <a class="strength-icon-button" href="/indstillinger" aria-label="Tilbage til indstillinger">←</a>
+        <div><p class="strength-overline">App</p><h1 id="notifications-title">Notifikationer</h1></div>
+        <NotificationBell />
     </header>
-
     <div class="settings-page-content">
-        @if (isLoading)
+        @if (loading) { <p role="status">Indlæser indstillinger…</p> }
+        @if (error is not null) { <p class="strength-field-error" role="alert">@error</p><button class="strength-secondary-button" @onclick="LoadAsync" disabled="@busy">Prøv igen</button> }
+        @if (preferences is { } p)
         {
-            <p class="strength-feedback" role="status">Indlæser notifikationer…</p>
-        }
-        else if (loadError is not null)
-        {
-            <section class="strength-status-card" role="alert">
-                <p>@loadError</p>
-                <button class="strength-secondary-button" type="button" @onclick="LoadAsync" disabled="@isSavingPreferences">Prøv igen</button>
-            </section>
-        }
-        else if (preferences is { } currentPreferences)
-        {
-            <p class="settings-notification-explainer">Notifikationer vises i FitnessApp, mens du bruger appen. De leveres ikke som browser-push eller e-mail, når appen er lukket.</p>
-
-            <section class="settings-section" aria-labelledby="notification-preferences-title">
-                <p class="strength-overline" id="notification-preferences-title">Påmindelser</p>
+            <p>Vælg beskeder til indbakken og telefonen. Klokken øverst åbner indbakken. Tidspunkterne følger din tidszone; levering kan blive forsinket af telefonen.</p>
+            <section class="settings-section" aria-label="Notifikationskategorier">
                 <div class="settings-toggle-list">
-                    <label class="settings-toggle-row">
-                        <span class="settings-toggle-copy">
-                            <strong>Træningspåmindelser</strong>
-                            <span>Vis en besked i appen, når du har planlagt løb eller styrketræning på dagen.</span>
-                        </span>
-                        <span class="settings-switch">
-                            <input type="checkbox" checked="@currentPreferences.TrainingRemindersEnabled" @onchange="args => SavePreferencesAsync(true, args)" disabled="@isSavingPreferences" aria-label="Træningspåmindelser" />
-                            <span aria-hidden="true"></span>
-                        </span>
-                    </label>
-                    @if (currentPreferences.IsAdministrator)
+                    @foreach (var row in Rows(p))
                     {
                         <label class="settings-toggle-row">
-                            <span class="settings-toggle-copy">
-                                <strong>Nye brugeranmodninger</strong>
-                                <span>Vis en besked i appen, når der venter en ny registrering til behandling.</span>
-                            </span>
-                            <span class="settings-switch">
-                                <input type="checkbox" checked="@currentPreferences.AdminRequestNotificationsEnabled" @onchange="args => SavePreferencesAsync(false, args)" disabled="@isSavingPreferences" aria-label="Nye brugeranmodninger" />
-                                <span aria-hidden="true"></span>
-                            </span>
+                            <span class="settings-toggle-copy"><strong>@row.Title</strong><span>@row.Description</span></span>
+                            <span class="settings-switch"><input type="checkbox" checked="@row.Enabled" disabled="@busy" @onchange="e => SaveToggleAsync(row.Key, e)" /><span aria-hidden="true"></span></span>
                         </label>
                     }
+                    <label class="settings-toggle-row is-unavailable">
+                        <span class="settings-toggle-copy"><strong>Dagbog · Kommer snart</strong><span>Planlagt til kl. 20.00. Ingen påmindelser sendes, før dagbogen findes.</span></span>
+                        <span class="settings-switch"><input type="checkbox" disabled aria-label="Dagbogspåmindelser kommer snart" /><span aria-hidden="true"></span></span>
+                    </label>
                 </div>
-                @if (preferencesError is not null)
-                {
-                    <p class="strength-field-error" role="alert">@preferencesError</p>
-                }
-                @if (preferencesMessage is not null)
-                {
-                    <p class="settings-save-status" role="status">@preferencesMessage</p>
-                }
+                <label for="notification-timezone">Tidszone</label>
+                <input id="notification-timezone" class="notification-timezone" @bind="timeZone" list="notification-timezones" disabled="@busy" />
+                <datalist id="notification-timezones"><option value="Europe/Copenhagen" /><option value="Europe/London" /><option value="America/New_York" /></datalist>
+                <button class="strength-secondary-button" disabled="@busy" @onclick="SaveZoneAsync">Gem tidszone</button>
+                <p>Standard: Europe/Copenhagen. Sommer- og vintertid følger tidszonen.</p>
             </section>
-
-            <section class="settings-section" aria-labelledby="notification-unavailable-title">
-                <p class="strength-overline" id="notification-unavailable-title">Ikke tilgængeligt</p>
-                <div class="settings-info-card">
-                    <h2>Browser-push og e-mail</h2>
-                    <p>Browser-push og e-mailnotifikationer er ikke en del af denne version. Aktivering af en kontakt her ændrer derfor ikke noget uden for appen.</p>
-                </div>
-            </section>
-
-            <section class="settings-section" aria-labelledby="notification-list-title">
-                <p class="strength-overline" id="notification-list-title">I appen</p>
-                @if (actionError is not null)
-                {
-                    <p class="strength-field-error" role="alert">
-                        @actionError
-                        @if (notificationToRetry is not null)
-                        {
-                            <button class="strength-text-action" type="button" @onclick="RetryNotificationAsync">Prøv igen</button>
-                        }
-                    </p>
-                }
-                @if (notifications.Count == 0)
-                {
-                    <section class="strength-empty-state">
-                        <span class="settings-empty-icon" aria-hidden="true">✓</span>
-                        <h2>Ingen notifikationer endnu</h2>
-                        <p>Nye træningspåmindelser og relevante administratorbeskeder vises her.</p>
-                    </section>
-                }
+            <section class="settings-section" aria-labelledby="phone-title">
+                <h2 id="phone-title">Telefonnotifikationer på denne enhed</h2>
+                <button class="strength-text-action" @onclick="RefreshDeviceAsync" disabled="@busy">Opdater telefonstatus</button>
+                <p>Indbakken virker også med telefonnotifikationer slået fra. Dine tidligere beskeder bevares.</p>
+                @if (browser is null) { <p role="status">Kontrollerer browseren…</p> }
                 else
                 {
-                    <div class="settings-notification-list" aria-label="Dine notifikationer">
-                        @foreach (var notification in notifications)
-                        {
-                            <a class="settings-notification-card @(notification.ReadAt is null ? "is-unread" : null)"
-                               href="@notification.TargetPath" @onclick="() => OpenNotificationAsync(notification)" @onclick:preventDefault="true">
-                                <span class="settings-notification-copy">
-                                    <strong>@notification.Title</strong>
-                                    <p>@notification.Message</p>
-                                </span>
-                                <span class="settings-notification-meta @(notification.ReadAt is null ? "is-unread" : null)">
-                                    @(notification.ReadAt is null ? "Ny" : "Læst")<br />@FormatTimestamp(notification.CreatedAt)
-                                </span>
-                            </a>
-                        }
-                    </div>
+                    <p role="status">@PhoneStatus</p>
+                    @if (device is { Configured: false }) { <p>Telefonnotifikationer er ikke konfigureret på serveren endnu.</p> }
+                    <button class="strength-secondary-button" @onclick="EnableAsync" disabled="@(busy || device is not { Configured: true } || !browser.Supported || browser.Permission == "denied" || browser.Ios && !browser.Installed)">Slå til på denne enhed</button>
+                    <button class="strength-secondary-button" @onclick="DisableAsync" disabled="@(busy || browser.Binding is null)">Slå fra på denne enhed</button>
+                    <button class="strength-secondary-button" @onclick="TestAsync" disabled="@(busy || device is not { Subscribed: true })">Send testnotifikation</button>
+                    <p>Højst én test pr. fem minutter. En test i indbakken er ikke en bekræftelse på telefonens levering.</p>
                 }
+                <label class="settings-toggle-row">
+                    <span class="settings-toggle-copy"><strong>Vis detaljer på låseskærmen</strong><span>Slået fra som standard. Vis ellers kort trænings- eller kostinformation. Hele kostoversigten findes altid i den beskyttede indbakke.</span></span>
+                    <span class="settings-switch"><input type="checkbox" checked="@p.DetailedPushPreviews" disabled="@busy" @onchange="SavePreviewAsync" /><span aria-hidden="true"></span></span>
+                </label>
+                <p>På iPhone: Åbn i Safari, tryk Del → Føj til hjemmeskærm. Åbn derefter FitnessApp fra hjemmeskærmen og slå telefonnotifikationer til her (iOS 16.4 eller nyere).</p>
+                <p>På Android eller computer kan du installere appen via browserens menu. Internet, tilladelse og en tilgængelig server er nødvendige. Fokus, batterisparefunktioner og operativsystemet kan forsinke eller blokere levering.</p>
+                <p>Ved logout eller nyt login slås denne enheds tilmelding fra. Tilmeld igen efter login. En lukket app stopper ikke tilmeldingen.</p>
             </section>
         }
+        @if (actionError is not null) { <p class="strength-field-error" role="alert">@actionError</p> }
+        @if (message is not null) { <p role="status">@message</p> }
     </div>
-
     <StrengthBottomNavigation Active="settings" />
 </main>
 
 @code {
     private NotificationPreferencesResponse? preferences;
-    private IReadOnlyCollection<InAppNotificationResponse> notifications = [];
-    private bool isLoading = true;
-    private bool isSavingPreferences;
-    private Guid? notificationToRetry;
-    private string? loadError;
-    private string? preferencesError;
-    private string? preferencesMessage;
-    private string? actionError;
-
+    private BrowserPushState? browser;
+    private PushDeviceResponse? device;
+    private bool loading = true, busy;
+    private string timeZone = "Europe/Copenhagen";
+    private string? error, actionError, message;
     protected override Task OnInitializedAsync() => LoadAsync();
-
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) { await RefreshDeviceAsync(); StateHasChanged(); } }
     private async Task LoadAsync()
     {
-        if (isLoading && preferences is not null || isSavingPreferences)
-        {
-            return;
-        }
-
-        isLoading = true;
-        loadError = null;
-        var overviewResult = await SettingsApi.GetOverviewAsync();
-        if (!overviewResult.Succeeded || overviewResult.Value is null)
-        {
-            isLoading = false;
-            loadError = overviewResult.Error ?? "Notifikationsindstillingerne kunne ikke indlæses. Prøv igen.";
-            return;
-        }
-
-        preferences = overviewResult.Value.NotificationPreferences;
-        var notificationResult = await SettingsApi.GetNotificationsAsync();
-        isLoading = false;
-        if (!notificationResult.Succeeded || notificationResult.Value is null)
-        {
-            loadError = notificationResult.Error ?? "Notifikationerne kunne ikke indlæses. Prøv igen.";
-            return;
-        }
-
-        notifications = notificationResult.Value.Notifications
-            .OrderByDescending(notification => notification.CreatedAt)
-            .ToArray();
-        preferencesError = null;
-        preferencesMessage = null;
-        actionError = null;
-        notificationToRetry = null;
+        loading = true; error = null;
+        var result = await SettingsApi.GetOverviewAsync();
+        if (result.Succeeded && result.Value is { } value) { preferences = value.NotificationPreferences; timeZone = preferences.TimeZoneId; }
+        else error = result.Error;
+        loading = false;
     }
-
-    private async Task SavePreferencesAsync(bool updateTrainingReminders, ChangeEventArgs args)
+    private static (string Key, string Title, string Description, bool Enabled)[] Rows(NotificationPreferencesResponse p) => [
+        ("run", "Løb", "Dagens planlagte løb kl. 07.00.", p.RunningNotificationsEnabled),
+        ("strength", "Styrketræning", "Dagens planlagte styrketræning kl. 07.00.", p.StrengthNotificationsEnabled),
+        ("meal", "Måltidspåmindelser", "Morgenmad kl. 10.00, frokost kl. 14.00 og aftensmad kl. 19.30, hvis måltidet er tomt.", p.MealRemindersEnabled),
+        ("progress", "Kostoversigt", "Kl. 10.00, 14.00 og 19.30, når måltidet er registreret, og der er tilføjet ny mad siden sidste oversigt.", p.NutritionProgressEnabled) ];
+    private Task SaveToggleAsync(string key, ChangeEventArgs args)
     {
-        if (isSavingPreferences || preferences is null)
-        {
-            return;
-        }
-
-        var enabled = args.Value is bool checkedValue && checkedValue;
-        var previous = preferences;
-        var request = updateTrainingReminders
-            ? new UpdateNotificationPreferencesRequest(enabled, preferences.AdminRequestNotificationsEnabled)
-            : new UpdateNotificationPreferencesRequest(preferences.TrainingRemindersEnabled, enabled);
-
-        preferences = updateTrainingReminders
-            ? preferences with { TrainingRemindersEnabled = enabled }
-            : preferences with { AdminRequestNotificationsEnabled = enabled };
-        isSavingPreferences = true;
-        preferencesError = null;
-        preferencesMessage = null;
-        var result = await SettingsApi.UpdateNotificationPreferencesAsync(request);
-        isSavingPreferences = false;
-        if (!result.Succeeded || result.Value is null)
-        {
-            preferences = previous;
-            preferencesError = result.Error ?? "Indstillingen kunne ikke gemmes. Prøv igen.";
-            return;
-        }
-
-        preferences = result.Value;
-        preferencesMessage = "Notifikationsindstillingerne er gemt.";
+        if (preferences is null) return Task.CompletedTask;
+        var enabled = args.Value is true;
+        var next = key switch {
+            "run" => preferences with { RunningNotificationsEnabled = enabled }, "strength" => preferences with { StrengthNotificationsEnabled = enabled },
+            "meal" => preferences with { MealRemindersEnabled = enabled }, "progress" => preferences with { NutritionProgressEnabled = enabled },
+            _ => preferences with { DetailedPushPreviews = enabled } };
+        return SaveAsync(next);
     }
-
-    private Task OpenNotificationAsync(InAppNotificationResponse notification) => NavigateFromNotificationAsync(notification);
-
-    private async Task RetryNotificationAsync()
+    private Task SavePreviewAsync(ChangeEventArgs args) => SaveToggleAsync("preview", args);
+    private Task SaveZoneAsync() => preferences is null ? Task.CompletedTask : SaveAsync(preferences with { TimeZoneId = timeZone.Trim() });
+    private async Task SaveAsync(NotificationPreferencesResponse next)
     {
-        if (notificationToRetry is not { } id)
+        if (busy) return;
+        busy = true; actionError = null; message = null;
+        var result = await SettingsApi.UpdateNotificationPreferencesAsync(new(next.RunningNotificationsEnabled, next.StrengthNotificationsEnabled,
+            next.MealRemindersEnabled, next.NutritionProgressEnabled, next.DetailedPushPreviews, next.TimeZoneId));
+        if (result.Succeeded && result.Value is { } saved)
         {
-            return;
+            preferences = saved; timeZone = saved.TimeZoneId; message = "Indstillingerne er gemt.";
+            try { await JS.InvokeVoidAsync("fitnessPush.previews", saved.DetailedPushPreviews); }
+            catch (JSException) { actionError = "Telefonens forhåndsvisning kunne ikke opdateres. Slå telefonnotifikationer fra og til igen."; }
         }
-
-        var notification = notifications.FirstOrDefault(item => item.Id == id);
-        if (notification is not null)
-        {
-            await NavigateFromNotificationAsync(notification);
-        }
+        else actionError = result.Error;
+        busy = false;
     }
-
-    private async Task NavigateFromNotificationAsync(InAppNotificationResponse notification)
+    private async Task RefreshDeviceAsync()
     {
-        if (notification.ReadAt is null)
+        try
         {
-            actionError = null;
-            notificationToRetry = notification.Id;
-            var result = await SettingsApi.MarkNotificationReadAsync(notification.Id);
-            if (!result.Succeeded)
+            browser = await JS.InvokeAsync<BrowserPushState>("fitnessPush.status");
+            var result = await Notifications.DeviceAsync(browser.Binding);
+            device = result.Value;
+            if (!result.Succeeded) actionError = result.Error;
+        }
+        catch (JSException) { actionError = "Telefonstatus kunne ikke indlæses. Genindlæs siden og prøv igen."; }
+    }
+    private async Task EnableAsync()
+    {
+        if (busy || device?.PublicKey is not { } key) return;
+        busy = true; actionError = null; message = null;
+        try
+        {
+            // Permission is requested by this explicit click, before any network request.
+            var subscription = await JS.InvokeAsync<SubscribePushRequest>("fitnessPush.enable", key, preferences?.DetailedPushPreviews == true);
+            var result = await Notifications.SubscribeAsync(subscription);
+            if (!result.Succeeded) { await JS.InvokeVoidAsync("fitnessPush.clear"); actionError = result.Error; }
+            else message = "Telefonnotifikationer er slået til på denne enhed.";
+        }
+        catch (JSException) { actionError = "Tilmelding blev ikke gennemført. Kontrollér tilladelsen og hjemmeskærmsinstallationen, og prøv igen."; }
+        await RefreshDeviceAsync(); busy = false;
+    }
+    private async Task DisableAsync()
+    {
+        if (busy) return;
+        busy = true; actionError = null; message = null;
+        var binding = browser?.Binding;
+        try
+        {
+            await JS.InvokeVoidAsync("fitnessPush.clear");
+            if (binding is not null)
             {
-                actionError = result.Error ?? "Notifikationen kunne ikke markeres som læst. Prøv igen.";
-                return;
+                var result = await Notifications.UnsubscribeAsync(binding);
+                if (!result.Succeeded) actionError = result.Error;
             }
-
-            notifications = notifications
-                .Select(item => item.Id == notification.Id ? item with { ReadAt = DateTimeOffset.UtcNow } : item)
-                .ToArray();
-            notificationToRetry = null;
+            message = "Telefonnotifikationer er slået fra på denne enhed.";
         }
-
-        Navigation.NavigateTo(notification.TargetPath);
+        catch (JSException) { actionError = "Enhedens tilmelding kunne ikke fjernes. Prøv igen."; }
+        await RefreshDeviceAsync(); busy = false;
     }
-
-    private static string FormatTimestamp(DateTimeOffset timestamp) =>
-        timestamp.ToLocalTime().ToString("d. MMM", CultureInfo.GetCultureInfo("da-DK"));
+    private async Task TestAsync()
+    {
+        if (busy || browser?.Binding is not { } binding) return;
+        busy = true; actionError = null; message = null;
+        var result = await Notifications.TestAsync(binding);
+        if (result.Succeeded) message = "Testen er sat i kø. Kontrollér telefonens notifikationer.";
+        else actionError = result.Error;
+        busy = false;
+    }
+    private string PhoneStatus => browser is null ? "" : !browser.Supported ? "Denne browser understøtter ikke telefonnotifikationer." :
+        browser.Ios && !browser.Installed ? "Installer først FitnessApp på hjemmeskærmen." :
+        browser.Permission == "denied" ? "Tilladelsen er blokeret. Åbn telefonens eller browserens indstillinger for at ændre den." :
+        device?.Subscribed == true && browser.Subscribed ? "Tilladelse givet · denne enhed er tilmeldt." :
+        browser.Permission == "granted" ? "Tilladelse givet · denne enhed er ikke tilmeldt denne session." : "Tilladelse er ikke givet endnu.";
+    private sealed record BrowserPushState(bool Supported, bool Ios, bool Installed, string Permission, bool Subscribed, string? Binding);
 }

@@ -5,7 +5,7 @@
     {
         if (!Navigation.Uri.EndsWith("/login", StringComparison.Ordinal))
         {
-            Navigation.NavigateTo("/login", replace: true);
+            Navigation.NavigateTo(SafeReturnPath.LoginUrl(Navigation.Uri), replace: true);
         }
     }
 }

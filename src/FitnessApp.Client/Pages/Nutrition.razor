@@ -194,9 +194,11 @@
     private CancellationTokenSource? searchCts;
 
     [SupplyParameterFromQuery(Name = "dato")] public string? RequestedDate { get; set; }
+    [SupplyParameterFromQuery(Name = "maaltid")] public string? RequestedMeal { get; set; }
 
     protected override Task OnParametersSetAsync()
     {
+        if (Enum.TryParse<NutritionMealSlot>(RequestedMeal, out var requestedMeal) && Enum.IsDefined(requestedMeal)) openSlot = requestedMeal;
         var nextDate = RunningPresentation.CopenhagenToday;
         if (DateOnly.TryParseExact(RequestedDate, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var requested))
         {

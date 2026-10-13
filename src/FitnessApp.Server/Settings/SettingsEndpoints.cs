@@ -10,7 +10,7 @@ internal static class SettingsEndpoints
 {
     public static IEndpointRouteBuilder MapSettingsEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/api/settings").RequireAuthorization();
+        var group = endpoints.MapGroup("/api/settings").RequireAuthorization().RequireRateLimiting("notifications");
 
         group.MapGet("", GetOverviewAsync);
         group.MapPut("/profile", UpdateProfileAsync);
@@ -18,8 +18,6 @@ internal static class SettingsEndpoints
         group.MapPut("/notification-preferences", UpdateNotificationPreferencesAsync);
         group.MapPost("/garmin-demo/connect", ConnectGarminDemoAsync);
         group.MapPost("/garmin-demo/disconnect", DisconnectGarminDemoAsync);
-        group.MapGet("/notifications", GetNotificationsAsync);
-        group.MapPost("/notifications/{notificationId:guid}/read", MarkNotificationReadAsync);
 
         return endpoints;
     }
@@ -114,8 +112,9 @@ internal static class SettingsEndpoints
             Owner(user),
             IsAdministrator(user),
             new UpdateNotificationPreferencesInput(
-                request.TrainingRemindersEnabled,
-                request.AdminRequestNotificationsEnabled),
+                request.RunningNotificationsEnabled, request.StrengthNotificationsEnabled,
+                request.MealRemindersEnabled, request.NutritionProgressEnabled,
+                request.DetailedPushPreviews, request.TimeZoneId),
             cancellationToken);
 
         return result.Status switch
@@ -141,28 +140,6 @@ internal static class SettingsEndpoints
         ISettingsService settingsService,
         CancellationToken cancellationToken) =>
         GarminStatus(await settingsService.DisconnectGarminDemoAsync(Owner(user), cancellationToken));
-
-    private static async Task<IResult> GetNotificationsAsync(
-        ClaimsPrincipal user,
-        ISettingsService settingsService,
-        CancellationToken cancellationToken)
-    {
-        var notifications = await settingsService.GetNotificationsAsync(
-            Owner(user),
-            IsAdministrator(user),
-            cancellationToken);
-        return Results.Ok(new InAppNotificationListResponse(notifications.Select(Map).ToArray()));
-    }
-
-    private static async Task<IResult> MarkNotificationReadAsync(
-        Guid notificationId,
-        ClaimsPrincipal user,
-        ISettingsService settingsService,
-        CancellationToken cancellationToken) =>
-        await settingsService.MarkNotificationReadAsync(Owner(user), IsAdministrator(user), notificationId, cancellationToken)
-            is NotificationReadStatus.Read
-                ? Results.NoContent()
-                : Results.NotFound(new { title = "Notifikationen blev ikke fundet." });
 
     private static IResult GarminStatus(GarminMockConnectionResult result) => result.Status switch
     {
@@ -209,20 +186,12 @@ internal static class SettingsEndpoints
         goals.SugarTargetGrams);
 
     private static NotificationPreferencesResponse Map(NotificationPreferencesData preferences) => new(
-        preferences.TrainingRemindersEnabled,
-        preferences.AdminRequestNotificationsEnabled,
-        preferences.IsAdministrator);
+        preferences.RunningNotificationsEnabled, preferences.StrengthNotificationsEnabled,
+        preferences.MealRemindersEnabled, preferences.NutritionProgressEnabled,
+        preferences.DetailedPushPreviews, preferences.TimeZoneId);
 
     private static GarminMockConnectionResponse Map(GarminMockConnectionData connection) => new(
         connection.IsConnected,
         connection.ConnectedAt);
 
-    private static InAppNotificationResponse Map(InAppNotificationData notification) => new(
-        notification.Id,
-        notification.Kind,
-        notification.Title,
-        notification.Message,
-        notification.TargetPath,
-        notification.CreatedAt,
-        notification.ReadAt);
 }

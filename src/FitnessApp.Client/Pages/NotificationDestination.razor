@@ -1,0 +1,24 @@
+@page "/notifikationer/{Id:guid}"
+@attribute [Authorize]
+@inject FitnessApp.Client.Notifications.NotificationClient Notifications
+@inject NavigationManager Navigation
+<PageTitle>Åbn notifikation</PageTitle>
+<main class="strength-app settings-app">
+    @if (error is not null) { <p role="alert">@error</p><button class="strength-secondary-button" @onclick="LoadAsync">Prøv igen</button> }
+    else if (fallback is not null) { <p>Aktiviteten eller beskeden er ikke længere tilgængelig.</p><a href="@fallback">Åbn oversigten</a> }
+    else { <p role="status">Åbner notifikationen…</p> }
+</main>
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private string? error, fallback;
+    protected override Task OnParametersSetAsync() => LoadAsync();
+    private async Task LoadAsync()
+    {
+        error = null; fallback = null;
+        var result = await Notifications.DestinationAsync(Id);
+        if (!result.Succeeded || result.Value is null) { error = result.Error ?? "Notifikationen kunne ikke åbnes."; return; }
+        var path = FitnessApp.Client.Authentication.SafeReturnPath.Validate(result.Value.TargetPath);
+        if (result.Value.Unavailable) fallback = path;
+        else Navigation.NavigateTo(path, replace: true);
+    }
+}

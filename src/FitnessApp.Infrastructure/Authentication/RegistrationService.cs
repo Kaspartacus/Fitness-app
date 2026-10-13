@@ -1,7 +1,6 @@
 using FitnessApp.Application.Authentication;
 using FitnessApp.Domain.Users;
 using FitnessApp.Infrastructure.Persistence;
-using FitnessApp.Infrastructure.Settings;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,7 +10,6 @@ internal sealed class RegistrationService(
     UserManager<ApplicationUser> userManager,
     RoleManager<IdentityRole> roleManager,
     FitnessDbContext dbContext,
-    InAppNotificationGenerator notificationGenerator,
     TimeProvider timeProvider) : IRegistrationService
 {
     public async Task<RegistrationResult> RegisterAsync(
@@ -72,7 +70,6 @@ internal sealed class RegistrationService(
                 return Invalid("Registreringen kunne ikke gennemføres. Prøv igen.");
             }
 
-            await notificationGenerator.QueueNewPendingRegistrationNotificationsAsync(user.Id, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return new RegistrationResult(RegistrationStatus.Created, []);

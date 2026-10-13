@@ -244,15 +244,30 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("FoodSequence")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Kind")
                         .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("LocalDate")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Message")
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("PreviousFoodSequence")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime?>("ReadAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ScheduleSlot")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ScheduledAtUtc")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SourceKey")
@@ -291,16 +306,14 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                         .HasMaxLength(450)
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("AdminRequestNotificationsEnabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(true);
-
                     b.Property<decimal?>("CarbohydrateTargetGrams")
                         .HasColumnType("TEXT");
 
                     b.Property<decimal?>("DailyCaloriesTarget")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("DetailedPushPreviews")
+                        .HasColumnType("INTEGER");
 
                     b.Property<decimal?>("FatTargetGrams")
                         .HasColumnType("TEXT");
@@ -315,16 +328,38 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsGarminDemoConnected")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("MealRemindersEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("NutritionProgressEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
                     b.Property<decimal?>("ProteinTargetGrams")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("RunningNotificationsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("StrengthNotificationsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
 
                     b.Property<decimal?>("SugarTargetGrams")
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("TrainingRemindersEnabled")
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(true);
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Europe/Copenhagen");
 
                     b.Property<decimal?>("WeightKg")
                         .HasPrecision(5, 1)
@@ -538,6 +573,135 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                     b.ToTable("StrengthPrograms");
                 });
 
+            modelBuilder.Entity("FitnessApp.Infrastructure.Notifications.NotificationDelivery", b =>
+                {
+                    b.Property<Guid>("NotificationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SubscriptionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Finished")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("NextAttemptAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("NotificationId", "SubscriptionId");
+
+                    b.HasIndex("SubscriptionId");
+
+                    b.HasIndex("Finished", "NextAttemptAtUtc");
+
+                    b.ToTable("NotificationDeliveries");
+                });
+
+            modelBuilder.Entity("FitnessApp.Infrastructure.Notifications.NotificationOccurrence", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Slot")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ScheduledAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId", "Date", "Slot");
+
+                    b.ToTable("NotificationOccurrences");
+                });
+
+            modelBuilder.Entity("FitnessApp.Infrastructure.Notifications.NutritionLogAddition", b =>
+                {
+                    b.Property<long>("Sequence")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Sequence");
+
+                    b.HasIndex("EntryId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "Date", "Sequence");
+
+                    b.ToTable("NutritionLogAdditions");
+                });
+
+            modelBuilder.Entity("FitnessApp.Infrastructure.Notifications.WebPushSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Auth")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Binding")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Endpoint")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InstallationId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("P256dh")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Binding")
+                        .IsUnique();
+
+                    b.HasIndex("Endpoint")
+                        .IsUnique();
+
+                    b.HasIndex("SessionId");
+
+                    b.HasIndex("UserId", "InstallationId")
+                        .IsUnique();
+
+                    b.ToTable("WebPushSubscriptions");
+                });
+
             modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.FridaCatalogueRelease", b =>
                 {
                     b.Property<string>("Id")
@@ -660,6 +824,35 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId", "SearchName");
 
                     b.ToTable("NutritionCustomFoods");
+                });
+
+            modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionFoodAddition", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CustomFoodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("FoodId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("Grams")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Slot")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("UserId", "RequestId");
+
+                    b.ToTable("NutritionFoodAdditions");
                 });
 
             modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionFoodEntry", b =>
@@ -806,7 +999,6 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionRecipeCreation", b =>
                 {
                     b.Property<string>("UserId")
-                        .IsRequired()
                         .HasMaxLength(450)
                         .HasColumnType("TEXT");
 
@@ -830,36 +1022,6 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                     b.HasKey("UserId", "RequestId");
 
                     b.ToTable("NutritionRecipeCreations");
-                });
-
-            modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionFoodAddition", b =>
-                {
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasMaxLength(450)
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("RequestId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly>("Date")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int?>("FoodId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<Guid?>("CustomFoodId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal>("Grams")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Slot")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("UserId", "RequestId");
-
-                    b.ToTable("NutritionFoodAdditions");
                 });
 
             modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionRecipeIngredient", b =>
@@ -1289,7 +1451,64 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FitnessApp.Infrastructure.Notifications.NotificationDelivery", b =>
+                {
+                    b.HasOne("FitnessApp.Domain.Settings.InAppNotification", null)
+                        .WithMany()
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FitnessApp.Infrastructure.Notifications.WebPushSubscription", null)
+                        .WithMany()
+                        .HasForeignKey("SubscriptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FitnessApp.Infrastructure.Notifications.NotificationOccurrence", b =>
+                {
+                    b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FitnessApp.Infrastructure.Notifications.NutritionLogAddition", b =>
+                {
+                    b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FitnessApp.Infrastructure.Notifications.WebPushSubscription", b =>
+                {
+                    b.HasOne("FitnessApp.Infrastructure.Persistence.UserSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionCustomFood", b =>
+                {
+                    b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionFoodAddition", b =>
                 {
                     b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
@@ -1337,15 +1556,6 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionRecipeCreation", b =>
-                {
-                    b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("FitnessApp.Infrastructure.Nutrition.NutritionFoodAddition", b =>
                 {
                     b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
