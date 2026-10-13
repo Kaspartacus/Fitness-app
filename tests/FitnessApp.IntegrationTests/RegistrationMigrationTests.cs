@@ -1,5 +1,7 @@
 using FitnessApp.Domain.Users;
 using FitnessApp.Domain.Nutrition;
+using FitnessApp.Domain.Settings;
+using FitnessApp.Infrastructure.Nutrition;
 using FitnessApp.Infrastructure.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +30,8 @@ public sealed class RegistrationMigrationTests
     private const string NutritionRecipeAdditionReceiptsMigration = "20260927165000_DetachNutritionRecipeAdditionReceipts";
     private const string NutritionRecipeCreationReceiptsMigration = "20261001195000_AddNutritionRecipeCreationReceipts";
 
+    private const string ScheduledNotificationsMigration = "20261012181855_AddScheduledNotificationsAndWebPush";
+
     [Fact]
     public async Task LatestMigrationAppliesToEmptyDatabase()
     {
@@ -45,7 +49,7 @@ public sealed class RegistrationMigrationTests
                     CompletedWorkoutOccurrenceLinkMigration, NutritionModuleMigration,
                     ConsolidateNutritionGoalsAndReceiptsMigration, UserNutritionFoodsMigration,
                     NutritionFoodAdditionReceiptsMigration, NutritionRecipeAdditionReceiptsMigration,
-                    NutritionRecipeCreationReceiptsMigration],
+                    NutritionRecipeCreationReceiptsMigration, ScheduledNotificationsMigration],
                 await dbContext.Database.GetAppliedMigrationsAsync());
             var columns = await ReadUserColumnsAsync(databasePath);
             Assert.Contains("RegisteredAt", columns);
@@ -235,6 +239,84 @@ public sealed class RegistrationMigrationTests
         {
             DeleteDatabase(databasePath);
         }
+    }
+
+    [Fact]
+    public async Task NotificationRollbackRebuildsLegacyTablesAndReupgradePreservesDataAndFoodTracking()
+    {
+        var databasePath = NewDatabasePath();
+        const string owner = "notification-migration-owner";
+        var notificationId = Guid.NewGuid();
+        var mealId = Guid.NewGuid();
+        var originalEntryId = Guid.NewGuid();
+        var date = new DateOnly(2026, 10, 12);
+        try
+        {
+            await using (var db = CreateContext(databasePath))
+            {
+                await db.Database.MigrateAsync();
+                db.Users.Add(new ApplicationUser { Id = owner, DisplayName = "Migration fixture", ApprovalStatus = AccountApprovalStatus.Approved });
+                db.UserSettings.Add(new UserSettings { UserId = owner, HeightCm = 180.5m, DailyCaloriesTarget = 2400.25m,
+                    RunningNotificationsEnabled = false, StrengthNotificationsEnabled = false });
+                db.InAppNotifications.Add(new InAppNotification { Id = notificationId, UserId = owner, Kind = InAppNotificationKind.TrainingReminder,
+                    SourceKey = "migration-history", Title = "Historik", Message = "Bevares", TargetPath = "/kalender?dato=2026-10-12",
+                    CreatedAtUtc = new DateTime(2026, 10, 12, 5, 0, 0, DateTimeKind.Utc), ReadAtUtc = new DateTime(2026, 10, 12, 6, 0, 0, DateTimeKind.Utc) });
+                db.NutritionMeals.Add(new NutritionMeal { Id = mealId, UserId = owner, Date = date, Slot = NutritionMealSlot.Breakfast,
+                    Entries = [new NutritionFoodEntry { Id = originalEntryId, MealId = mealId, Name = "Migration food", Grams = 125,
+                        EnergyKcalPer100g = 100, SugarPer100g = null }] });
+                db.NutritionRecipeCreations.Add(new NutritionRecipeCreation { UserId = owner, RequestId = Guid.NewGuid(), Date = date,
+                    Slot = NutritionMealSlot.Breakfast, Name = "Receipt", Portions = 1.5m });
+                await db.SaveChangesAsync();
+                Assert.Equal(1, await db.NutritionLogAdditions.CountAsync());
+            }
+            await using (var db = CreateContext(databasePath))
+                await db.GetService<IMigrator>().MigrateAsync(NutritionRecipeCreationReceiptsMigration);
+
+            var settingsColumns = await ReadColumnsAsync(databasePath, "UserSettings");
+            Assert.Contains("TrainingRemindersEnabled", settingsColumns);
+            Assert.DoesNotContain("DetailedPushPreviews", settingsColumns);
+            Assert.DoesNotContain("ScheduledAtUtc", await ReadColumnsAsync(databasePath, "InAppNotifications"));
+            Assert.DoesNotContain("NutritionLogAdditions", await ReadTableNamesAsync(databasePath));
+            await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+            {
+                await connection.OpenAsync();
+                var command = connection.CreateCommand();
+                command.CommandText = "SELECT TrainingRemindersEnabled, HeightCm, DailyCaloriesTarget FROM UserSettings WHERE UserId = $owner";
+                command.Parameters.AddWithValue("$owner", owner);
+                await using (var row = await command.ExecuteReaderAsync())
+                {
+                    Assert.True(await row.ReadAsync());
+                    Assert.Equal(0, row.GetInt32(0));
+                    Assert.Equal(180.5m, row.GetDecimal(1));
+                    Assert.Equal(2400.25m, row.GetDecimal(2));
+                }
+                command.CommandText = "SELECT COUNT(*) FROM InAppNotifications WHERE UserId = $owner AND SourceKey = 'migration-history' AND ReadAtUtc IS NOT NULL";
+                Assert.Equal(1L, (long)(await command.ExecuteScalarAsync())!);
+                command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND name = 'NutritionFoodEntry_TrackAddition'";
+                Assert.Equal(0L, (long)(await command.ExecuteScalarAsync())!);
+            }
+            await using (var db = CreateContext(databasePath))
+            {
+                await db.Database.MigrateAsync();
+                var settings = await db.UserSettings.SingleAsync();
+                Assert.False(settings.RunningNotificationsEnabled);
+                Assert.False(settings.StrengthNotificationsEnabled);
+                Assert.Equal(2400.25m, settings.DailyCaloriesTarget);
+                Assert.Equal("Historik", (await db.InAppNotifications.SingleAsync()).Title);
+                Assert.Equal(notificationId, (await db.InAppNotifications.SingleAsync()).Id);
+                Assert.Equal(1.5m, (await db.NutritionRecipeCreations.SingleAsync()).Portions);
+                var original = await db.NutritionFoodEntries.SingleAsync();
+                Assert.Equal(originalEntryId, original.Id);
+                Assert.Equal(125m, original.Grams);
+                Assert.Null(original.SugarPer100g);
+                Assert.Equal(1, await db.NutritionLogAdditions.CountAsync()); // backfilled on reupgrade
+                original.Grams = 150;
+                db.NutritionFoodEntries.Add(new NutritionFoodEntry { Id = Guid.NewGuid(), MealId = mealId, Name = "New food", Grams = 100 });
+                await db.SaveChangesAsync();
+                Assert.Equal(2, await db.NutritionLogAdditions.CountAsync()); // only the new insertion advances it
+            }
+        }
+        finally { DeleteDatabase(databasePath); }
     }
 
     [Fact]
