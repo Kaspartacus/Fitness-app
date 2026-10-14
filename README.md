@@ -276,6 +276,8 @@ The integration suite uses isolated real SQLite databases, not EF InMemory. Run 
 
 Pull requests targeting `main` run `.github/workflows/pr-verification.yml`, which calls the same shared verification script with read-only repository permissions and no production secrets or deployment. When deployment work begins, CI/CD secrets belong in GitHub Actions Secrets and the Raspberry Pi requires separate runtime secret provisioning. Evaluate a genuinely no-license-cost vault together with its operational burden before adoption; do not assume Azure Key Vault or another hosted service remains permanently free. A private Grafana/Loki dashboard with bounded retention is a future logging candidate. No deployment, vault, container, Pi, cloud, or log-shipping infrastructure is included in this slice.
 
+The Server project uses `Microsoft.AspNetCore.Components.WebAssembly.Server` 10.0.13, the patched version for Microsoft Blazor debugger advisories [GHSA-g27p-qf6j-c96c](https://github.com/dotnet/aspnetcore/security/advisories/GHSA-g27p-qf6j-c96c) and [GHSA-qjpx-jqm5-h2c4](https://github.com/dotnet/aspnetcore/security/advisories/GHSA-qjpx-jqm5-h2c4).
+
 Dependency audit failures print only validated package IDs, resolved versions, severities and public GitHub advisory links. Raw audit JSON, source URLs and diagnostic output remain private; vulnerable or incomplete results still fail CI.
 
 ## PWA installation and scheduled notifications
