@@ -241,6 +241,68 @@ public sealed class RegistrationMigrationTests
         }
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task NotificationMigrationPreservesIndependentLegacyAdminPreference(bool trainingEnabled, bool adminEnabled)
+    {
+        var databasePath = NewDatabasePath();
+        const string owner = "legacy-preferences-owner";
+        try
+        {
+            await using (var db = CreateContext(databasePath))
+                await db.GetService<IMigrator>().MigrateAsync(NutritionRecipeCreationReceiptsMigration);
+            await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+            {
+                await connection.OpenAsync();
+                var command = connection.CreateCommand();
+                command.CommandText = """
+                    INSERT INTO AspNetUsers (Id, DisplayName, ApprovalStatus, EmailConfirmed,
+                        PhoneNumberConfirmed, TwoFactorEnabled, LockoutEnabled, AccessFailedCount)
+                    VALUES ($owner, 'Legacy preferences', 1, 1, 0, 0, 1, 0);
+                    INSERT INTO UserSettings (UserId, TrainingRemindersEnabled, AdminRequestNotificationsEnabled, IsGarminDemoConnected)
+                    VALUES ($owner, $training, $admin, 0);
+                    """;
+                command.Parameters.AddWithValue("$owner", owner);
+                command.Parameters.AddWithValue("$training", trainingEnabled);
+                command.Parameters.AddWithValue("$admin", adminEnabled);
+                await command.ExecuteNonQueryAsync();
+            }
+            await using (var db = CreateContext(databasePath))
+            {
+                await db.Database.MigrateAsync();
+                var settings = await db.UserSettings.SingleAsync();
+                Assert.Equal(trainingEnabled, settings.RunningNotificationsEnabled);
+                Assert.Equal(trainingEnabled, settings.StrengthNotificationsEnabled);
+                Assert.Equal(adminEnabled, db.Entry(settings).Property<bool>("LegacyAdminRequestNotificationsEnabled").CurrentValue);
+                // A new category preference must not overwrite the retired independent admin flag.
+                settings.RunningNotificationsEnabled = !adminEnabled;
+                await db.SaveChangesAsync();
+            }
+            await using (var db = CreateContext(databasePath))
+                await db.GetService<IMigrator>().MigrateAsync(NutritionRecipeCreationReceiptsMigration);
+            await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+            {
+                await connection.OpenAsync();
+                var command = connection.CreateCommand();
+                command.CommandText = "SELECT TrainingRemindersEnabled, AdminRequestNotificationsEnabled FROM UserSettings WHERE UserId = $owner";
+                command.Parameters.AddWithValue("$owner", owner);
+                await using var row = await command.ExecuteReaderAsync();
+                Assert.True(await row.ReadAsync());
+                Assert.Equal(trainingEnabled, row.GetBoolean(0));
+                Assert.Equal(adminEnabled, row.GetBoolean(1));
+            }
+            await using (var db = CreateContext(databasePath))
+            {
+                await db.Database.MigrateAsync();
+                var settings = await db.UserSettings.SingleAsync();
+                Assert.Equal(trainingEnabled, settings.RunningNotificationsEnabled);
+                Assert.Equal(adminEnabled, db.Entry(settings).Property<bool>("LegacyAdminRequestNotificationsEnabled").CurrentValue);
+            }
+        }
+        finally { DeleteDatabase(databasePath); }
+    }
+
     [Fact]
     public async Task NotificationRollbackRebuildsLegacyTablesAndReupgradePreservesDataAndFoodTracking()
     {

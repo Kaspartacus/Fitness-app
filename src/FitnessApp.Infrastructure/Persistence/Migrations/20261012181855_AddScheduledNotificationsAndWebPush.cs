@@ -19,10 +19,17 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
             migrationBuilder.RenameColumn(
                 name: "AdminRequestNotificationsEnabled",
                 table: "UserSettings",
-                newName: "RunningNotificationsEnabled");
+                newName: "LegacyAdminRequestNotificationsEnabled");
 
-            // Both training categories inherit the old training preference; the retired admin
-            // preference does not become a running opt-in. Existing notification history is retained.
+            // Keep the retired admin preference independently for a lossless rollback. Both new
+            // training categories inherit the old training preference, never the admin opt-in.
+            migrationBuilder.AddColumn<bool>(
+                name: "RunningNotificationsEnabled",
+                table: "UserSettings",
+                type: "INTEGER",
+                nullable: false,
+                defaultValue: true);
+
             migrationBuilder.Sql("UPDATE UserSettings SET RunningNotificationsEnabled = StrengthNotificationsEnabled;");
 
             migrationBuilder.AddColumn<bool>(
@@ -299,8 +306,12 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                 table: "UserSettings",
                 newName: "TrainingRemindersEnabled");
 
-            migrationBuilder.RenameColumn(
+            migrationBuilder.DropColumn(
                 name: "RunningNotificationsEnabled",
+                table: "UserSettings");
+
+            migrationBuilder.RenameColumn(
+                name: "LegacyAdminRequestNotificationsEnabled",
                 table: "UserSettings",
                 newName: "AdminRequestNotificationsEnabled");
         }

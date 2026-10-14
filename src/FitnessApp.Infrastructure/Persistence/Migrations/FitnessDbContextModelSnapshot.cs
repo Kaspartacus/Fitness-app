@@ -328,6 +328,11 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsGarminDemoConnected")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("LegacyAdminRequestNotificationsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
                     b.Property<bool>("MealRemindersEnabled")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")

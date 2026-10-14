@@ -82,6 +82,42 @@ public sealed class ClientAuthenticationTests
     }
 
     [Fact]
+    public async Task UnauthorizedStrengthDestinationSurvivesLoginEncodingRoundTrip()
+    {
+        var navigation = new TestNavigationManager();
+        navigation.NavigateTo("/styrke/11111111-1111-1111-1111-111111111111/træninger/22222222-2222-2222-2222-222222222222/aktiv?planlagt=2026-10-12");
+        using var handler = new ApiAuthorizationHandler(CreateAuthenticatedState(), navigation)
+        {
+            InnerHandler = new StubHttpMessageHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized)))
+        };
+        using var client = new HttpClient(handler) { BaseAddress = new Uri(navigation.BaseUri) };
+        using var response = await client.GetAsync("api/notifications/unread");
+        var query = new Uri(navigation.Uri).Query;
+        Assert.StartsWith("?returnUrl=", query);
+        var suppliedReturnUrl = Uri.UnescapeDataString(query["?returnUrl=".Length..]);
+        Assert.Equal("/styrke/11111111-1111-1111-1111-111111111111/tr%C3%A6ninger/22222222-2222-2222-2222-222222222222/aktiv?planlagt=2026-10-12",
+            SafeReturnPath.Validate(suppliedReturnUrl));
+    }
+
+    [Theory]
+    [InlineData("/styrke/tr%C3%A6ninger", "/styrke/tr%C3%A6ninger")]
+    [InlineData("/styrke/træninger", "/styrke/tr%C3%A6ninger")]
+    [InlineData("/kost?dato=2026-10-%31%32", "/kost?dato=2026-10-12")]
+    [InlineData("/%2f%2fevil.test", "/")]
+    [InlineData("/%5cevil.test", "/")]
+    [InlineData("/%252fevil.test", "/")]
+    [InlineData("/%3freturnUrl=external", "/")]
+    [InlineData("/%23external", "/")]
+    [InlineData("/%0dexternal", "/")]
+    [InlineData("/%C2%85external", "/")]
+    [InlineData("/%", "/")]
+    [InlineData("/%C3", "/")]
+    [InlineData("/%2e%2e/login", "/")]
+    [InlineData("/a/..//evil.test", "/")]
+    public void ReturnPathCanonicalizesUnicodeWithoutAcceptingEncodedRedirects(string input, string expected) =>
+        Assert.Equal(expected, SafeReturnPath.Validate(input));
+
+    [Fact]
     public async Task LaterUnauthorizedResponsePreservesNotificationLoginDestination()
     {
         var state = CreateAuthenticatedState();

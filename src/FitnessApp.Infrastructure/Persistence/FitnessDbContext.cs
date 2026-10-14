@@ -258,6 +258,8 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
             entity.Property(settings => settings.UserId).HasMaxLength(450);
             entity.Property(settings => settings.HeightCm).HasPrecision(5, 1);
             entity.Property(settings => settings.WeightKg).HasPrecision(5, 1);
+            // Retired UI preference retained only to restore independent opt-outs on rollback.
+            entity.Property<bool>("LegacyAdminRequestNotificationsEnabled").HasDefaultValue(true);
             entity.Property(settings => settings.RunningNotificationsEnabled).HasDefaultValue(true);
             entity.Property(settings => settings.StrengthNotificationsEnabled).HasDefaultValue(true);
             entity.Property(settings => settings.MealRemindersEnabled).HasDefaultValue(true);
