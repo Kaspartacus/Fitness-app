@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using FitnessApp.Application.Notifications;
+using FitnessApp.Application.Authentication;
 using FitnessApp.Contracts.Notifications;
 using FitnessApp.Contracts.Settings;
 
@@ -14,32 +15,33 @@ internal static class NotificationEndpoints
         group.MapGet("", async (int? page, ClaimsPrincipal user, INotificationService service, CancellationToken ct) =>
         {
             if (page is < 0 or > 100000) return Results.BadRequest();
-            var data = await service.GetInboxAsync(Owner(user), page ?? 0, ct);
+            var data = await service.GetInboxAsync(Owner(user), user.IsInRole(AuthenticationConstants.AdminRole), page ?? 0, ct);
             return Results.Ok(new NotificationPageResponse(data.Items.Select(n => new InAppNotificationResponse(n.Id, n.Kind, n.Title, n.Message, n.TargetPath, n.CreatedAt, n.ReadAt)).ToArray(), data.HasMore, data.UnreadCount));
         });
         group.MapGet("/unread", async (ClaimsPrincipal user, INotificationService service, CancellationToken ct) =>
-            Results.Ok(new NotificationCountResponse(await service.UnreadAsync(Owner(user), ct))));
+            Results.Ok(new NotificationCountResponse(await service.UnreadAsync(Owner(user), user.IsInRole(AuthenticationConstants.AdminRole), ct))));
         group.MapPost("/read", async (MarkNotificationsReadRequest request, ClaimsPrincipal user, INotificationService service, CancellationToken ct) =>
         {
             if (request.Ids is null || request.Ids.Length > 25) return Results.BadRequest();
-            await service.MarkReadAsync(Owner(user), request.Ids, ct);
-            return Results.Ok(new NotificationCountResponse(await service.UnreadAsync(Owner(user), ct)));
+            await service.MarkReadAsync(Owner(user), user.IsInRole(AuthenticationConstants.AdminRole), request.Ids, ct);
+            return Results.Ok(new NotificationCountResponse(await service.UnreadAsync(Owner(user), user.IsInRole(AuthenticationConstants.AdminRole), ct)));
         });
         group.MapGet("/{id:guid}/destination", async (Guid id, ClaimsPrincipal user, INotificationService service, CancellationToken ct) =>
         {
-            var result = await service.DestinationAsync(Owner(user), id, ct);
+            var result = await service.DestinationAsync(Owner(user), user.IsInRole(AuthenticationConstants.AdminRole), id, ct);
             return Results.Ok(new NotificationDestinationResponse(result.TargetPath, result.Unavailable));
         });
-        group.MapGet("/device", async (string? binding, ClaimsPrincipal user, INotificationService service, CancellationToken ct) =>
+        group.MapGet("/device", async (string? binding, string? installationId, ClaimsPrincipal user, INotificationService service, CancellationToken ct) =>
         {
-            var result = await service.DeviceAsync(Owner(user), Session(user), binding, ct);
-            return Results.Ok(new PushDeviceResponse(result.Configured, result.PublicKey, result.Subscribed));
+            var result = await service.DeviceAsync(Owner(user), Session(user), binding, installationId, ct);
+            return Results.Ok(new PushDeviceResponse(result.Configured, result.PublicKey, result.Subscribed, result.HasRegistration));
         });
         group.MapPost("/subscribe", async (SubscribePushRequest request, ClaimsPrincipal user, INotificationService service, CancellationToken ct) =>
             Map(await service.SubscribeAsync(Owner(user), Session(user), new(request.Endpoint, request.P256dh, request.Auth, request.Binding, request.InstallationId), ct)));
-        group.MapPost("/unsubscribe", async (PushBindingRequest request, ClaimsPrincipal user, INotificationService service, CancellationToken ct) =>
+        group.MapPost("/unsubscribe", async (UnsubscribePushRequest request, ClaimsPrincipal user, INotificationService service, CancellationToken ct) =>
         {
-            await service.UnsubscribeAsync(Owner(user), request.Binding, ct);
+            if (!Guid.TryParseExact(request.InstallationId, "N", out _)) return Results.BadRequest();
+            await service.UnsubscribeAsync(Owner(user), request.InstallationId, ct);
             return Results.Ok(new NotificationActionResponse(true));
         });
         group.MapPost("/test", async (PushBindingRequest request, ClaimsPrincipal user, INotificationService service, CancellationToken ct) =>

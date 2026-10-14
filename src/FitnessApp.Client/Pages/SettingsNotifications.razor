@@ -50,7 +50,7 @@
                     <p role="status">@PhoneStatus</p>
                     @if (device is { Configured: false }) { <p>Telefonnotifikationer er ikke konfigureret på serveren endnu.</p> }
                     <button class="strength-secondary-button" @onclick="EnableAsync" disabled="@(busy || device is not { Configured: true } || !browser.Supported || browser.Permission == "denied" || browser.Ios && !browser.Installed)">Slå til på denne enhed</button>
-                    <button class="strength-secondary-button" @onclick="DisableAsync" disabled="@(busy || browser.Binding is null)">Slå fra på denne enhed</button>
+                    <button class="strength-secondary-button" @onclick="DisableAsync" disabled="@(busy || browser.InstallationId is null || browser.Binding is null && device is { HasRegistration: false })">Slå fra på denne enhed</button>
                     <button class="strength-secondary-button" @onclick="TestAsync" disabled="@(busy || device is not { Subscribed: true })">Send testnotifikation</button>
                     <p>Højst én test pr. fem minutter. En test i indbakken er ikke en bekræftelse på telefonens levering.</p>
                 }
@@ -123,7 +123,7 @@
         try
         {
             browser = await JS.InvokeAsync<BrowserPushState>("fitnessPush.status");
-            var result = await Notifications.DeviceAsync(browser.Binding);
+            var result = await Notifications.DeviceAsync(browser.Binding, browser.InstallationId);
             device = result.Value;
             if (!result.Succeeded) actionError = result.Error;
         }
@@ -148,16 +148,16 @@
     {
         if (busy) return;
         busy = true; actionError = null; message = null;
-        var binding = browser?.Binding;
+        var installationId = browser?.InstallationId;
         try
         {
             await JS.InvokeVoidAsync("fitnessPush.clear");
-            if (binding is not null)
+            if (installationId is not null)
             {
-                var result = await Notifications.UnsubscribeAsync(binding);
-                if (!result.Succeeded) actionError = result.Error;
+                var result = await Notifications.UnsubscribeAsync(installationId);
+                if (result.Succeeded) message = "Telefonnotifikationer er slået fra på denne enhed.";
+                else actionError = "Forhåndsvisninger er fjernet lokalt, men serverens tilmelding kunne ikke fjernes. Tryk Slå fra på denne enhed igen for at prøve igen.";
             }
-            message = "Telefonnotifikationer er slået fra på denne enhed.";
         }
         catch (JSException) { actionError = "Enhedens tilmelding kunne ikke fjernes. Prøv igen."; }
         await RefreshDeviceAsync(); busy = false;
@@ -175,6 +175,7 @@
         browser.Ios && !browser.Installed ? "Installer først FitnessApp på hjemmeskærmen." :
         browser.Permission == "denied" ? "Tilladelsen er blokeret. Åbn telefonens eller browserens indstillinger for at ændre den." :
         device?.Subscribed == true && browser.Subscribed ? "Tilladelse givet · denne enhed er tilmeldt." :
+        device?.HasRegistration == true ? "Enheden har stadig en servertilmelding. Slå fra for at fjerne den, eller tilmeld igen." :
         browser.Permission == "granted" ? "Tilladelse givet · denne enhed er ikke tilmeldt denne session." : "Tilladelse er ikke givet endnu.";
-    private sealed record BrowserPushState(bool Supported, bool Ios, bool Installed, string Permission, bool Subscribed, string? Binding);
+    private sealed record BrowserPushState(bool Supported, bool Ios, bool Installed, string Permission, bool Subscribed, string? Binding, string? InstallationId);
 }

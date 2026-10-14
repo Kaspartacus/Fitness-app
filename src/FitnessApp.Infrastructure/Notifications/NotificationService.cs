@@ -9,22 +9,22 @@ namespace FitnessApp.Infrastructure.Notifications;
 
 public sealed class NotificationService(FitnessDbContext db, TimeProvider clock, IOptions<WebPushOptions> options) : INotificationService
 {
-    public async Task<NotificationPageData> GetInboxAsync(string owner, int page, CancellationToken ct)
+    public async Task<NotificationPageData> GetInboxAsync(string owner, bool isAdministrator, int page, CancellationToken ct)
     {
-        var rows = await db.InAppNotifications.AsNoTracking().Where(x => x.UserId == owner)
+        var rows = await Visible(owner, isAdministrator).AsNoTracking()
             .OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id).Skip(page * 25).Take(26).ToListAsync(ct);
-        return new(rows.Take(25).Select(Map).ToArray(), rows.Count > 25, await UnreadAsync(owner, ct));
+        return new(rows.Take(25).Select(Map).ToArray(), rows.Count > 25, await UnreadAsync(owner, isAdministrator, ct));
     }
-    public Task<int> UnreadAsync(string owner, CancellationToken ct) => db.InAppNotifications.CountAsync(x => x.UserId == owner && x.ReadAtUtc == null, ct);
-    public async Task MarkReadAsync(string owner, IReadOnlyCollection<Guid> ids, CancellationToken ct)
+    public Task<int> UnreadAsync(string owner, bool isAdministrator, CancellationToken ct) => Visible(owner, isAdministrator).CountAsync(x => x.ReadAtUtc == null, ct);
+    public async Task MarkReadAsync(string owner, bool isAdministrator, IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {
         var now = clock.GetUtcNow().UtcDateTime;
-        await db.InAppNotifications.Where(x => x.UserId == owner && ids.Contains(x.Id) && x.ReadAtUtc == null)
+        await Visible(owner, isAdministrator).Where(x => ids.Contains(x.Id) && x.ReadAtUtc == null)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.ReadAtUtc, now), ct);
     }
-    public async Task<NotificationDestinationData> DestinationAsync(string owner, Guid id, CancellationToken ct)
+    public async Task<NotificationDestinationData> DestinationAsync(string owner, bool isAdministrator, Guid id, CancellationToken ct)
     {
-        var notification = await db.InAppNotifications.AsNoTracking().SingleOrDefaultAsync(x => x.UserId == owner && x.Id == id, ct);
+        var notification = await Visible(owner, isAdministrator).AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
         if (notification is null) return new("/indstillinger/notifikationer", true);
         var path = notification.TargetPath;
         // Destinations are generated internally, but still enforce a narrow same-origin path allowlist.
@@ -44,15 +44,21 @@ public sealed class NotificationService(FitnessDbContext db, TimeProvider clock,
         }
         return new(path, false);
     }
+    // isAdministrator comes only from the server principal, whose roles are refreshed at validation.
+    private IQueryable<InAppNotification> Visible(string owner, bool isAdministrator) =>
+        db.InAppNotifications.Where(x => x.UserId == owner &&
+            (isAdministrator || x.Kind != InAppNotificationKind.AdminRegistrationRequest));
+
     public static bool IsSafePath(string path) => path.Length <= 300 && !path.Contains('\\') && !path.Contains('%') && !path.Any(char.IsControl) &&
         (path.StartsWith("/loeb/plan/", StringComparison.Ordinal) || path.StartsWith("/styrke/", StringComparison.Ordinal) ||
          path.StartsWith("/kalender?", StringComparison.Ordinal) || path.StartsWith("/kost?", StringComparison.Ordinal) ||
          path is "/indstillinger/notifikationer" or "/administration/registreringer");
     internal static string CalendarPath(DateOnly? date) => date is { } day ? $"/kalender?maaned={day:yyyy-MM}&dato={day:yyyy-MM-dd}" : "/kalender";
 
-    public async Task<PushDeviceData> DeviceAsync(string owner, string session, string? binding, CancellationToken ct) =>
+    public async Task<PushDeviceData> DeviceAsync(string owner, string session, string? binding, string? installationId, CancellationToken ct) =>
         new(options.Value.Configured, options.Value.Configured ? options.Value.PublicKey : null,
-            binding is not null && await db.WebPushSubscriptions.AnyAsync(x => x.UserId == owner && x.SessionId == session && x.Binding == binding, ct));
+            binding is not null && await db.WebPushSubscriptions.AnyAsync(x => x.UserId == owner && x.SessionId == session && x.Binding == binding, ct),
+            installationId is not null && await db.WebPushSubscriptions.AnyAsync(x => x.UserId == owner && x.InstallationId == installationId, ct));
 
     public async Task<PushSaveStatus> SubscribeAsync(string owner, string session, SubscribePushInput input, CancellationToken ct)
     {
@@ -84,8 +90,9 @@ public sealed class NotificationService(FitnessDbContext db, TimeProvider clock,
         await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct);
         return PushSaveStatus.Saved;
     }
-    public Task UnsubscribeAsync(string owner, string binding, CancellationToken ct) =>
-        db.WebPushSubscriptions.Where(x => x.UserId == owner && x.Binding == binding).ExecuteDeleteAsync(ct);
+    public Task UnsubscribeAsync(string owner, string installationId, CancellationToken ct) =>
+        // Installation identity survives privacy-first local clearing. It never authorizes another owner's rows.
+        db.WebPushSubscriptions.Where(x => x.UserId == owner && x.InstallationId == installationId).ExecuteDeleteAsync(ct);
 
     public async Task<PushSaveStatus> TestAsync(string owner, string binding, CancellationToken ct)
     {

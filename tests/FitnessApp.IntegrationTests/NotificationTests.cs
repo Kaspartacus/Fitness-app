@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using FitnessApp.Application.Notifications;
+using FitnessApp.Application.Authentication;
 using FitnessApp.Client.Authentication;
 using FitnessApp.Contracts.Authentication;
 using FitnessApp.Contracts.Notifications;
@@ -216,6 +217,63 @@ public sealed class NotificationTests
     }
 
     [Fact]
+    public async Task HistoricalAdminNoticesFollowCurrentRoleForAllInboxOperations()
+    {
+        using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync();
+        var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved, AuthenticationConstants.AdminRole);
+        using var client = await Login(factory, owner);
+        await using var scope = factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+        var legacy = Notice(owner.Id); legacy.Kind = InAppNotificationKind.AdminRegistrationRequest;
+        legacy.TargetPath = "/administration/registreringer";
+        var ordinary = Notice(owner.Id);
+        db.InAppNotifications.AddRange(legacy, ordinary); await db.SaveChangesAsync();
+        Assert.Equal(2, (await client.GetFromJsonAsync<NotificationPageResponse>("api/notifications"))!.Items.Count);
+        Assert.False((await client.GetFromJsonAsync<NotificationDestinationResponse>($"api/notifications/{legacy.Id}/destination"))!.Unavailable);
+        // Keep the original Admin-bearing access token: validation must refresh its role from the server.
+        await factory.RemoveRoleAsync(owner.Id, AuthenticationConstants.AdminRole);
+        var page = (await client.GetFromJsonAsync<NotificationPageResponse>("api/notifications"))!;
+        Assert.Equal(ordinary.Id, Assert.Single(page.Items).Id);
+        Assert.Equal(1, page.UnreadCount);
+        Assert.Equal(1, (await client.GetFromJsonAsync<NotificationCountResponse>("api/notifications/unread"))!.UnreadCount);
+        Assert.Equal(1, (await client.GetFromJsonAsync<SettingsOverviewResponse>("api/settings"))!.UnreadNotificationCount);
+        var destination = (await client.GetFromJsonAsync<NotificationDestinationResponse>($"api/notifications/{legacy.Id}/destination"))!;
+        Assert.True(destination.Unavailable);
+        Assert.Equal("/indstillinger/notifikationer", destination.TargetPath);
+        var read = await client.PostAsJsonAsync("api/notifications/read", new MarkNotificationsReadRequest([legacy.Id, ordinary.Id]));
+        Assert.Equal(0, (await read.Content.ReadFromJsonAsync<NotificationCountResponse>())!.UnreadCount);
+        db.ChangeTracker.Clear();
+        Assert.Null((await db.InAppNotifications.SingleAsync(x => x.Id == legacy.Id)).ReadAtUtc);
+        Assert.NotNull((await db.InAppNotifications.SingleAsync(x => x.Id == ordinary.Id)).ReadAtUtc);
+        Assert.Equal(2, await db.InAppNotifications.CountAsync()); // History is retained, not deleted on role revocation.
+    }
+
+    [Fact]
+    public async Task InstallationCleanupSurvivesClearedBindingAndNeverDeletesAnotherOwner()
+    {
+        using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync();
+        var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        var other = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        using var client = await Login(factory, owner);
+        await using var scope = factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+        var ownDevice = await AddDevice(factory, db, owner);
+        var foreignDevice = await AddDevice(factory, db, other);
+        foreignDevice.InstallationId = ownDevice.InstallationId; await db.SaveChangesAsync();
+        var statusPath = "api/notifications/device?installationId=" + ownDevice.InstallationId;
+        // After failed cleanup/reload there is no recipient binding, but the installation can still reconcile.
+        var status = (await client.GetFromJsonAsync<PushDeviceResponse>(statusPath))!;
+        Assert.False(status.Subscribed);
+        Assert.True(status.HasRegistration);
+        for (var retry = 0; retry < 2; retry++)
+            Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("api/notifications/unsubscribe", new UnsubscribePushRequest(ownDevice.InstallationId))).StatusCode);
+        Assert.False((await client.GetFromJsonAsync<PushDeviceResponse>(statusPath))!.HasRegistration);
+        Assert.False(await db.WebPushSubscriptions.AnyAsync(x => x.UserId == owner.Id));
+        Assert.True(await db.WebPushSubscriptions.AnyAsync(x => x.Id == foreignDevice.Id));
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("api/notifications/unsubscribe", new UnsubscribePushRequest("invalid"))).StatusCode);
+        using var anonymous = factory.CreateHttpsClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("api/notifications/unsubscribe", new UnsubscribePushRequest(foreignDevice.InstallationId))).StatusCode);
+    }
+
+    [Fact]
     public async Task DeviceOwnershipTestCooldownAndExpiryPreserveInbox()
     {
         using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync();
@@ -223,7 +281,7 @@ public sealed class NotificationTests
         await using var scope = factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
         var device = await AddDevice(factory, db, owner);
         var service = new NotificationService(db, new FixedClock(At(1)), Configured);
-        await service.UnsubscribeAsync(other.Id, device.Binding, default);
+        await service.UnsubscribeAsync(other.Id, device.InstallationId, default);
         Assert.True(await db.WebPushSubscriptions.AnyAsync());
         Assert.Equal(PushSaveStatus.NotFound, await service.TestAsync(other.Id, device.Binding, default));
         Assert.Equal(PushSaveStatus.Saved, await service.TestAsync(owner.Id, device.Binding, default));

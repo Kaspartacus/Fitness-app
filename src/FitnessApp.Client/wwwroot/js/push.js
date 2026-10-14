@@ -12,7 +12,7 @@
             const registration = await ready;
             const state = await fitnessPushState.read();
             const subscription = registration ? await registration.pushManager.getSubscription() : null;
-            return { supported: true, ios, installed, permission: Notification.permission, subscribed: !!subscription, binding: state?.binding || null };
+            return { supported: true, ios, installed, permission: Notification.permission, subscribed: !!subscription, binding: state?.binding || null, installationId: await fitnessPushState.installation() };
         },
         async enable(publicKey, detailed) {
             // Call before the first await: Safari requires a direct user gesture.

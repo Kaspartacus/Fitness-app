@@ -26,7 +26,8 @@ internal sealed class SettingsService(
 
         var settings = await GetOrCreateSettingsAsync(userId, cancellationToken);
         var unreadNotificationCount = await db.InAppNotifications.AsNoTracking()
-            .CountAsync(notification => notification.UserId == userId && notification.ReadAtUtc == null,
+            .CountAsync(notification => notification.UserId == userId && notification.ReadAtUtc == null &&
+                (isAdministrator || notification.Kind != InAppNotificationKind.AdminRegistrationRequest),
                 cancellationToken);
 
         return new SettingsOverviewData(
