@@ -3,7 +3,10 @@ namespace FitnessApp.Domain.Settings;
 public enum InAppNotificationKind
 {
     TrainingReminder,
-    AdminRegistrationRequest
+    AdminRegistrationRequest, // Historical only; never generated automatically.
+    MealReminder,
+    NutritionProgress,
+    PushTest
 }
 
 public sealed class InAppNotification
@@ -25,4 +28,9 @@ public sealed class InAppNotification
     public DateTime CreatedAtUtc { get; set; }
 
     public DateTime? ReadAtUtc { get; set; }
+    public DateOnly? LocalDate { get; set; }
+    public int? ScheduleSlot { get; set; }
+    public DateTime? ScheduledAtUtc { get; set; }
+    public long FoodSequence { get; set; }
+    public long PreviousFoodSequence { get; set; }
 }

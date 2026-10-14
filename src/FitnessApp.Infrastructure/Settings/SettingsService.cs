@@ -8,7 +8,6 @@ namespace FitnessApp.Infrastructure.Settings;
 
 internal sealed class SettingsService(
     FitnessDbContext db,
-    InAppNotificationGenerator notificationGenerator,
     TimeProvider timeProvider) : ISettingsService
 {
     public async Task<SettingsOverviewData?> GetOverviewAsync(
@@ -26,10 +25,9 @@ internal sealed class SettingsService(
         }
 
         var settings = await GetOrCreateSettingsAsync(userId, cancellationToken);
-        await notificationGenerator.EnsureTrainingRemindersAsync(userId, settings, cancellationToken);
         var unreadNotificationCount = await db.InAppNotifications.AsNoTracking()
             .CountAsync(notification => notification.UserId == userId && notification.ReadAtUtc == null &&
-                                        (isAdministrator || notification.Kind != InAppNotificationKind.AdminRegistrationRequest),
+                (isAdministrator || notification.Kind != InAppNotificationKind.AdminRegistrationRequest),
                 cancellationToken);
 
         return new SettingsOverviewData(
@@ -107,11 +105,14 @@ internal sealed class SettingsService(
         }
 
         var settings = await GetOrCreateSettingsAsync(userId, cancellationToken);
-        settings.TrainingRemindersEnabled = input.TrainingRemindersEnabled;
-        if (isAdministrator)
-        {
-            settings.AdminRequestNotificationsEnabled = input.AdminRequestNotificationsEnabled;
-        }
+        if (!FitnessApp.Domain.Settings.NotificationSchedule.IsValidTimeZone(input.TimeZoneId))
+            return new NotificationPreferencesResult(SettingsSaveStatus.Invalid);
+        settings.RunningNotificationsEnabled = input.RunningNotificationsEnabled;
+        settings.StrengthNotificationsEnabled = input.StrengthNotificationsEnabled;
+        settings.MealRemindersEnabled = input.MealRemindersEnabled;
+        settings.NutritionProgressEnabled = input.NutritionProgressEnabled;
+        settings.DetailedPushPreviews = input.DetailedPushPreviews;
+        settings.TimeZoneId = input.TimeZoneId;
         await db.SaveChangesAsync(cancellationToken);
 
         return new NotificationPreferencesResult(
@@ -157,55 +158,6 @@ internal sealed class SettingsService(
         }
 
         return new GarminMockConnectionResult(SettingsSaveStatus.Saved, MapGarmin(settings));
-    }
-
-    public async Task<IReadOnlyCollection<InAppNotificationData>> GetNotificationsAsync(
-        string userId,
-        bool isAdministrator,
-        CancellationToken cancellationToken)
-    {
-        if (!await UserExistsAsync(userId, cancellationToken))
-        {
-            return [];
-        }
-
-        var settings = await GetOrCreateSettingsAsync(userId, cancellationToken);
-        await notificationGenerator.EnsureTrainingRemindersAsync(userId, settings, cancellationToken);
-
-        var notifications = await db.InAppNotifications.AsNoTracking()
-            .Where(notification => notification.UserId == userId &&
-                                   (isAdministrator || notification.Kind != InAppNotificationKind.AdminRegistrationRequest))
-            .OrderBy(notification => notification.ReadAtUtc == null ? 0 : 1)
-            .ThenByDescending(notification => notification.CreatedAtUtc)
-            .Take(100)
-            .ToArrayAsync(cancellationToken);
-
-        return notifications.Select(MapNotification).ToArray();
-    }
-
-    public async Task<NotificationReadStatus> MarkNotificationReadAsync(
-        string userId,
-        bool isAdministrator,
-        Guid notificationId,
-        CancellationToken cancellationToken)
-    {
-        var readAtUtc = UtcNow();
-        var affected = await db.InAppNotifications
-            .Where(notification => notification.Id == notificationId && notification.UserId == userId &&
-                                   notification.ReadAtUtc == null &&
-                                   (isAdministrator || notification.Kind != InAppNotificationKind.AdminRegistrationRequest))
-            .ExecuteUpdateAsync(setters => setters.SetProperty(notification => notification.ReadAtUtc, readAtUtc),
-                cancellationToken);
-        if (affected == 1)
-        {
-            return NotificationReadStatus.Read;
-        }
-
-        var exists = await db.InAppNotifications.AsNoTracking()
-            .AnyAsync(notification => notification.Id == notificationId && notification.UserId == userId &&
-                                      (isAdministrator || notification.Kind != InAppNotificationKind.AdminRegistrationRequest),
-                cancellationToken);
-        return exists ? NotificationReadStatus.Read : NotificationReadStatus.NotFound;
     }
 
     private async Task<UserSettings> GetOrCreateSettingsAsync(string userId, CancellationToken cancellationToken)
@@ -264,25 +216,14 @@ internal sealed class SettingsService(
         settings.SugarTargetGrams);
 
     private static NotificationPreferencesData MapPreferences(UserSettings settings, bool isAdministrator) => new(
-        settings.TrainingRemindersEnabled,
-        isAdministrator && settings.AdminRequestNotificationsEnabled,
-        isAdministrator);
+        settings.RunningNotificationsEnabled, settings.StrengthNotificationsEnabled,
+        settings.MealRemindersEnabled, settings.NutritionProgressEnabled,
+        settings.DetailedPushPreviews, settings.TimeZoneId);
 
     private static GarminMockConnectionData MapGarmin(UserSettings settings) => new(
         settings.IsGarminDemoConnected,
         settings.GarminDemoConnectedAtUtc is { } connectedAt
             ? new DateTimeOffset(DateTime.SpecifyKind(connectedAt, DateTimeKind.Utc))
-            : null);
-
-    private static InAppNotificationData MapNotification(InAppNotification notification) => new(
-        notification.Id,
-        notification.Kind.ToString(),
-        notification.Title,
-        notification.Message,
-        notification.TargetPath,
-        new DateTimeOffset(DateTime.SpecifyKind(notification.CreatedAtUtc, DateTimeKind.Utc)),
-        notification.ReadAtUtc is { } readAt
-            ? new DateTimeOffset(DateTime.SpecifyKind(readAt, DateTimeKind.Utc))
             : null);
 
     private static bool IsUniqueConstraint(DbUpdateException exception) =>

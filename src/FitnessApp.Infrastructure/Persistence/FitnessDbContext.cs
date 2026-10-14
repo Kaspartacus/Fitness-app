@@ -6,6 +6,7 @@ using FitnessApp.Domain.Running;
 using FitnessApp.Domain.Settings;
 using FitnessApp.Domain.Strength;
 using FitnessApp.Infrastructure.Nutrition;
+using FitnessApp.Infrastructure.Notifications;
 
 namespace FitnessApp.Infrastructure.Persistence;
 
@@ -38,6 +39,11 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
     public DbSet<NutritionFoodAddition> NutritionFoodAdditions => Set<NutritionFoodAddition>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<InAppNotification> InAppNotifications => Set<InAppNotification>();
+
+    public DbSet<NotificationOccurrence> NotificationOccurrences => Set<NotificationOccurrence>();
+    public DbSet<NutritionLogAddition> NutritionLogAdditions => Set<NutritionLogAddition>();
+    public DbSet<WebPushSubscription> WebPushSubscriptions => Set<WebPushSubscription>();
+    public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -252,8 +258,13 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
             entity.Property(settings => settings.UserId).HasMaxLength(450);
             entity.Property(settings => settings.HeightCm).HasPrecision(5, 1);
             entity.Property(settings => settings.WeightKg).HasPrecision(5, 1);
-            entity.Property(settings => settings.TrainingRemindersEnabled).HasDefaultValue(true);
-            entity.Property(settings => settings.AdminRequestNotificationsEnabled).HasDefaultValue(true);
+            // Retired UI preference retained only to restore independent opt-outs on rollback.
+            entity.Property<bool>("LegacyAdminRequestNotificationsEnabled").HasDefaultValue(true);
+            entity.Property(settings => settings.RunningNotificationsEnabled).HasDefaultValue(true);
+            entity.Property(settings => settings.StrengthNotificationsEnabled).HasDefaultValue(true);
+            entity.Property(settings => settings.MealRemindersEnabled).HasDefaultValue(true);
+            entity.Property(settings => settings.NutritionProgressEnabled).HasDefaultValue(true);
+            entity.Property(settings => settings.TimeZoneId).HasMaxLength(100).HasDefaultValue("Europe/Copenhagen");
             entity.HasOne<ApplicationUser>().WithOne().HasForeignKey<UserSettings>(settings => settings.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
@@ -271,6 +282,41 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
             entity.HasIndex(notification => new { notification.UserId, notification.ReadAtUtc, notification.CreatedAtUtc });
             entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(notification => notification.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<NotificationOccurrence>(entity =>
+        {
+            entity.HasKey(x => new { x.UserId, x.Date, x.Slot });
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<NutritionLogAddition>(entity =>
+        {
+            entity.HasKey(x => x.Sequence);
+            entity.Property(x => x.Sequence).ValueGeneratedOnAdd();
+            entity.HasIndex(x => x.EntryId).IsUnique();
+            entity.HasIndex(x => new { x.UserId, x.Date, x.Sequence });
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<WebPushSubscription>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.Endpoint).IsUnique();
+            entity.HasIndex(x => x.Binding).IsUnique();
+            entity.HasIndex(x => new { x.UserId, x.InstallationId }).IsUnique();
+            entity.Property(x => x.Endpoint).HasMaxLength(2048);
+            entity.Property(x => x.P256dh).HasMaxLength(100);
+            entity.Property(x => x.Auth).HasMaxLength(32);
+            entity.Property(x => x.Binding).HasMaxLength(64);
+            entity.Property(x => x.InstallationId).HasMaxLength(32);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<UserSession>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<NotificationDelivery>(entity =>
+        {
+            entity.HasKey(x => new { x.NotificationId, x.SubscriptionId });
+            entity.HasIndex(x => new { x.Finished, x.NextAttemptAtUtc });
+            entity.HasOne<InAppNotification>().WithMany().HasForeignKey(x => x.NotificationId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<WebPushSubscription>().WithMany().HasForeignKey(x => x.SubscriptionId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<ApplicationUser>(entity =>

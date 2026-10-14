@@ -18,9 +18,12 @@ public sealed class UserSettings
 
     public decimal? SugarTargetGrams { get; set; }
 
-    public bool TrainingRemindersEnabled { get; set; } = true;
-
-    public bool AdminRequestNotificationsEnabled { get; set; } = true;
+    public bool RunningNotificationsEnabled { get; set; } = true;
+    public bool StrengthNotificationsEnabled { get; set; } = true;
+    public bool MealRemindersEnabled { get; set; } = true;
+    public bool NutritionProgressEnabled { get; set; } = true;
+    public bool DetailedPushPreviews { get; set; }
+    public string TimeZoneId { get; set; } = "Europe/Copenhagen";
 
     public bool IsGarminDemoConnected { get; set; }
 

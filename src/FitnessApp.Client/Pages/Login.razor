@@ -51,6 +51,8 @@
     [SupplyParameterFromQuery(Name = "logout")]
     public string? Logout { get; set; }
 
+    [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
+
     private readonly FitnessApp.Contracts.Authentication.LoginRequest model = new();
     private bool isSubmitting;
     private string? errorMessage;
@@ -70,7 +72,7 @@
             errorMessage = await Authentication.LoginAsync(model);
             if (errorMessage is null)
             {
-                Navigation.NavigateTo("/");
+                Navigation.NavigateTo(SafeReturnPath.Validate(ReturnUrl));
             }
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)

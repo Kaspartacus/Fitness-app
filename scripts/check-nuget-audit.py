@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
@@ -70,6 +71,38 @@ def has_vulnerabilities(value: object) -> bool:
     return False
 
 
+def finding_summaries(value: object) -> set[str]:
+    """Expose only bounded package metadata, never raw output, source URLs or paths."""
+    summaries: set[str] = set()
+    if isinstance(value, dict):
+        vulnerabilities = value.get("vulnerabilities")
+        if isinstance(vulnerabilities, list) and vulnerabilities:
+            package = safe_metadata(value.get("id"), r"[A-Za-z0-9_.-]{1,100}")
+            version = safe_metadata(value.get("resolvedVersion"), r"[0-9][A-Za-z0-9.+-]{0,99}")
+            for vulnerability in vulnerabilities:
+                if not isinstance(vulnerability, dict):
+                    summaries.add(f"Package {package} {version}: advisory unavailable")
+                    continue
+                severity = vulnerability.get("severity")
+                if severity not in ("Low", "Moderate", "High", "Critical"):
+                    severity = "unknown severity"
+                # NuGet's default public advisory provider. Do not echo arbitrary URLs,
+                # query strings, credentials or feed diagnostics from the JSON document.
+                advisory = safe_metadata(vulnerability.get("advisoryurl"),
+                    r"https://github\.com/advisories/GHSA-[23456789cfghjmpqrvwx]{4}-[23456789cfghjmpqrvwx]{4}-[23456789cfghjmpqrvwx]{4}")
+                summaries.add(f"Package {package} {version}: {severity}; {advisory}")
+        for child in value.values():
+            summaries.update(finding_summaries(child))
+    elif isinstance(value, list):
+        for child in value:
+            summaries.update(finding_summaries(child))
+    return summaries
+
+
+def safe_metadata(value: object, pattern: str) -> str:
+    return value if isinstance(value, str) and re.fullmatch(pattern, value, flags=re.ASCII) else "<unavailable>"
+
+
 def validate(solution_path: Path, audit_path: Path, diagnostics_path: Path) -> int:
     solution_path = solution_path.resolve()
 
@@ -122,6 +155,8 @@ def validate(solution_path: Path, audit_path: Path, diagnostics_path: Path) -> i
 
     if has_vulnerabilities(document):
         print("Dependency audit found vulnerable packages.", file=sys.stderr)
+        for summary in sorted(finding_summaries(document)):
+            print(summary, file=sys.stderr)
         return FINDINGS
 
     print(
@@ -176,6 +211,17 @@ def self_test() -> int:
         ]
         audit.write_text(json.dumps(findings_document), encoding="utf-8")
         if validate(solution, audit, diagnostics) != FINDINGS:
+            return 1
+
+        safe_finding = {"id": "Synthetic.Package", "resolvedVersion": "1.2.3", "vulnerabilities": [
+            {"severity": "High", "advisoryurl": "https://github.com/advisories/GHSA-846f-f764-76mx"}]}
+        expected = {"Package Synthetic.Package 1.2.3: High; https://github.com/advisories/GHSA-846f-f764-76mx"}
+        if finding_summaries({"projects": [{"frameworks": [{"transitivePackages": [safe_finding, safe_finding]}]}]}) != expected:
+            return 1
+        unsafe_finding = {"id": "private/path\n::error::unsafe", "resolvedVersion": "https://credential@example.invalid",
+            "vulnerabilities": [{"severity": "High\nunsafe", "advisoryurl": "https://github.com/advisories/GHSA-846f-f764-76mx?token=private"}],
+            "sources": ["https://credential@example.invalid"], "path": "private/path"}
+        if finding_summaries(unsafe_finding) != {"Package <unavailable> <unavailable>: unknown severity; <unavailable>"}:
             return 1
 
         invalid_findings_document = json.loads(json.dumps(base_document))

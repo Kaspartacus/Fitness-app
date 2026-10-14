@@ -1,0 +1,82 @@
+@implements IDisposable
+@using FitnessApp.Contracts.Settings
+@inject NotificationClient Notifications
+
+<button class="strength-profile-button notification-bell" type="button" @onclick="OpenAsync"
+        aria-label="@(unread > 0 ? $"Notifikationer, {unread} ulæste" : "Notifikationer")" title="Notifikationer">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 10a6 6 0 0 0-12 0c0 7-3 7-3 8.5h18C21 17 18 17 18 10" /><path d="M10 21h4" /></svg>
+    @if (unread > 0) { <span class="settings-notification-count" aria-hidden="true">@(unread > 99 ? "99+" : unread)</span> }
+</button>
+<ModalDialog IsOpen="isOpen" Title="Notifikationer" OnDismiss="Close">
+    @if (loading) { <p role="status">Indlæser notifikationer…</p> }
+    @if (error is not null)
+    {
+        <p class="strength-field-error" role="alert">@error</p>
+        <button class="strength-secondary-button" @onclick="RetryAsync" disabled="@loading">Prøv igen</button>
+    }
+    @if (!loading && items.Count == 0 && error is null) { <p>Ingen notifikationer endnu.</p> }
+    <div class="settings-notification-list">
+        @foreach (var item in items)
+        {
+            <a class="settings-notification-card @(item.ReadAt is null ? "is-unread" : null)" href="@($"/notifikationer/{item.Id}")">
+                <span class="settings-notification-copy"><strong>@item.Title</strong><p>@item.Message</p></span>
+                <span class="settings-notification-meta">@(item.ReadAt is null ? "Ny" : "Læst")<br />@item.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+            </a>
+        }
+    </div>
+    @if (hasMore) { <button class="strength-secondary-button" disabled="@loading" @onclick="MoreAsync">Vis ældre</button> }
+    <a class="strength-text-action" href="/indstillinger/notifikationer">Notifikationsindstillinger</a>
+</ModalDialog>
+
+@code {
+    private int unread, page, loadVersion;
+    private bool isOpen, loading, hasMore;
+    private string? error;
+    private List<InAppNotificationResponse> items = [];
+    private readonly CancellationTokenSource stop = new();
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshBadgeAsync();
+        _ = PollAsync();
+    }
+    private async Task RefreshBadgeAsync()
+    {
+        var result = await Notifications.UnreadAsync();
+        if (!stop.IsCancellationRequested && result.Succeeded && result.Value is { } value) unread = value.UnreadCount;
+    }
+    private async Task PollAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(60));
+        try { while (await timer.WaitForNextTickAsync(stop.Token)) await InvokeAsync(async () => { await RefreshBadgeAsync(); StateHasChanged(); }); }
+        catch (OperationCanceledException) { }
+    }
+    private async Task OpenAsync() { isOpen = true; items = []; page = 0; await LoadAsync(); }
+    private void Close() { isOpen = false; loadVersion++; loading = false; }
+    private Task RetryAsync() => LoadAsync();
+    private async Task MoreAsync() { page++; await LoadAsync(); }
+    private async Task LoadAsync()
+    {
+        if (loading) return;
+        loading = true; error = null;
+        var version = ++loadVersion;
+        var result = await Notifications.InboxAsync(page);
+        if (!isOpen || version != loadVersion || stop.IsCancellationRequested) return;
+        if (result.Succeeded && result.Value is { } value)
+        {
+            foreach (var item in value.Items) if (!items.Any(x => x.Id == item.Id)) items.Add(item);
+            hasMore = value.HasMore; unread = value.UnreadCount;
+            // Only the IDs successfully loaded by this opening/page are acknowledged. A later arrival is untouched.
+            var read = await Notifications.ReadAsync(value.Items.Select(x => x.Id).ToArray());
+            if (read.Succeeded && read.Value is { } count)
+            {
+                unread = count.UnreadCount;
+                var ids = value.Items.Select(x => x.Id).ToHashSet();
+                items = items.Select(x => ids.Contains(x.Id) ? x with { ReadAt = x.ReadAt ?? DateTimeOffset.UtcNow } : x).ToList();
+            }
+            else error = read.Error;
+        }
+        else error = result.Error;
+        loading = false;
+    }
+    public void Dispose() { stop.Cancel(); stop.Dispose(); }
+}

@@ -2,13 +2,15 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using FitnessApp.Contracts.Authentication;
 using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 
 namespace FitnessApp.Client.Authentication;
 
 public sealed class AuthenticationClient(
     IHttpClientFactory httpClientFactory,
     InMemoryAuthenticationStateProvider authenticationState,
-    NavigationManager navigationManager)
+    NavigationManager navigationManager,
+    IJSRuntime? javaScript = null)
 {
     public const string ClientName = "FitnessAppApi";
     private const string GenericLoginFailure =
@@ -16,6 +18,14 @@ public sealed class AuthenticationClient(
 
     public async Task<string?> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
+        try
+        {
+            if (javaScript is not null) await javaScript.InvokeVoidAsync("fitnessPush.clear", cancellationToken);
+        }
+        catch (JSException)
+        {
+            return "Telefonens tilmelding kunne ikke ryddes sikkert. Luk appen, og prøv igen.";
+        }
         using var response = await Client.PostAsJsonAsync("api/auth/login", request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
@@ -67,6 +77,11 @@ public sealed class AuthenticationClient(
 
         try
         {
+            if (javaScript is not null)
+            {
+                try { await javaScript.InvokeVoidAsync("fitnessPush.clear", cancellationToken); }
+                catch (JSException) { /* Server revocation must still be attempted. */ }
+            }
             using var response = await Client.PostAsync("api/auth/logout", content: null, cancellationToken);
             status = response.IsSuccessStatusCode
                 ? LogoutStatus.Succeeded

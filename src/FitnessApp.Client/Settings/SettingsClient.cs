@@ -16,11 +16,6 @@ public sealed record SettingsClientResult<T>(
     public bool Succeeded => Error is null;
 }
 
-public sealed record SettingsClientActionResult(string? Error = null, bool IsNotFound = false)
-{
-    public bool Succeeded => Error is null;
-}
-
 public sealed class SettingsClient(IHttpClientFactory httpClientFactory)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -55,46 +50,7 @@ public sealed class SettingsClient(IHttpClientFactory httpClientFactory)
         SendAsync<GarminMockConnectionResponse>(HttpMethod.Post, "api/settings/garmin-demo/disconnect",
             cancellationToken: cancellationToken);
 
-    public Task<SettingsClientResult<InAppNotificationListResponse>> GetNotificationsAsync(
-        CancellationToken cancellationToken = default) =>
-        SendAsync<InAppNotificationListResponse>(HttpMethod.Get, "api/settings/notifications",
-            cancellationToken: cancellationToken);
-
-    public async Task<SettingsClientActionResult> MarkNotificationReadAsync(
-        Guid notificationId,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            using var response = await Client.PostAsync(
-                $"api/settings/notifications/{notificationId}/read",
-                content: null,
-                cancellationToken);
-            if (response.IsSuccessStatusCode)
-            {
-                return new();
-            }
-
-            var problem = await ReadProblemAsync(response, cancellationToken);
-            return response.StatusCode switch
-            {
-                HttpStatusCode.NotFound => new(problem.Message ?? "Notifikationen findes ikke længere.", true),
-                HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => new(
-                    problem.Message ?? "Du har ikke længere adgang til denne notifikation."),
-                _ => new(problem.Message ?? "Notifikationen kunne ikke markeres som læst. Prøv igen.")
-            };
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            return new("Anmodningen blev annulleret.");
-        }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException or NotSupportedException)
-        {
-            return new("Kunne ikke kontakte serveren. Kontrollér forbindelsen, og prøv igen.");
-        }
-    }
-
-    private async Task<SettingsClientResult<T>> SendAsync<T>(
+    internal async Task<SettingsClientResult<T>> SendAsync<T>(
         HttpMethod method,
         string path,
         object? body = null,

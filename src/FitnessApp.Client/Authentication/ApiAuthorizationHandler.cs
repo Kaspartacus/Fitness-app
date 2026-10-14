@@ -33,9 +33,9 @@ public sealed class ApiAuthorizationHandler(
             requestUri?.AbsolutePath is not "/api/auth/login")
         {
             authenticationState.ClearSession();
-            if (!navigationManager.Uri.EndsWith("/login", StringComparison.Ordinal))
+            if (!string.Equals(new Uri(navigationManager.Uri).AbsolutePath.TrimEnd('/'), "/login", StringComparison.OrdinalIgnoreCase))
             {
-                navigationManager.NavigateTo("/login", replace: true);
+                navigationManager.NavigateTo(SafeReturnPath.LoginUrl(navigationManager.Uri), replace: true);
             }
         }
 

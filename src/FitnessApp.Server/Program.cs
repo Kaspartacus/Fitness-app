@@ -1,4 +1,7 @@
 using System.Threading.RateLimiting;
+using System.IdentityModel.Tokens.Jwt;
+using FitnessApp.Server.Notifications;
+using FitnessApp.Infrastructure.Notifications;
 using FitnessApp.Server.Calendar;
 using FitnessApp.Server.Running;
 using FitnessApp.Server.Settings;
@@ -77,6 +80,13 @@ builder.Services.AddInfrastructure(connectionString, passwordResetTokenLifetime)
 var emailTransport = builder.Configuration.GetValue("Email:Transport", "Smtp");
 builder.Services.AddEmailDelivery(usePickupDirectory: emailTransport is "Pickup");
 builder.Services.AddScoped<IAccessTokenIssuer, JwtAccessTokenIssuer>();
+builder.Services.AddOptions<WebPushOptions>().Bind(builder.Configuration.GetSection("WebPush"))
+    .Validate(o => (!o.Configured && o.PublicKey.Length == 0 && o.PrivateKey.Length == 0 && o.Subject.Length == 0) ||
+        (o.Configured && PushEndpointPolicy.ValidKey(o.PublicKey, 65) && PushEndpointPolicy.ValidKey(o.PrivateKey, 32) &&
+         Uri.TryCreate(o.Subject, UriKind.Absolute, out var subject) && (subject.Scheme is "mailto" or "https")),
+        "WebPush must contain a complete valid VAPID configuration, or be entirely empty.").ValidateOnStart();
+builder.Services.AddSingleton<IWebPushSender, WebPushSender>();
+if (!builder.Environment.IsEnvironment("Testing")) builder.Services.AddHostedService<NotificationWorker>();
 
 builder.Services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
 builder.Services.AddOptions<JwtOptions>()
@@ -107,6 +117,12 @@ builder.Services.AddRateLimiter(options =>
             new { title = "For mange forsøg. Prøv igen senere." },
             cancellationToken);
     };
+    options.AddPolicy("notifications", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    options.AddPolicy("push-test", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 1, Window = TimeSpan.FromMinutes(5), QueueLimit = 0 }));
     options.AddPolicy("login", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -197,8 +213,8 @@ app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 app.UseRouting();
-app.UseRateLimiter();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.Use(async (context, next) =>
@@ -218,7 +234,8 @@ app.Use(async (context, next) =>
         context.Request.Path.StartsWithSegments("/api/running") ||
         context.Request.Path.StartsWithSegments("/api/calendar") ||
         context.Request.Path.StartsWithSegments("/api/nutrition") ||
-        context.Request.Path.StartsWithSegments("/api/settings"))
+        context.Request.Path.StartsWithSegments("/api/settings") ||
+        context.Request.Path.StartsWithSegments("/api/notifications"))
     {
         AuthenticationHttpResponses.SetNoStore(context.Response);
     }
@@ -243,6 +260,7 @@ app.MapRunningEndpoints();
 app.MapCalendarEndpoints();
 app.MapNutritionEndpoints();
 app.MapSettingsEndpoints();
+app.MapNotificationEndpoints();
 app.MapStaticAssets();
 app.UseEndpoints(_ => { });
 

@@ -30,7 +30,10 @@ public sealed class NutritionTests
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync("/api/nutrition/entries", new AddNutritionFoodRequest { Id = request.Id, Date = request.Date, MealSlot = request.MealSlot, FoodId = request.FoodId, Grams = 251 })).StatusCode);
         var day = (await client.GetFromJsonAsync<NutritionDayResponse>($"/api/nutrition/days/{date:yyyy-MM-dd}"))!;
         Assert.Equal(130m, day.Totals.EnergyKcal); Assert.Null(day.Totals.Sugar); Assert.Equal(250m, Assert.Single(day.Meals.Single(meal => meal.Slot == NutritionMealSlot.Breakfast).Entries).Grams);
-        using var scope = factory.Services.CreateScope(); Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<FitnessDbContext>().NutritionFoodEntries.CountAsync());
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+        Assert.Equal(1, await db.NutritionFoodEntries.CountAsync());
+        Assert.Equal(1, await db.NutritionLogAdditions.CountAsync());
     }
 
     [Fact]

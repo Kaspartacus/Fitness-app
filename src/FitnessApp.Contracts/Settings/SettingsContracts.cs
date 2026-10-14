@@ -26,13 +26,20 @@ public sealed record UpdateNutritionGoalsRequest(
     decimal? SugarTargetGrams);
 
 public sealed record NotificationPreferencesResponse(
-    bool TrainingRemindersEnabled,
-    bool AdminRequestNotificationsEnabled,
-    bool IsAdministrator);
+    bool RunningNotificationsEnabled,
+    bool StrengthNotificationsEnabled,
+    bool MealRemindersEnabled,
+    bool NutritionProgressEnabled,
+    bool DetailedPushPreviews,
+    string TimeZoneId);
 
 public sealed record UpdateNotificationPreferencesRequest(
-    bool TrainingRemindersEnabled,
-    bool AdminRequestNotificationsEnabled);
+    bool RunningNotificationsEnabled,
+    bool StrengthNotificationsEnabled,
+    bool MealRemindersEnabled,
+    bool NutritionProgressEnabled,
+    bool DetailedPushPreviews,
+    string TimeZoneId);
 
 public sealed record GarminMockConnectionResponse(
     bool IsConnected,
@@ -52,6 +59,3 @@ public sealed record InAppNotificationResponse(
     string TargetPath,
     DateTimeOffset CreatedAt,
     DateTimeOffset? ReadAt);
-
-public sealed record InAppNotificationListResponse(
-    IReadOnlyCollection<InAppNotificationResponse> Notifications);
