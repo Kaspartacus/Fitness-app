@@ -31,6 +31,7 @@ public sealed class RegistrationMigrationTests
     private const string NutritionRecipeCreationReceiptsMigration = "20261001195000_AddNutritionRecipeCreationReceipts";
 
     private const string ScheduledNotificationsMigration = "20261012181855_AddScheduledNotificationsAndWebPush";
+    private const string PersistentSessionsMigration = "20261015103000_AddPersistentSessions";
 
     [Fact]
     public async Task LatestMigrationAppliesToEmptyDatabase()
@@ -49,7 +50,7 @@ public sealed class RegistrationMigrationTests
                     CompletedWorkoutOccurrenceLinkMigration, NutritionModuleMigration,
                     ConsolidateNutritionGoalsAndReceiptsMigration, UserNutritionFoodsMigration,
                     NutritionFoodAdditionReceiptsMigration, NutritionRecipeAdditionReceiptsMigration,
-                    NutritionRecipeCreationReceiptsMigration, ScheduledNotificationsMigration],
+                    NutritionRecipeCreationReceiptsMigration, ScheduledNotificationsMigration, PersistentSessionsMigration],
                 await dbContext.Database.GetAppliedMigrationsAsync());
             var columns = await ReadUserColumnsAsync(databasePath);
             Assert.Contains("RegisteredAt", columns);
@@ -57,6 +58,8 @@ public sealed class RegistrationMigrationTests
             Assert.Contains("DecidedByUserId", columns);
             Assert.Contains("LastPasswordResetEmailQueuedAt", columns);
             Assert.Contains("SecurityStamp", await ReadColumnsAsync(databasePath, "UserSessions"));
+            Assert.Contains("RefreshTokenHash", await ReadColumnsAsync(databasePath, "UserSessions"));
+            Assert.Contains("Hash", await ReadColumnsAsync(databasePath, "ConsumedRefreshTokens"));
             Assert.Contains("Name", await ReadColumnsAsync(databasePath, "StrengthPrograms"));
             Assert.Contains("WorkoutId", await ReadColumnsAsync(databasePath, "ProgramExercises"));
             Assert.DoesNotContain("ProgramId", await ReadColumnsAsync(databasePath, "ProgramExercises"));
@@ -498,6 +501,9 @@ public sealed class RegistrationMigrationTests
                 var session = await upgradedContext.UserSessions.AsNoTracking().SingleAsync();
                 Assert.Equal("existing-session", session.Id);
                 Assert.Null(session.SecurityStamp);
+                Assert.Null(session.RefreshTokenHash);
+                Assert.Equal(session.CreatedAt, session.LastActivityAt);
+                Assert.Equal(DateTimeOffset.Parse("2026-09-08T01:00:00+00:00"), session.ExpiresAt);
             }
         }
         finally

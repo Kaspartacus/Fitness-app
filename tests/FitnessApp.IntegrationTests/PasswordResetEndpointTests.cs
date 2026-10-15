@@ -224,8 +224,8 @@ public sealed class PasswordResetEndpointTests
         Assert.NotEqual(HttpStatusCode.InternalServerError, getResponse.StatusCode);
         Assert.Equal("no-referrer", getResponse.Headers.GetValues("Referrer-Policy").Single());
         Assert.Contains("no-store", getResponse.Headers.CacheControl?.ToString());
-        Assert.Equal(HttpStatusCode.OK, (await LoginAsync(client, user.Email!, factory.ValidPassword)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await GetCurrentUserAsync(client, accessToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await LoginAsync(client, user.Email!, factory.ValidPassword)).StatusCode);
     }
 
     [Fact]

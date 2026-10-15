@@ -80,6 +80,7 @@ builder.Services.AddInfrastructure(connectionString, passwordResetTokenLifetime)
 var emailTransport = builder.Configuration.GetValue("Email:Transport", "Smtp");
 builder.Services.AddEmailDelivery(usePickupDirectory: emailTransport is "Pickup");
 builder.Services.AddScoped<IAccessTokenIssuer, JwtAccessTokenIssuer>();
+builder.Services.AddSingleton<IRefreshCredentialDeriver, RefreshCredentialDeriver>();
 builder.Services.AddOptions<WebPushOptions>().Bind(builder.Configuration.GetSection("WebPush"))
     .Validate(o => (!o.Configured && o.PublicKey.Length == 0 && o.PrivateKey.Length == 0 && o.Subject.Length == 0) ||
         (o.Configured && PushEndpointPolicy.ValidKey(o.PublicKey, 65) && PushEndpointPolicy.ValidKey(o.PrivateKey, 32) &&
@@ -117,6 +118,9 @@ builder.Services.AddRateLimiter(options =>
             new { title = "For mange forsøg. Prøv igen senere." },
             cancellationToken);
     };
+    options.AddPolicy("session-refresh", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     options.AddPolicy("notifications", context => RateLimitPartition.GetFixedWindowLimiter(
         context.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));

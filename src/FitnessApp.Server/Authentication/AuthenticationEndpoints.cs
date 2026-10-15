@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.ComponentModel.DataAnnotations;
 using FitnessApp.Application.Authentication;
 using FitnessApp.Contracts.Authentication;
+using Microsoft.Extensions.Options;
 
 namespace FitnessApp.Server.Authentication;
 
@@ -16,14 +17,24 @@ internal static class AuthenticationEndpoints
     public static IEndpointRouteBuilder MapAuthenticationEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/api/auth");
+        group.AddEndpointFilter(async (context, next) =>
+        {
+            AuthenticationHttpResponses.SetNoStore(context.HttpContext.Response);
+            if (HttpMethods.IsPost(context.HttpContext.Request.Method) &&
+                !RefreshCookie.IsTrusted(context.HttpContext.Request,
+                    context.HttpContext.RequestServices.GetRequiredService<IOptions<PublicAppOptions>>()))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            return await next(context);
+        });
 
         group.MapPost("/login", LoginAsync)
             .AllowAnonymous()
             .RequireRateLimiting("login");
+        group.MapPost("/refresh", RefreshAsync).AllowAnonymous().RequireRateLimiting("session-refresh");
         group.MapGet("/me", CurrentUser)
             .RequireAuthorization();
         group.MapPost("/logout", LogoutAsync)
-            .RequireAuthorization();
+            .AllowAnonymous();
 
         return endpoints;
     }
@@ -61,11 +72,15 @@ internal static class AuthenticationEndpoints
                 "Login succeeded. TraceId: {TraceId}",
                 httpContext.TraceIdentifier);
 
+            // A successful account switch revokes the cookie's prior device session before replacement.
+            if (httpContext.Request.Cookies[RefreshCookie.Name] is { } previous)
+                await authenticationService.LogoutCredentialAsync(previous, cancellationToken);
+            RefreshCookie.Write(httpContext.Response, result.Refresh!);
             var user = result.User!;
             return Results.Ok(new LoginResponse(
                 result.AccessToken!.Value,
                 result.AccessToken.ExpiresAt,
-                new AuthenticatedUserResponse(user.Email, user.DisplayName, user.Roles)));
+                new AuthenticatedUserResponse(user.Email, user.DisplayName, user.Roles), result.SessionId));
         }
 
         var eventId = result.Status is LoginStatus.LockedOut ? LoginLockedOut : LoginFailed;
@@ -78,6 +93,21 @@ internal static class AuthenticationEndpoints
             new { title = "E-mail eller adgangskode er forkert, eller kontoen har ikke adgang." },
             statusCode: StatusCodes.Status401Unauthorized,
             contentType: "application/problem+json");
+    }
+
+    private static async Task<IResult> RefreshAsync(
+        RefreshRequest request, HttpContext context, IAuthenticationService service, CancellationToken cancellationToken)
+    {
+        var credential = context.Request.Cookies[RefreshCookie.Name];
+        if (credential is null) return Results.Unauthorized();
+        var result = await service.RefreshAsync(credential, request.UserActivity, request.ExpectedSessionId, cancellationToken);
+        if (result.Status == RefreshStatus.Conflict) return Results.Conflict();
+        // Do not delete on rejection: a delayed response must never erase a newer tab's cookie.
+        if (result.Status != RefreshStatus.Succeeded) return Results.Unauthorized();
+        RefreshCookie.Write(context.Response, result.Refresh!);
+        var user = result.User!;
+        return Results.Ok(new LoginResponse(result.AccessToken!.Value, result.AccessToken.ExpiresAt,
+            new AuthenticatedUserResponse(user.Email, user.DisplayName, user.Roles), result.SessionId));
     }
 
     private static IResult CurrentUser(ClaimsPrincipal principal)
@@ -95,9 +125,12 @@ internal static class AuthenticationEndpoints
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken)
     {
-        var userId = principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!;
-        var sessionId = principal.FindFirstValue(JwtRegisteredClaimNames.Sid)!;
-        await authenticationService.LogoutAsync(userId, sessionId, cancellationToken);
+        if (httpContext.Request.Cookies[RefreshCookie.Name] is { } credential)
+            await authenticationService.LogoutCredentialAsync(credential, cancellationToken);
+        if (principal.FindFirstValue(JwtRegisteredClaimNames.Sub) is { } userId &&
+            principal.FindFirstValue(JwtRegisteredClaimNames.Sid) is { } sessionId)
+            await authenticationService.LogoutAsync(userId, sessionId, cancellationToken);
+        RefreshCookie.Delete(httpContext.Response);
 
         loggerFactory.CreateLogger("Authentication").LogInformation(
             LogoutSucceeded,

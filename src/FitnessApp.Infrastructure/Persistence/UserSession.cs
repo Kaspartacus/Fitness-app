@@ -10,9 +10,21 @@ public sealed class UserSession
 
     public DateTimeOffset ExpiresAt { get; set; }
 
+    public DateTimeOffset LastActivityAt { get; set; }
+
+    public string? RefreshTokenHash { get; set; }
+
     public DateTimeOffset? RevokedAt { get; set; }
 
     public string? SecurityStamp { get; set; }
 
     public ApplicationUser User { get; set; } = null!;
+}
+
+// Consumed hashes remain until the device session is deleted, so old-token replay can revoke it.
+public sealed class ConsumedRefreshToken
+{
+    public string Hash { get; set; } = string.Empty;
+    public string SessionId { get; set; } = string.Empty;
+    public DateTimeOffset ConsumedAt { get; set; }
 }

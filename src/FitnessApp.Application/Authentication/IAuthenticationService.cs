@@ -9,7 +9,16 @@ public interface IAuthenticationService
         string sessionId,
         CancellationToken cancellationToken);
 
+    Task<RefreshResult> RefreshAsync(string credential, bool userActivity, string? expectedSessionId, CancellationToken cancellationToken);
+
+    Task LogoutCredentialAsync(string credential, CancellationToken cancellationToken);
+
     Task<bool> LogoutAsync(string userId, string sessionId, CancellationToken cancellationToken);
+}
+
+public interface IRefreshCredentialDeriver
+{
+    string DeriveSuccessor(string credential);
 }
 
 public interface IAccessTokenIssuer
