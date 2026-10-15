@@ -8,4 +8,7 @@ public sealed record AuthenticatedUserResponse(
 public sealed record LoginResponse(
     string AccessToken,
     DateTimeOffset ExpiresAt,
-    AuthenticatedUserResponse User);
+    AuthenticatedUserResponse User,
+    string? SessionId = null);
+
+public sealed record RefreshRequest(bool UserActivity = false, string? ExpectedSessionId = null);

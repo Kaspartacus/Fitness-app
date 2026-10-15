@@ -1,4 +1,25 @@
-﻿<CascadingAuthenticationState>
+@implements IDisposable
+@inject AuthenticationClient Authentication
+@inject NavigationManager Navigation
+
+@if (SessionRouting.ShowSessionGate(initializing, Navigation.Uri))
+{
+    <p class="status-message" role="status">Gendanner din session…</p>
+}
+else if (SessionRouting.ShowSessionGate(Authentication.IsUnavailable, Navigation.Uri))
+{
+    <main class="state-page"><section class="state-panel">
+        <h1>Kunne ikke kontrollere din session</h1>
+        <p>Kontrollér forbindelsen, og prøv igen.</p>
+        <button class="button button-primary" @onclick="RetryAsync">Prøv igen</button>
+        <button class="button button-secondary" @onclick="LogoutAsync">Log ud</button>
+        <a href="/login">Log ind</a>
+        <a href="/glemt-adgangskode">Glemt adgangskode?</a>
+    </section></main>
+}
+else
+{
+<CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
@@ -26,3 +47,29 @@
         </Found>
     </Router>
 </CascadingAuthenticationState>
+
+}
+
+@code {
+    private bool initializing = true;
+    protected override async Task OnInitializedAsync()
+    {
+        Authentication.StateChanged += OnSessionChanged;
+        Navigation.LocationChanged += OnLocationChanged;
+        await RetryAsync();
+    }
+    private async Task RetryAsync()
+    {
+        initializing = true;
+        try { await Authentication.InitializeAsync(); }
+        finally { initializing = false; }
+    }
+    private Task LogoutAsync() => Authentication.LogoutAsync();
+    private void OnSessionChanged() => _ = InvokeAsync(StateHasChanged);
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args) => OnSessionChanged();
+    public void Dispose()
+    {
+        Authentication.StateChanged -= OnSessionChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+}

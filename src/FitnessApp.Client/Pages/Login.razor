@@ -12,9 +12,10 @@
             <p>Log ind for at fortsætte</p>
         </header>
 
-        @if (Logout is "unconfirmed")
+        @if (Logout is "unconfirmed" || Authentication.LogoutPending)
         {
             <p class="notice notice-warning" role="status">Du er logget ud lokalt. Serverlogout kunne ikke bekræftes.</p>
+            <button class="button button-secondary" @onclick="RetryLogoutAsync">Prøv at logge ud igen</button>
         }
 
         <EditForm Model="model" OnValidSubmit="LoginAsync" FormName="login" class="auth-form">
@@ -57,6 +58,8 @@
     private bool isSubmitting;
     private string? errorMessage;
 
+    private async Task RetryLogoutAsync() => await Authentication.LogoutAsync();
+
     private async Task LoginAsync()
     {
         if (isSubmitting)
@@ -75,7 +78,7 @@
                 Navigation.NavigateTo(SafeReturnPath.Validate(ReturnUrl));
             }
         }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or Microsoft.JSInterop.JSException)
         {
             errorMessage = "Der kunne ikke oprettes forbindelse. Prøv igen.";
         }

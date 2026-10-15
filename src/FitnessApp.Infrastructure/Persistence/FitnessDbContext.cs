@@ -13,6 +13,8 @@ namespace FitnessApp.Infrastructure.Persistence;
 public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
     : IdentityDbContext<ApplicationUser, IdentityRole, string>(options)
 {
+    public DbSet<ConsumedRefreshToken> ConsumedRefreshTokens => Set<ConsumedRefreshToken>();
+
     public DbSet<UserSession> UserSessions => Set<UserSession>();
 
     public DbSet<StrengthProgram> StrengthPrograms => Set<StrengthProgram>();
@@ -327,10 +329,20 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
             entity.HasIndex(user => new { user.ApprovalStatus, user.RegisteredAt });
         });
 
+        builder.Entity<ConsumedRefreshToken>(entity =>
+        {
+            entity.HasKey(token => token.Hash);
+            entity.Property(token => token.Hash).HasMaxLength(64);
+            entity.HasIndex(token => token.SessionId);
+            entity.HasOne<UserSession>().WithMany().HasForeignKey(token => token.SessionId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         builder.Entity<UserSession>(entity =>
         {
             entity.HasKey(session => session.Id);
             entity.Property(session => session.Id).HasMaxLength(32);
+            entity.Property(session => session.RefreshTokenHash).HasMaxLength(64);
+            entity.HasIndex(session => session.RefreshTokenHash).IsUnique();
             entity.Property(session => session.SecurityStamp).HasMaxLength(450);
             entity.HasIndex(session => new { session.UserId, session.RevokedAt });
             entity.HasOne(session => session.User)

@@ -33,3 +33,6 @@ jobs:
 
       - name: Audit dependencies
         run: ./scripts/verify.sh audit
+
+      - name: Verify browser session coordination
+        run: node --test tests/FitnessApp.IntegrationTests/session.test.cjs

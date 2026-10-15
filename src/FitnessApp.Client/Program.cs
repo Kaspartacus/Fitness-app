@@ -16,10 +16,12 @@ builder.Services.AddSingleton<InMemoryAuthenticationStateProvider>();
 builder.Services.AddSingleton<AuthenticationStateProvider>(services =>
     services.GetRequiredService<InMemoryAuthenticationStateProvider>());
 builder.Services.AddTransient<ApiAuthorizationHandler>();
+builder.Services.AddHttpClient("FitnessAppSession", client =>
+    client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress));
 builder.Services.AddHttpClient(AuthenticationClient.ClientName, client =>
         client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress))
     .AddHttpMessageHandler<ApiAuthorizationHandler>();
-builder.Services.AddScoped<AuthenticationClient>();
+builder.Services.AddSingleton<AuthenticationClient>();
 builder.Services.AddScoped<RegistrationClient>();
 builder.Services.AddScoped<PasswordResetClient>();
 builder.Services.AddScoped<UserAdministrationClient>();

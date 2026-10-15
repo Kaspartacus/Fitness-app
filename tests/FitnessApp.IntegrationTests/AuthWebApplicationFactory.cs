@@ -30,6 +30,7 @@ internal sealed class AuthWebApplicationFactory : WebApplicationFactory<Program>
     private readonly bool ownsStorage;
     private readonly IReadOnlyDictionary<string, string?> configurationOverrides;
     private readonly SaveChangesInterceptor? saveChangesInterceptor;
+    private readonly TimeProvider? timeProvider;
 
     public AuthWebApplicationFactory(
         int loginPermitLimit = 10,
@@ -40,7 +41,8 @@ internal sealed class AuthWebApplicationFactory : WebApplicationFactory<Program>
         TestAppStorage? storage = null,
         RecordingEmailSender? emailSender = null,
         IReadOnlyDictionary<string, string?>? configurationOverrides = null,
-        SaveChangesInterceptor? saveChangesInterceptor = null)
+        SaveChangesInterceptor? saveChangesInterceptor = null,
+        TimeProvider? timeProvider = null)
     {
         this.loginPermitLimit = loginPermitLimit;
         this.registrationPermitLimit = registrationPermitLimit;
@@ -52,6 +54,7 @@ internal sealed class AuthWebApplicationFactory : WebApplicationFactory<Program>
         EmailSender = emailSender ?? new RecordingEmailSender();
         this.configurationOverrides = configurationOverrides ?? new Dictionary<string, string?>();
         this.saveChangesInterceptor = saveChangesInterceptor;
+        this.timeProvider = timeProvider;
     }
 
     public RecordingEmailSender EmailSender { get; }
@@ -123,6 +126,11 @@ internal sealed class AuthWebApplicationFactory : WebApplicationFactory<Program>
                         passwordResetTokenLifetimeMilliseconds.Value));
             }
 
+            if (timeProvider is not null)
+            {
+                services.RemoveAll<TimeProvider>();
+                services.AddSingleton(timeProvider);
+            }
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(EmailSender);
             services.AddDbContext<FitnessDbContext>(options =>
@@ -136,11 +144,18 @@ internal sealed class AuthWebApplicationFactory : WebApplicationFactory<Program>
         });
     }
 
-    public HttpClient CreateHttpsClient() => CreateClient(new WebApplicationFactoryClientOptions
+    public HttpClient CreateHttpsClient(bool handleCookies = true)
     {
-        BaseAddress = new Uri("https://localhost"),
-        AllowAutoRedirect = false
-    });
+        var client = CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost"),
+            AllowAutoRedirect = false,
+            HandleCookies = handleCookies
+        });
+        client.DefaultRequestHeaders.Add("Origin", "https://fitnessapp.example.test");
+        client.DefaultRequestHeaders.Add("X-FitnessApp-Session", "1");
+        return client;
+    }
 
     public async Task InitializeDatabaseAsync()
     {
