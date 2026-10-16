@@ -540,7 +540,7 @@ a {
 .request-card h2,
 .state-panel h2 {
     margin: 0;
-    color: var(--color-on-primary);
+    color: var(--color-text);
     font-size: 1.25rem;
 }
 
