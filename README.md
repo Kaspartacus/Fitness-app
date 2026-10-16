@@ -306,6 +306,16 @@ The Server project uses `Microsoft.AspNetCore.Components.WebAssembly.Server` 10.
 
 Dependency audit failures print only validated package IDs, resolved versions, severities and public GitHub advisory links. Raw audit JSON, source URLs and diagnostic output remain private; vulnerable or incomplete results still fail CI.
 
+## Appearance
+
+Open **Indstillinger → Indstillinger → Udseende** and choose **Lys** or **Mørk**. Native buttons support Tab/Shift+Tab and Enter/Space; the active option has a checkmark and pressed state. The theme applies immediately. A failed save restores the previous choice and displays a retryable error.
+
+The authenticated user's `UserSettings.Theme` is the source of truth (`dark` by default). `PUT /api/settings/theme` accepts only `light` or `dark` and derives ownership from validated server claims. Theme writes do not update other settings. The `AddThemePreference` migration defaults existing rows to dark.
+
+Only the theme string is cached in `fitnessapp.theme` local storage. The synchronous `wwwroot/js/theme.js` script applies it before CSS and Blazor load; storage denial falls back safely. Authentication changes reload the server preference, never upload the cache, and invalidate earlier reads/saves. Shared semantic tokens in `wwwroot/css/app.css` cover both palettes, including native controls via `color-scheme`. Theme metadata and the matching manifest use the same PWA identity and selected background. Installed launch-screen/manifest refresh timing depends on the browser/OS.
+
+Manual verification remains required on desktop and phone: both themes across strength, running, nutrition, calendar, settings, login and recovery; dialogs, dropdowns, charts, notifications and loading/empty/error states; focus, hover, selected/disabled controls; reload before Blazor, failed saves, and logout/account switching. Also check installed PWA chrome and launch screens. No local app, browser QA or tests were run for this feature at the owner's request; CI remains enabled.
+
 ## PWA installation and scheduled notifications
 
 The existing server hosts a standalone PWA, an authenticated notification inbox and Web Push. The header bell opens the shared centred modal, newest first, in pages of 25. Only the IDs returned by a successfully loaded page are marked read; later arrivals remain unread. Closing the modal preserves history. Category preferences apply to both new inbox entries and push; disabling a device only disables push on that device. Historical entries are retained, including legacy notification kinds; request-time training and administrator registration notifications are no longer generated.

@@ -266,6 +266,7 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
             entity.Property(settings => settings.StrengthNotificationsEnabled).HasDefaultValue(true);
             entity.Property(settings => settings.MealRemindersEnabled).HasDefaultValue(true);
             entity.Property(settings => settings.NutritionProgressEnabled).HasDefaultValue(true);
+            entity.Property(settings => settings.Theme).HasMaxLength(5).HasDefaultValue("dark");
             entity.Property(settings => settings.TimeZoneId).HasMaxLength(100).HasDefaultValue("Europe/Copenhagen");
             entity.HasOne<ApplicationUser>().WithOne().HasForeignKey<UserSettings>(settings => settings.UserId)
                 .OnDelete(DeleteBehavior.Cascade);

@@ -1,19 +1,47 @@
 @page "/indstillinger/sikkerhed"
 @attribute [Authorize]
+@implements IDisposable
+@inject FitnessApp.Client.Settings.ThemePreference Theme
 
-<PageTitle>Sikkerhed og privatliv</PageTitle>
+<PageTitle>Indstillinger</PageTitle>
 
 <main class="strength-app settings-app strength-with-bottom-nav" aria-labelledby="settings-security-title">
     <header class="strength-back-header settings-page-header">
         <a class="strength-icon-button" href="/indstillinger" aria-label="Tilbage til indstillinger" title="Tilbage til indstillinger">←</a>
         <div>
             <p class="strength-overline">App</p>
-            <h1 id="settings-security-title">Sikkerhed og privatliv</h1>
+            <h1 id="settings-security-title">Indstillinger</h1>
         </div>
         <span class="strength-header-spacer" aria-hidden="true"></span>
     </header>
 
     <div class="settings-page-content">
+        <section class="settings-info-card" aria-labelledby="appearance-title">
+            <h2 id="appearance-title">Udseende</h2>
+            <div class="theme-options" role="group" aria-labelledby="appearance-title" aria-busy="@Theme.IsSaving.ToString().ToLowerInvariant()">
+                <button type="button" class="strength-outline-button" aria-pressed="@((Theme.Current == "light").ToString().ToLowerInvariant())"
+                        disabled="@(!Theme.IsReady || Theme.IsSaving)" @onclick='() => Theme.SelectAsync("light")'>Lys</button>
+                <button type="button" class="strength-outline-button" aria-pressed="@((Theme.Current == "dark").ToString().ToLowerInvariant())"
+                        disabled="@(!Theme.IsReady || Theme.IsSaving)" @onclick='() => Theme.SelectAsync("dark")'>Mørk</button>
+            </div>
+            @if (Theme.Error is { } error)
+            {
+                <p class="settings-inline-error" role="alert">@error</p>
+                @if (!Theme.IsReady)
+                {
+                    <button type="button" class="strength-outline-button" @onclick="Theme.ReloadAsync">Prøv igen</button>
+                }
+            }
+            else if (Theme.IsSaving)
+            {
+                <p role="status">Gemmer udseende…</p>
+            }
+            else if (!Theme.IsReady)
+            {
+                <p role="status">Indlæser udseende…</p>
+            }
+        </section>
+
         <section class="settings-info-card">
             <h2>Adgangskode</h2>
             <p>Brug den eksisterende sikre adgangskodeproces, hvis du vil vælge en ny adgangskode. Vi viser eller gemmer aldrig din nuværende adgangskode i indstillinger.</p>
@@ -34,3 +62,9 @@
 
     <StrengthBottomNavigation Active="settings" />
 </main>
+
+@code {
+    protected override void OnInitialized() => Theme.Changed += ThemeChanged;
+    private void ThemeChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Theme.Changed -= ThemeChanged;
+}

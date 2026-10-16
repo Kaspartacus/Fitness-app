@@ -1,8 +1,9 @@
 @implements IDisposable
+@inject FitnessApp.Client.Settings.ThemePreference Theme
 @inject AuthenticationClient Authentication
 @inject NavigationManager Navigation
 
-@if (SessionRouting.ShowSessionGate(initializing, Navigation.Uri))
+@if (SessionRouting.ShowSessionGate(initializing || Theme.IsLoading, Navigation.Uri))
 {
     <p class="status-message" role="status">Gendanner din session…</p>
 }
@@ -55,7 +56,9 @@ else
     protected override async Task OnInitializedAsync()
     {
         Authentication.StateChanged += OnSessionChanged;
+        Theme.Changed += OnSessionChanged;
         Navigation.LocationChanged += OnLocationChanged;
+        await Theme.InitializeAsync();
         await RetryAsync();
     }
     private async Task RetryAsync()
@@ -70,6 +73,7 @@ else
     public void Dispose()
     {
         Authentication.StateChanged -= OnSessionChanged;
+        Theme.Changed -= OnSessionChanged;
         Navigation.LocationChanged -= OnLocationChanged;
     }
 }

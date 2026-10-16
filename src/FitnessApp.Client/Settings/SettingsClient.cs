@@ -24,6 +24,10 @@ public sealed class SettingsClient(IHttpClientFactory httpClientFactory)
         CancellationToken cancellationToken = default) =>
         SendAsync<SettingsOverviewResponse>(HttpMethod.Get, "api/settings", cancellationToken: cancellationToken);
 
+    public Task<SettingsClientResult<ThemePreferenceResponse>> UpdateThemeAsync(
+        string theme, CancellationToken cancellationToken = default) =>
+        SendAsync<ThemePreferenceResponse>(HttpMethod.Put, "api/settings/theme", new UpdateThemePreferenceRequest(theme), cancellationToken);
+
     public Task<SettingsClientResult<ProfileSettingsResponse>> UpdateProfileAsync(
         UpdateProfileSettingsRequest request,
         CancellationToken cancellationToken = default) =>

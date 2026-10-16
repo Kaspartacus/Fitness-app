@@ -29,7 +29,8 @@ public sealed record SettingsOverviewData(
     ProfileSettingsData Profile,
     NotificationPreferencesData NotificationPreferences,
     GarminMockConnectionData Garmin,
-    int UnreadNotificationCount);
+    int UnreadNotificationCount,
+    string Theme = "dark");
 
 public sealed record UpdateProfileSettingsInput(
     string? DisplayName,
@@ -83,8 +84,12 @@ public sealed record InAppNotificationData(
     DateTimeOffset CreatedAt,
     DateTimeOffset? ReadAt);
 
+public sealed record ThemePreferenceResult(SettingsSaveStatus Status, string? Theme = null);
+
 public interface ISettingsService
 {
+    Task<ThemePreferenceResult> UpdateThemeAsync(string userId, string? theme, CancellationToken cancellationToken);
+
     Task<SettingsOverviewData?> GetOverviewAsync(
         string userId,
         bool isAdministrator,

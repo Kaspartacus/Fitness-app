@@ -14,6 +14,7 @@ internal static class SettingsEndpoints
 
         group.MapGet("", GetOverviewAsync);
         group.MapPut("/profile", UpdateProfileAsync);
+        group.MapPut("/theme", UpdateThemeAsync);
         group.MapPut("/nutrition-goals", UpdateNutritionGoalsAsync);
         group.MapPut("/notification-preferences", UpdateNotificationPreferencesAsync);
         group.MapPost("/garmin-demo/connect", ConnectGarminDemoAsync);
@@ -34,6 +35,23 @@ internal static class SettingsEndpoints
         return overview is null
             ? Results.NotFound(new { title = "Indstillingerne blev ikke fundet." })
             : Results.Ok(Map(overview));
+    }
+
+    private static async Task<IResult> UpdateThemeAsync(
+        UpdateThemePreferenceRequest request, ClaimsPrincipal user,
+        ISettingsService settingsService, CancellationToken cancellationToken)
+    {
+        var result = await settingsService.UpdateThemeAsync(Owner(user), request.Theme, cancellationToken);
+        return result.Status switch
+        {
+            SettingsSaveStatus.Saved => Results.Ok(new ThemePreferenceResponse(result.Theme!)),
+            SettingsSaveStatus.Invalid => Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Theme"] = ["Vælg Lys eller Mørk."]
+            }),
+            SettingsSaveStatus.NotFound => Results.NotFound(new { title = "Indstillingerne blev ikke fundet." }),
+            _ => Unexpected()
+        };
     }
 
     private static async Task<IResult> UpdateProfileAsync(
@@ -170,7 +188,8 @@ internal static class SettingsEndpoints
         Map(overview.Profile),
         Map(overview.NotificationPreferences),
         Map(overview.Garmin),
-        overview.UnreadNotificationCount);
+        overview.UnreadNotificationCount,
+        overview.Theme);
 
     private static ProfileSettingsResponse Map(ProfileSettingsData profile) => new(
         profile.DisplayName,
