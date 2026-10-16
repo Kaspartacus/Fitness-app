@@ -1,4 +1,7 @@
 using System.Threading.RateLimiting;
+using System.Diagnostics;
+using FitnessApp.Server.Logging;
+using Microsoft.Extensions.Logging.Console;
 using System.IdentityModel.Tokens.Jwt;
 using FitnessApp.Server.Notifications;
 using FitnessApp.Infrastructure.Notifications;
@@ -24,7 +27,15 @@ var importFrida = args.Length > 0 && args[0] == "import-frida";
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Logging.ClearProviders();
-builder.Logging.AddJsonConsole(options => options.IncludeScopes = true);
+builder.Services.AddSingleton<LogSpool>();
+builder.Services.AddHostedService(services => services.GetRequiredService<LogSpool>());
+builder.Logging.AddConsole(options =>
+{
+    options.FormatterName = "fitness-json";
+    options.MaxQueueLength = 256;
+    options.QueueFullMode = ConsoleLoggerQueueFullMode.DropWrite;
+});
+builder.Logging.AddConsoleFormatter<StructuredConsoleFormatter, ConsoleFormatterOptions>();
 
 builder.Services.AddSingleton<IValidateOptions<PasswordResetOptions>, PasswordResetOptionsValidator>();
 builder.Services.AddOptions<PasswordResetOptions>()
@@ -194,24 +205,57 @@ if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"
     app.UseHsts();
 }
 
-app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
+// Scope surrounds the handler so failures and their completion event share one request ID.
+app.Use(async (context, next) =>
 {
-    var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
-    context.RequestServices.GetRequiredService<ILoggerFactory>()
-        .CreateLogger("UnhandledException")
-        .LogError(
-            new EventId(5000, "UnhandledServerError"),
-            exception,
-            "Unexpected server error. TraceId: {TraceId}",
-            context.TraceIdentifier);
-
-    context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-    await context.Response.WriteAsJsonAsync(new ProblemDetails
+    using var scope = app.Logger.BeginScope(new Dictionary<string, object?>
     {
-        Status = StatusCodes.Status500InternalServerError,
-        Title = "Der opstod en uventet fejl."
+        ["TraceId"] = context.TraceIdentifier,
+        ["RequestId"] = context.TraceIdentifier
     });
-}));
+    var started = Stopwatch.GetTimestamp();
+    try { await next(context); }
+    finally
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+            app.Logger.LogInformation(new EventId(5001, "RequestCompleted"),
+                "Request completed. Status: {StatusCode}; DurationMs: {DurationMs}; Endpoint: {Endpoint}",
+                context.Response.StatusCode, Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+                ((context.GetEndpoint() ?? context.Features.Get<IExceptionHandlerFeature>()?.Endpoint) as RouteEndpoint)
+                    ?.RoutePattern.RawText ?? "unmatched");
+    }
+});
+
+app.Lifetime.ApplicationStarted.Register(() => app.Logger.LogInformation(
+    new EventId(5002, "ApplicationStarted"), "Application started."));
+app.Lifetime.ApplicationStopping.Register(() => app.Logger.LogInformation(
+    new EventId(5003, "ApplicationStopping"), "Application stopping."));
+
+app.UseExceptionHandler(new ExceptionHandlerOptions
+{
+    // The handler below owns handled exception logging. Unhandled failures still use
+    // framework diagnostics (for example when the response has already started).
+    SuppressDiagnosticsCallback = _ => true,
+    ExceptionHandler = async context =>
+    {
+        var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+        context.RequestServices.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("UnhandledException")
+            .LogError(
+                new EventId(5000, "UnhandledServerError"),
+                exception,
+                "Unexpected server error. TraceId: {TraceId}",
+                context.TraceIdentifier);
+
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new ProblemDetails
+        {
+            Status = StatusCodes.Status500InternalServerError,
+            Title = "Der opstod en uventet fejl.",
+            Extensions = { ["traceId"] = context.TraceIdentifier }
+        });
+    }
+});
 
 app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();

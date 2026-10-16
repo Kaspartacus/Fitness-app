@@ -1,0 +1,42 @@
+logging {
+  level = "error"
+}
+
+loki.source.file "fitnessapp" {
+  targets = [{ __path__ = "/var/log/fitnessapp/fitness-*.jsonl", application = "FitnessApp" }]
+  forward_to = [loki.process.fitnessapp.receiver]
+  file_match {
+    enabled = true
+  }
+}
+
+loki.process "fitnessapp" {
+  forward_to = [loki.write.local.receiver]
+  stage.json {
+    expressions = { timestamp = "timestamp", environment = "environment", severity = "severity" }
+  }
+  stage.timestamp {
+    source = "timestamp"
+    format = "RFC3339Nano"
+  }
+  stage.labels {
+    values = { environment = "", severity = "" }
+  }
+  // Only these bounded labels are indexed. Category/trace/request IDs stay in JSON.
+  stage.label_keep {
+    values = ["application", "environment", "severity"]
+  }
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+    batch_size = "256KiB"
+    batch_wait = "1s"
+    remote_timeout = "3s"
+    min_backoff_period = "1s"
+    max_backoff_period = "10s"
+    max_backoff_retries = 3
+  }
+  // No WAL: bounded in-memory batches and the application's rotating file buffer.
+}

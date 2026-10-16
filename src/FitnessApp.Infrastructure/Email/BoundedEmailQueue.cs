@@ -59,6 +59,7 @@ internal sealed class EmailDeliveryWorker(
                 {
                     logger.LogWarning(
                         DeliveryFailed,
+                        exception,
                         "Email delivery failed. MessageId: {MessageId}; Attempt: {Attempt}; ErrorType: {ErrorType}",
                         message.MessageId,
                         attempt,
