@@ -1,0 +1,182 @@
+{
+  "uid": "fitnessapp-logs",
+  "title": "FitnessApp logs",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "tags": [
+    "FitnessApp",
+    "logs"
+  ],
+  "timezone": "browser",
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "label": "Environment",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "fitnessapp-loki"
+        },
+        "query": "label_values({application=\"FitnessApp\"}, environment)",
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "severity",
+        "label": "Severity",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "fitnessapp-loki"
+        },
+        "query": "label_values({application=\"FitnessApp\"}, severity)",
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "category",
+        "label": "Category (regex)",
+        "type": "textbox",
+        "query": ".*",
+        "current": {
+          "text": ".*",
+          "value": ".*"
+        }
+      },
+      {
+        "name": "traceId",
+        "label": "Trace / request ID (regex)",
+        "type": "textbox",
+        "query": ".*",
+        "current": {
+          "text": ".*",
+          "value": ".*"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Warnings and errors per interval",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (severity) (count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\" | __error__=\"\" | category =~ ${category:doublequote} | traceId =~ ${traceId:doublequote} | severity =~ \"Warning|Error|Critical\" [$__auto]))",
+          "queryType": "range",
+          "legendFormat": "{{severity}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "title": "Recent exceptions \u2014 expand a line and follow Related request logs",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 24,
+        "h": 9
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\" | __error__=\"\" | category =~ ${category:doublequote} | traceId =~ ${traceId:doublequote} | exceptionType != \"\"",
+          "queryType": "range",
+          "legendFormat": "{{severity}}"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "Searchable logs \u2014 clear severity/category filters to see the whole request",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 24,
+        "h": 12
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\" | __error__=\"\" | category =~ ${category:doublequote} | traceId =~ ${traceId:doublequote}",
+          "queryType": "range",
+          "legendFormat": "{{severity}}"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    }
+  ]
+}
