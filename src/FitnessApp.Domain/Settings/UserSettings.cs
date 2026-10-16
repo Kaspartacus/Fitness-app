@@ -2,6 +2,8 @@ namespace FitnessApp.Domain.Settings;
 
 public sealed class UserSettings
 {
+    public string Theme { get; set; } = "dark";
+
     public string UserId { get; set; } = string.Empty;
 
     public decimal? HeightCm { get; set; }

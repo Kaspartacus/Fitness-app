@@ -49,7 +49,8 @@ public sealed record SettingsOverviewResponse(
     ProfileSettingsResponse Profile,
     NotificationPreferencesResponse NotificationPreferences,
     GarminMockConnectionResponse Garmin,
-    int UnreadNotificationCount);
+    int UnreadNotificationCount,
+    string Theme = "dark");
 
 public sealed record InAppNotificationResponse(
     Guid Id,
@@ -59,3 +60,7 @@ public sealed record InAppNotificationResponse(
     string TargetPath,
     DateTimeOffset CreatedAt,
     DateTimeOffset? ReadAt);
+
+public sealed record ThemePreferenceResponse(string Theme);
+
+public sealed record UpdateThemePreferenceRequest(string? Theme);

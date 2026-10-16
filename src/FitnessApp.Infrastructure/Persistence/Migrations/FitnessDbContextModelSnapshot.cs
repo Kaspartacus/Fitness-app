@@ -359,6 +359,13 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                     b.Property<decimal?>("SugarTargetGrams")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Theme")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(5)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("dark");
+
                     b.Property<string>("TimeZoneId")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
