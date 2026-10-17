@@ -11,7 +11,7 @@ datasources:
     jsonData:
       maxLines: 1000
       derivedFields:
-        - name: Related request logs
+        - name: Følg request
           matcherRegex: '"traceId":"([^"\\]+)"'
-          url: '/d/fitnessapp-logs/fitnessapp-logs?var-environment=All&var-severity=All&var-category=.*&var-traceId=$${__value.raw}&from=now-3h&to=now'
-          urlDisplayLabel: Related request logs
+          url: '/d/fitnessapp-logs/fitnessapp-logs?var-environment=All&var-severity=All&var-category=.*&var-search=&var-traceId=$${__value.raw}&from=now-72h&to=now'
+          urlDisplayLabel: Følg request

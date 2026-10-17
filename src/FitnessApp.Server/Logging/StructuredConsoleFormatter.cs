@@ -11,8 +11,12 @@ namespace FitnessApp.Server.Logging;
 // state, scopes, exception messages or Exception.Data: these can contain private values.
 internal sealed partial class StructuredConsoleFormatter(
     IHostEnvironment environment,
-    LogSpool spool) : ConsoleFormatter("fitness-json")
+    LogSpool spool,
+    IConfiguration configuration) : ConsoleFormatter("fitness-json")
 {
+    private readonly LogLevel dashboardConsoleMinimumLevel = configuration.GetValue(
+        "Logging:Dashboard:ConsoleMinimumLevel", LogLevel.Warning);
+
     // EF and the request boundary may see the same object. Weak keys bound this to
     // the exception lifetime; later events retain only newly propagated stack frames.
     private readonly ConditionalWeakTable<Exception, ExceptionSnapshot> reportedExceptions = new();
@@ -66,8 +70,11 @@ internal sealed partial class StructuredConsoleFormatter(
             exceptionLoggedPreviously,
             additionalExceptionStack
         });
-        writer.WriteLine(line);
-        spool.TryWrite(line);
+        var forwarded = spool.TryWrite(line);
+        // The provider must still receive Information events for the dashboard.
+        // Filter only the console destination; fall back if spooling is unavailable.
+        if (!forwarded || entry.LogLevel >= dashboardConsoleMinimumLevel)
+            writer.WriteLine(line);
     }
 
     private static void CopySafeFields(object? state, Dictionary<string, object?> fields)
