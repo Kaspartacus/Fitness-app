@@ -70,10 +70,11 @@ internal sealed partial class StructuredConsoleFormatter(
             exceptionLoggedPreviously,
             additionalExceptionStack
         });
-        var forwarded = spool.TryWrite(line);
+        var showConsole = entry.LogLevel >= dashboardConsoleMinimumLevel;
+        var forwarded = spool.TryWrite(line, consoleFallback: !showConsole);
         // The provider must still receive Information events for the dashboard.
         // Filter only the console destination; fall back if spooling is unavailable.
-        if (!forwarded || entry.LogLevel >= dashboardConsoleMinimumLevel)
+        if (!forwarded || showConsole)
             writer.WriteLine(line);
     }
 

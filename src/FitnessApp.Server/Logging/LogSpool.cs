@@ -11,24 +11,25 @@ internal sealed class LogSpool(IConfiguration configuration, IWebHostEnvironment
     private const int FileCount = 4;
     private const int FileBytes = 5 * 1024 * 1024;
     private const int EntryBytes = 64 * 1024;
-    private readonly Channel<string> queue = Channel.CreateBounded<string>(new BoundedChannelOptions(256)
+    private readonly Channel<PendingLog> queue = Channel.CreateBounded<PendingLog>(new BoundedChannelOptions(256)
     {
         SingleReader = true,
         FullMode = BoundedChannelFullMode.Wait
     });
     private readonly bool enabled = configuration.GetValue<bool>("Logging:Dashboard:Enabled");
-    private volatile bool failed;
+    private volatile bool ready;
 
-    public bool TryWrite(string line)
+    public bool TryWrite(string line, bool consoleFallback)
     {
-        if (!enabled || failed) return false;
+        if (!ready) return false;
         // Bound queued memory as well as file sizes. Oversized events remain on console.
-        return Encoding.UTF8.GetByteCount(line) <= EntryBytes && queue.Writer.TryWrite(line);
+        return Encoding.UTF8.GetByteCount(line) <= EntryBytes && queue.Writer.TryWrite(new PendingLog(line, consoleFallback));
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.Run(async () =>
     {
         if (!enabled) return;
+        PendingLog? pending = null;
         try
         {
             var directory = PrivateDirectory.ResolveAndCreate("App_Data/logs", environment.ContentRootPath,
@@ -37,11 +38,14 @@ internal sealed class LogSpool(IConfiguration configuration, IWebHostEnvironment
             var index = SelectFile(directory, newest: true);
             await using var initial = Open(directory, index, append: true);
             FileStream current = initial;
+            // Until the directory/file is open, startup events stay on the console.
+            ready = true;
             try
             {
-                await foreach (var line in queue.Reader.ReadAllAsync(stoppingToken))
+                await foreach (var entry in queue.Reader.ReadAllAsync(stoppingToken))
                 {
-                    var bytes = Encoding.UTF8.GetBytes(line + "\n");
+                    pending = entry;
+                    var bytes = Encoding.UTF8.GetBytes(entry.Line + "\n");
                     if (current.Length + bytes.Length > FileBytes)
                     {
                         await current.DisposeAsync();
@@ -50,6 +54,7 @@ internal sealed class LogSpool(IConfiguration configuration, IWebHostEnvironment
                     }
                     await current.WriteAsync(bytes, stoppingToken);
                     await current.FlushAsync(stoppingToken);
+                    pending = null;
                 }
             }
             finally { await current.DisposeAsync(); }
@@ -58,14 +63,34 @@ internal sealed class LogSpool(IConfiguration configuration, IWebHostEnvironment
         catch (Exception exception)
         {
             // Disable until restart, with one safe diagnostic. Never retry or report file paths.
-            failed = true;
+            ready = false;
             queue.Writer.TryComplete();
             services.GetRequiredService<ILogger<LogSpool>>().LogWarning(
                 new EventId(5200, "DashboardSpoolUnavailable"), exception,
                 "Dashboard log spool unavailable; console logging continues. Restart to retry.");
         }
-        finally { queue.Writer.TryComplete(); }
+        finally
+        {
+            ready = false;
+            queue.Writer.TryComplete();
+            // Admission is not delivery: replay only entries whose console copy was
+            // suppressed. Completion prevents concurrent writers adding after this drain.
+            WriteFallback(pending);
+            while (queue.Reader.TryRead(out var entry)) WriteFallback(entry);
+        }
     }, CancellationToken.None);
+
+    private readonly record struct PendingLog(string Line, bool ConsoleFallback);
+
+    private static void WriteFallback(PendingLog? entry)
+    {
+        if (entry is not { ConsoleFallback: true } value) return;
+        // Already privacy-filtered JSON. Bypass ILogger to avoid re-enqueueing the
+        // abandoned event or repeating exception serialization/deduplication.
+        try { Console.Error.WriteLine(value.Line); }
+        catch (IOException) { /* The console is unavailable too; never retry. */ }
+        catch (ObjectDisposedException) { /* The host may be shutting down. */ }
+    }
 
     private static int SelectFile(string directory, bool newest, int? excludedIndex = null)
     {
