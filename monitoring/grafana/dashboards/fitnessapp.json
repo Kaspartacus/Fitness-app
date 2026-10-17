@@ -2,7 +2,7 @@
   "uid": "fitnessapp-logs",
   "title": "FitnessApp logs",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "editable": false,
   "tags": [
     "FitnessApp",
@@ -142,12 +142,61 @@
   },
   "panels": [
     {
+      "id": 13,
+      "title": "Seneste app-log",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(max_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\"} | label_format loggedAt=\"{{ __timestamp__ | unixEpoch }}\" | unwrap loggedAt | __error__=\"\" [72h])) * 1000",
+          "queryType": "instant",
+          "instant": true
+        }
+      ],
+      "description": "Tidspunkt i den seneste app-log inden for 72 timer frem til den valgte sluttid. Følger kun Miljø; andre filtre ignoreres. En gammel eller manglende log beviser ikke en fejl: appen kan være stille. Dette er ikke en heartbeat.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeFromNow",
+          "noValue": "Ingen logs · 72 timer",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center"
+      }
+    },
+    {
       "id": 3,
       "title": "Logs",
       "type": "logs",
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 3,
         "w": 24,
         "h": 12
       },
@@ -158,7 +207,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\" | __error__=\"\" | category =~ ${category:doublequote}",
+          "expr": "{application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote}",
           "queryType": "range",
           "legendFormat": "{{severity}}",
           "maxLines": 500
@@ -200,7 +249,7 @@
       "type": "stat",
       "gridPos": {
         "x": 0,
-        "y": 12,
+        "y": 15,
         "w": 8,
         "h": 3
       },
@@ -211,7 +260,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\" | __error__=\"\" | category =~ ${category:doublequote} [$__range])) or vector(0)",
+          "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote} [$__range])) or vector(0)",
           "queryType": "instant",
           "instant": true
         }
@@ -250,7 +299,7 @@
       "type": "stat",
       "gridPos": {
         "x": 8,
-        "y": 12,
+        "y": 15,
         "w": 8,
         "h": 3
       },
@@ -261,7 +310,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\" | __error__=\"\" | category =~ ${category:doublequote} | severity = \"Warning\" [$__range])) or vector(0)",
+          "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote} | severity = \"Warning\" [$__range])) or vector(0)",
           "queryType": "instant",
           "instant": true
         }
@@ -300,7 +349,7 @@
       "type": "stat",
       "gridPos": {
         "x": 16,
-        "y": 12,
+        "y": 15,
         "w": 8,
         "h": 3
       },
@@ -311,7 +360,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\" | __error__=\"\" | category =~ ${category:doublequote} | severity =~ \"Error|Critical\" [$__range])) or vector(0)",
+          "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote} | severity =~ \"Error|Critical\" [$__range])) or vector(0)",
           "queryType": "instant",
           "instant": true
         }
@@ -350,34 +399,329 @@
       "type": "text",
       "gridPos": {
         "x": 0,
-        "y": 15,
+        "y": 18,
         "w": 24,
-        "h": 3
+        "h": 6
       },
       "options": {
         "mode": "markdown",
-        "content": "**Find logs:** vælg tidsperiode, niveau og kategori, eller brug **Søg i logs**. Åbn linjens **⋮** → **Show log details** for tidspunkt og detaljer.\n\n**Følg en fejl:** vælg **Følg request** i logdetaljerne, eller indsæt ID’et i **Request-ID**. **0 fejl** betyder ingen fejl i de viste logs. Er loglisten tom, så nulstil filtrene og udvid perioden til 72 timer; kontrollér derefter at logopsamlingen kører."
+        "content": "**Logs:** brug filtrene. **⋮ → Show log details → Følg request** samler ét request.\n\n**HTTP-grafer:** følger kun Miljø, Request-ID og perioden. 4xx/5xx kan være Info-logs.\n\n**Kodested:** fold Undtagelser ud. **Seneste app-log** viser datatiden, ikke en sundhedstest."
       }
     },
     {
+      "id": 40,
+      "title": "HTTP-svar over tid",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (statusCode) (count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\"} |~ ${traceId:doublequote} | json eventName=\"eventName\", statusCode=\"fields.StatusCode\", durationMs=\"fields.DurationMs\", endpoint=\"fields.Endpoint\" | __error__=\"\" | eventName=\"RequestCompleted\" | statusCode >= 100 and statusCode < 600 [$__auto]))",
+          "queryType": "range",
+          "legendFormat": "HTTP {{statusCode}}"
+        }
+      ],
+      "description": "Følger kun Miljø, Request-ID og tidsperioden; logniveau, kategori og fritekstsøgning påvirker ikke request-grafer. Kun RequestCompleted-hændelser tælles. 404 betyder ikke fundet; 401/403 handler om adgang; 5xx er serverfejl. Tomt betyder ingen matchende requests. Klik på en serie for logs med samme status.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "links": [
+            {
+              "title": "Vis requests med denne HTTP-status",
+              "url": "/d/fitnessapp-logs/fitnessapp-logs?${environment:queryparam}&var-severity=All&var-category=.*&var-search=Status%3A%20${__field.labels.statusCode}%3B&var-traceId=${traceId:percentencode}&from=${__from}&to=${__to}",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 41,
+      "title": "Svartider",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 25,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.5, {application=\"FitnessApp\", environment=~\"${environment:regex}\"} |~ ${traceId:doublequote} | json eventName=\"eventName\", statusCode=\"fields.StatusCode\", durationMs=\"fields.DurationMs\", endpoint=\"fields.Endpoint\" | __error__=\"\" | eventName=\"RequestCompleted\" | durationMs != \"\" | unwrap durationMs | __error__=\"\" [$__auto]) by ()",
+          "queryType": "range",
+          "legendFormat": "Median (50 %)"
+        },
+        {
+          "refId": "B",
+          "expr": "quantile_over_time(0.95, {application=\"FitnessApp\", environment=~\"${environment:regex}\"} |~ ${traceId:doublequote} | json eventName=\"eventName\", statusCode=\"fields.StatusCode\", durationMs=\"fields.DurationMs\", endpoint=\"fields.Endpoint\" | __error__=\"\" | eventName=\"RequestCompleted\" | durationMs != \"\" | unwrap durationMs | __error__=\"\" [$__auto]) by ()",
+          "queryType": "range",
+          "legendFormat": "95 % af requests er hurtigere"
+        }
+      ],
+      "description": "Følger kun Miljø, Request-ID og tidsperioden; logniveau, kategori og fritekstsøgning påvirker ikke request-grafer. Kun RequestCompleted-hændelser tælles. Median er den typiske svartid; 95 %-linjen fremhæver den langsomme ende. Med få requests er percentiler usikre. Ingen requests vises som manglende data, aldrig som 0 ms.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 1,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 42,
+      "title": "HTTP-problemer · top 10",
+      "type": "table",
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sort_desc(topk(10, sum by (statusCode, endpoint) (count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\"} |~ ${traceId:doublequote} | json eventName=\"eventName\", statusCode=\"fields.StatusCode\", durationMs=\"fields.DurationMs\", endpoint=\"fields.Endpoint\" | __error__=\"\" | eventName=\"RequestCompleted\" | statusCode >= 400 and statusCode < 600 [$__range]))))",
+          "queryType": "instant",
+          "instant": true
+        }
+      ],
+      "description": "Følger kun Miljø, Request-ID og tidsperioden; logniveau, kategori og fritekstsøgning påvirker ikke request-grafer. Kun RequestCompleted-hændelser tælles. Antal 4xx/5xx-svar pr. status og sikker routeskabelon, ikke rå URL. Et HTTP-problem er ikke nødvendigvis en exception. Klik på en HTTP-status for alle requests med denne status; endpoint står i logdetaljerne.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "Ingen matchende HTTP-problemer"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Antal"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "HTTP"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Vis requests med denne HTTP-status",
+                    "url": "/d/fitnessapp-logs/fitnessapp-logs?${environment:queryparam}&var-severity=All&var-category=.*&var-search=Status%3A%20${__value.raw}%3B&var-traceId=${traceId:percentencode}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "statusCode": 0,
+              "endpoint": 1,
+              "Value": 2,
+              "Value #A": 2
+            },
+            "renameByName": {
+              "statusCode": "HTTP",
+              "endpoint": "Endpoint",
+              "Value": "Antal",
+              "Value #A": "Antal"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "title": "Fejl i koden · top 8",
+      "type": "table",
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sort_desc(topk(8, sum by (category, exceptionType) (count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote} | severity =~ \"Error|Critical\" [$__range]))))",
+          "queryType": "instant",
+          "instant": true
+        }
+      ],
+      "description": "Følger alle logfiltre. Antal Error/Critical-hændelser pr. kategori og undtagelsestype; det er ikke antal unikke fejl. Ingen match giver en tom visning. Brug Kategori eller søgning ovenfor og åbn Undtagelser og kodesteder for det relevante request.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "Ingen matchende fejl"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Antal"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "category": 0,
+              "exceptionType": 1,
+              "Value": 2,
+              "Value #A": 2
+            },
+            "renameByName": {
+              "category": "Kategori",
+              "exceptionType": "Undtagelse",
+              "Value": "Antal",
+              "Value #A": "Antal"
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": 30,
-      "title": "Undtagelser og udvikling over tid",
+      "title": "Undtagelser og kodesteder",
       "type": "row",
       "collapsed": true,
       "gridPos": {
         "x": 0,
-        "y": 18,
+        "y": 41,
         "w": 24,
         "h": 1
       },
       "panels": [
         {
           "id": 2,
-          "title": "Undtagelser · klik for stack trace",
+          "title": "Undtagelser · type og kodested",
           "type": "logs",
           "gridPos": {
             "x": 0,
-            "y": 18,
+            "y": 42,
             "w": 24,
             "h": 9
           },
@@ -388,7 +732,7 @@
           "targets": [
             {
               "refId": "A",
-              "expr": "{application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\" | __error__=\"\" | category =~ ${category:doublequote} | exceptionType != \"\"",
+              "expr": "{application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote} | exceptionType != \"\"",
               "queryType": "range",
               "legendFormat": "{{severity}}",
               "maxLines": 100
@@ -402,6 +746,9 @@
             "sortOrder": "Descending",
             "dedupStrategy": "none",
             "displayedFields": [
+              "exceptionType",
+              "sourceLocation",
+              "sourceMethod",
               "message"
             ],
             "showLevel": true,
@@ -414,7 +761,7 @@
             "defaults": {},
             "overrides": []
           },
-          "description": "Ingen poster betyder ingen registrerede undtagelser i det valgte udsnit. Åbn linjens ⋮-menu → Show log details og vælg Følg request. Udvid tidsperioden, hvis der heller ikke er almindelige logs."
+          "description": "Viser undtagelsestype og første relevante sted i appens kode. Fil/linje kræver debug-symboler; ellers vises metode, hvis tilgængelig. Ældre logs kan mangle kodested. Åbn ⋮ → Show log details for den fulde stack trace, inner exceptions og Følg request. Tom liste betyder ingen matchende undtagelser."
         },
         {
           "id": 1,
@@ -422,7 +769,7 @@
           "type": "timeseries",
           "gridPos": {
             "x": 0,
-            "y": 27,
+            "y": 51,
             "w": 24,
             "h": 6
           },
@@ -433,13 +780,13 @@
           "targets": [
             {
               "refId": "A",
-              "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\" | __error__=\"\" | category =~ ${category:doublequote} | severity = \"Warning\" [$__auto])) or vector(0)",
+              "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote} | severity = \"Warning\" [$__auto])) or vector(0)",
               "queryType": "range",
               "legendFormat": "Advarsler"
             },
             {
               "refId": "B",
-              "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\" | __error__=\"\" | category =~ ${category:doublequote} | severity =~ \"Error|Critical\" [$__auto])) or vector(0)",
+              "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote} | severity =~ \"Error|Critical\" [$__auto])) or vector(0)",
               "queryType": "range",
               "legendFormat": "Fejl"
             }

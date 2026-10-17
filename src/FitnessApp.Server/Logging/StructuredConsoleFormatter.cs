@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -105,6 +106,7 @@ internal sealed partial class StructuredConsoleFormatter(
         return new
         {
             type = exception.GetType().FullName,
+            source = FindSource(exception),
             exception.HResult,
             // Stack frames and inner types are retained; free-form messages/data are not safe.
             stackTrace = exception.StackTrace,
@@ -112,6 +114,34 @@ internal sealed partial class StructuredConsoleFormatter(
             aggregated = exception is AggregateException aggregate && depth < 8
                 ? aggregate.InnerExceptions.Take(8).Select(inner => ExceptionDetails(inner, depth + 1)).ToArray() : null
         };
+    }
+
+    private static object? FindSource(Exception exception)
+    {
+        foreach (var frame in new StackTrace(exception, fNeedFileInfo: true).GetFrames())
+        {
+            var method = frame.GetMethod();
+            var type = method?.DeclaringType;
+            var path = frame.GetFileName()?.Replace('\\', '/');
+            var root = path?.LastIndexOf("/src/FitnessApp.", StringComparison.Ordinal) ?? -1;
+            // Never publish an absolute build-machine path as a source field.
+            var file = root >= 0 ? path![(root + 1)..]
+                : path?.StartsWith("src/FitnessApp.", StringComparison.Ordinal) == true ? path : null;
+            if (file is not null && (!file.EndsWith(".cs", StringComparison.Ordinal) ||
+                file.Split('/').Any(part => part is "." or ".."))) file = null;
+            var applicationFrame = type?.Assembly == typeof(StructuredConsoleFormatter).Assembly ||
+                type?.Namespace?.StartsWith("FitnessApp.", StringComparison.Ordinal) == true;
+            if (file is null && !applicationFrame) continue;
+            var name = $"{type?.FullName}.{method?.Name}";
+            // Async frames name the generated MoveNext method; show its source method.
+            if (method?.Name == "MoveNext" && type?.DeclaringType is not null &&
+                type.Name.StartsWith('<') && type.Name.IndexOf('>') is var end && end > 1)
+                name = $"{type.DeclaringType.FullName}.{type.Name[1..end]}";
+            int? line = file is not null && frame.GetFileLineNumber() > 0 ? frame.GetFileLineNumber() : null;
+            return new { file, line, method = name,
+                location = file is null ? name : line is null ? file : $"{file}:{line}" };
+        }
+        return null;
     }
 
     private sealed class ExceptionSnapshot
