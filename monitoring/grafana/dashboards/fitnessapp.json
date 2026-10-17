@@ -1,0 +1,888 @@
+{
+  "uid": "fitnessapp-logs",
+  "title": "FitnessApp logs",
+  "schemaVersion": 39,
+  "version": 5,
+  "editable": false,
+  "tags": [
+    "FitnessApp",
+    "logs"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": {
+    "from": "now-48h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "label": "Miljø",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "fitnessapp-loki"
+        },
+        "query": "label_values({application=\"FitnessApp\"}, environment)",
+        "refresh": 2,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "severity",
+        "label": "Niveau",
+        "type": "custom",
+        "query": "Trace,Debug,Information,Warning,Error,Critical",
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [
+          {
+            "text": "Trace",
+            "value": "Trace",
+            "selected": false
+          },
+          {
+            "text": "Debug",
+            "value": "Debug",
+            "selected": false
+          },
+          {
+            "text": "Information",
+            "value": "Information",
+            "selected": false
+          },
+          {
+            "text": "Warning",
+            "value": "Warning",
+            "selected": false
+          },
+          {
+            "text": "Error",
+            "value": "Error",
+            "selected": false
+          },
+          {
+            "text": "Critical",
+            "value": "Critical",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "search",
+        "label": "Søg i logs",
+        "description": "Søg efter tekst, hændelsesnavn eller kategori. Søgningen skelner mellem store og små bogstaver. Tomt felt viser alle.",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
+      },
+      {
+        "name": "category",
+        "label": "Kategori",
+        "type": "custom",
+        "query": "Alle : .*, API og opstart : ^FitnessApp[.]Server$, Login og brugere : (?i).*(authentication|passwordreset|registration|useradministration).*, Træning : (?i).*(strength|training).*, Løb : (?i).*running.*, Kost : (?i).*(nutrition|food).*, Kalender : (?i).*calendar.*, Notifikationer : (?i).*(notification|webpush).*, Database : (?i).*entityframeworkcore.*, Uventede fejl : ^UnhandledException$",
+        "multi": false,
+        "includeAll": false,
+        "current": {
+          "text": "Alle",
+          "value": ".*"
+        },
+        "options": [
+          {
+            "text": "Alle",
+            "value": ".*",
+            "selected": true
+          },
+          {
+            "text": "API og opstart",
+            "value": "^FitnessApp[.]Server$",
+            "selected": false
+          },
+          {
+            "text": "Login og brugere",
+            "value": "(?i).*(authentication|passwordreset|registration|useradministration).*",
+            "selected": false
+          },
+          {
+            "text": "Træning",
+            "value": "(?i).*(strength|training).*",
+            "selected": false
+          },
+          {
+            "text": "Løb",
+            "value": "(?i).*running.*",
+            "selected": false
+          },
+          {
+            "text": "Kost",
+            "value": "(?i).*(nutrition|food).*",
+            "selected": false
+          },
+          {
+            "text": "Kalender",
+            "value": "(?i).*calendar.*",
+            "selected": false
+          },
+          {
+            "text": "Notifikationer",
+            "value": "(?i).*(notification|webpush).*",
+            "selected": false
+          },
+          {
+            "text": "Database",
+            "value": "(?i).*entityframeworkcore.*",
+            "selected": false
+          },
+          {
+            "text": "Uventede fejl",
+            "value": "^UnhandledException$",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "traceId",
+        "label": "Request-ID",
+        "description": "Indsæt et trace/request-ID for at følge et forløb. Tomt felt viser alle.",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 13,
+      "title": "Seneste app-log",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{application=\"FitnessApp\", environment=~\"${environment:regex}\"}",
+          "queryType": "range",
+          "maxLines": 1,
+          "direction": "backward"
+        }
+      ],
+      "description": "Tidspunkt i den seneste app-log i den valgte periode. Følger kun Miljø og perioden; andre filtre ignoreres. En gammel eller manglende log beviser ikke en fejl: appen kan være stille. Dette er ikke en heartbeat.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeFromNow",
+          "noValue": "Ingen logs i perioden",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^Time$/",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Logs",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 24,
+        "h": 12
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote}",
+          "queryType": "range",
+          "legendFormat": "{{severity}}",
+          "maxLines": 500
+        }
+      ],
+      "options": {
+        "showTime": false,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "displayedFields": [
+          "message"
+        ],
+        "showLevel": true,
+        "showControls": true,
+        "allowDownload": false,
+        "detailsMode": "inline",
+        "prettifyLogMessage": false,
+        "showCommonLabels": false
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "description": "Søg eller vælg et filter ovenfor. Åbn linjens ⋮-menu → Show log details for tidspunkt, alle felter, stack trace og linket Følg request. Brug logvisningens sortering til at læse et forløb fra start.",
+      "links": [
+        {
+          "title": "Vis alle logs · nulstil filtre",
+          "url": "/d/fitnessapp-logs/fitnessapp-logs?var-environment=All&var-severity=All&var-category=.*&var-search=&var-traceId=&from=${__from}&to=${__to}",
+          "targetBlank": false
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Logs i perioden",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 8,
+        "h": 3
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote} [$__range])) or vector(0)",
+          "queryType": "instant",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "noValue": "Kan ikke hentes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center"
+      },
+      "description": "Antal i den valgte periode med de aktuelle filtre. Nul betyder ingen matchende logposter; ved forbindelsesfejl vises en fejl."
+    },
+    {
+      "id": 11,
+      "title": "Advarsler",
+      "type": "stat",
+      "gridPos": {
+        "x": 8,
+        "y": 15,
+        "w": 8,
+        "h": 3
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote} | severity = \"Warning\" [$__range])) or vector(0)",
+          "queryType": "instant",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          },
+          "noValue": "Kan ikke hentes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center"
+      },
+      "description": "Antal i den valgte periode med de aktuelle filtre. Nul betyder ingen matchende logposter; ved forbindelsesfejl vises en fejl."
+    },
+    {
+      "id": 12,
+      "title": "Fejl",
+      "type": "stat",
+      "gridPos": {
+        "x": 16,
+        "y": 15,
+        "w": 8,
+        "h": 3
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote} | severity =~ \"Error|Critical\" [$__range])) or vector(0)",
+          "queryType": "instant",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          },
+          "noValue": "Kan ikke hentes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center"
+      },
+      "description": "Antal i den valgte periode med de aktuelle filtre. Nul betyder ingen matchende logposter; ved forbindelsesfejl vises en fejl."
+    },
+    {
+      "id": 20,
+      "title": "Find det relevante forløb",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 6
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Logs:** brug filtrene. **⋮ → Show log details → Følg request** samler ét request.\n\n**HTTP-grafer:** følger kun Miljø, Request-ID og perioden. 4xx/5xx kan være Info-logs.\n\n**Kodested:** fold Undtagelser ud. **Seneste app-log** viser datatiden, ikke en sundhedstest."
+      }
+    },
+    {
+      "id": 40,
+      "title": "HTTP-svar over tid",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (statusCode) (count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\"} |~ ${traceId:doublequote} | json eventName=\"eventName\", statusCode=\"fields.StatusCode\", durationMs=\"fields.DurationMs\", endpoint=\"fields.Endpoint\" | __error__=\"\" | eventName=\"RequestCompleted\" | statusCode >= 100 and statusCode < 600 [$__auto]))",
+          "queryType": "range",
+          "legendFormat": "HTTP {{statusCode}}"
+        }
+      ],
+      "description": "Følger kun Miljø, Request-ID og tidsperioden; logniveau, kategori og fritekstsøgning påvirker ikke request-grafer. Kun RequestCompleted-hændelser tælles. 404 betyder ikke fundet; 401/403 handler om adgang; 5xx er serverfejl. Tomt betyder ingen matchende requests. Klik på en serie for logs med samme status.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "links": [
+            {
+              "title": "Vis requests med denne HTTP-status",
+              "url": "/d/fitnessapp-logs/fitnessapp-logs?${environment:queryparam}&var-severity=All&var-category=.*&var-search=Status%3A%20${__field.labels.statusCode}%3B&var-traceId=${traceId:percentencode}&from=${__from}&to=${__to}",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 41,
+      "title": "Svartider",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 12,
+        "y": 25,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.5, {application=\"FitnessApp\", environment=~\"${environment:regex}\"} |~ ${traceId:doublequote} | json eventName=\"eventName\", statusCode=\"fields.StatusCode\", durationMs=\"fields.DurationMs\", endpoint=\"fields.Endpoint\" | __error__=\"\" | eventName=\"RequestCompleted\" | durationMs != \"\" | unwrap durationMs | __error__=\"\" [$__auto]) by ()",
+          "queryType": "range",
+          "legendFormat": "Median (50 %)"
+        },
+        {
+          "refId": "B",
+          "expr": "quantile_over_time(0.95, {application=\"FitnessApp\", environment=~\"${environment:regex}\"} |~ ${traceId:doublequote} | json eventName=\"eventName\", statusCode=\"fields.StatusCode\", durationMs=\"fields.DurationMs\", endpoint=\"fields.Endpoint\" | __error__=\"\" | eventName=\"RequestCompleted\" | durationMs != \"\" | unwrap durationMs | __error__=\"\" [$__auto]) by ()",
+          "queryType": "range",
+          "legendFormat": "95 % af requests er hurtigere"
+        }
+      ],
+      "description": "Følger kun Miljø, Request-ID og tidsperioden; logniveau, kategori og fritekstsøgning påvirker ikke request-grafer. Kun RequestCompleted-hændelser tælles. Median er den typiske svartid; 95 %-linjen fremhæver den langsomme ende. Med få requests er percentiler usikre. Ingen requests vises som manglende data, aldrig som 0 ms.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 1,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 42,
+      "title": "HTTP-problemer · top 10",
+      "type": "table",
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sort_desc(topk(10, sum by (statusCode, endpoint) (count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\"} |~ ${traceId:doublequote} | json eventName=\"eventName\", statusCode=\"fields.StatusCode\", durationMs=\"fields.DurationMs\", endpoint=\"fields.Endpoint\" | __error__=\"\" | eventName=\"RequestCompleted\" | statusCode >= 400 and statusCode < 600 [$__range]))))",
+          "queryType": "instant",
+          "instant": true
+        }
+      ],
+      "description": "Følger kun Miljø, Request-ID og tidsperioden; logniveau, kategori og fritekstsøgning påvirker ikke request-grafer. Kun RequestCompleted-hændelser tælles. Antal 4xx/5xx-svar pr. status og sikker routeskabelon, ikke rå URL. Et HTTP-problem er ikke nødvendigvis en exception. Klik på en HTTP-status for alle requests med denne status; endpoint står i logdetaljerne.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "Ingen matchende HTTP-problemer"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Antal"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "HTTP"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Vis requests med denne HTTP-status",
+                    "url": "/d/fitnessapp-logs/fitnessapp-logs?${environment:queryparam}&var-severity=All&var-category=.*&var-search=Status%3A%20${__value.raw}%3B&var-traceId=${traceId:percentencode}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "statusCode": 0,
+              "endpoint": 1,
+              "Value": 2,
+              "Value #A": 2
+            },
+            "renameByName": {
+              "statusCode": "HTTP",
+              "endpoint": "Endpoint",
+              "Value": "Antal",
+              "Value #A": "Antal"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "title": "Fejl i koden · top 8",
+      "type": "table",
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "fitnessapp-loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sort_desc(topk(8, sum by (category, exceptionType) (count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote} | severity =~ \"Error|Critical\" [$__range]))))",
+          "queryType": "instant",
+          "instant": true
+        }
+      ],
+      "description": "Følger alle logfiltre. Antal Error/Critical-hændelser pr. kategori og undtagelsestype; det er ikke antal unikke fejl. Ingen match giver en tom visning. Brug Kategori eller søgning ovenfor og åbn Undtagelser og kodesteder for det relevante request.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "noValue": "Ingen matchende fejl"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Antal"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "category": 0,
+              "exceptionType": 1,
+              "Value": 2,
+              "Value #A": 2
+            },
+            "renameByName": {
+              "category": "Kategori",
+              "exceptionType": "Undtagelse",
+              "Value": "Antal",
+              "Value #A": "Antal"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "title": "Undtagelser og kodesteder",
+      "type": "row",
+      "collapsed": true,
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [
+        {
+          "id": 2,
+          "title": "Undtagelser · type og kodested",
+          "type": "logs",
+          "gridPos": {
+            "x": 0,
+            "y": 42,
+            "w": 24,
+            "h": 9
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "fitnessapp-loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "{application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote} | exceptionType != \"\"",
+              "queryType": "range",
+              "legendFormat": "{{severity}}",
+              "maxLines": 100
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "showLabels": false,
+            "wrapLogMessage": true,
+            "enableLogDetails": true,
+            "sortOrder": "Descending",
+            "dedupStrategy": "none",
+            "displayedFields": [
+              "exceptionType",
+              "sourceLocation",
+              "sourceMethod",
+              "message"
+            ],
+            "showLevel": true,
+            "showControls": true,
+            "detailsMode": "inline",
+            "prettifyLogMessage": false,
+            "showCommonLabels": false
+          },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "description": "Viser undtagelsestype og første relevante sted i appens kode. Fil/linje kræver debug-symboler; ellers vises metode, hvis tilgængelig. Ældre logs kan mangle kodested. Åbn ⋮ → Show log details for den fulde stack trace, inner exceptions og Følg request. Tom liste betyder ingen matchende undtagelser."
+        },
+        {
+          "id": 1,
+          "title": "Advarsler og fejl over tid",
+          "type": "timeseries",
+          "gridPos": {
+            "x": 0,
+            "y": 51,
+            "w": 24,
+            "h": 6
+          },
+          "datasource": {
+            "type": "loki",
+            "uid": "fitnessapp-loki"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote} | severity = \"Warning\" [$__auto])) or vector(0)",
+              "queryType": "range",
+              "legendFormat": "Advarsler"
+            },
+            {
+              "refId": "B",
+              "expr": "sum(count_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\", severity=~\"${severity:regex}\"} |= ${search:doublequote} |~ ${traceId:doublequote} | json category=\"category\", traceId=\"traceId\", exceptionType=\"exception.type\", message=\"message\", sourceLocation=\"exception.source.location\", sourceMethod=\"exception.source.method\" | __error__=\"\" | category =~ ${category:doublequote} | severity =~ \"Error|Critical\" [$__auto])) or vector(0)",
+              "queryType": "range",
+              "legendFormat": "Fejl"
+            }
+          ],
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            }
+          },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Advarsler"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "orange"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Fejl"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "fixed",
+                      "fixedColor": "red"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "description": "Antal loghændelser pr. interval; den samme fejl kan give flere hændelser. Nul betyder ingen registrerede hændelser, ikke en garanti for at appen eller logopsamlingen kører."
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "type": "link",
+      "title": "Alle logs · nulstil",
+      "url": "/d/fitnessapp-logs/fitnessapp-logs?var-environment=All&var-severity=All&var-category=.*&var-search=&var-traceId=&from=${__from}&to=${__to}",
+      "targetBlank": false
+    },
+    {
+      "type": "link",
+      "title": "Kun fejl",
+      "url": "/d/fitnessapp-logs/fitnessapp-logs?var-environment=All&var-severity=Error&var-severity=Critical&var-category=.*&var-search=&var-traceId=&from=${__from}&to=${__to}",
+      "targetBlank": false
+    },
+    {
+      "type": "link",
+      "title": "Seneste time",
+      "url": "/d/fitnessapp-logs/fitnessapp-logs?var-environment=All&var-severity=All&var-category=.*&var-search=&var-traceId=&from=now-1h&to=now",
+      "targetBlank": false
+    }
+  ]
+}

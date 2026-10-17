@@ -1,0 +1,74 @@
+name: fitnessapp-monitoring
+
+x-log-limits: &log-limits
+  driver: json-file
+  options:
+    max-size: 5m
+    max-file: "2"
+
+services:
+  loki:
+    image: grafana/loki:3.7.8
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./loki.yaml:/etc/loki/config.yaml:ro
+      - loki-data:/loki
+    networks: [logs]
+    mem_limit: 512m
+    cpus: 1.0
+    restart: unless-stopped
+    logging: *log-limits
+    security_opt: [no-new-privileges:true]
+
+  alloy:
+    image: grafana/alloy:v1.20.1
+    command: [run, /etc/alloy/config.alloy, "--storage.path=/var/lib/alloy/data", "--server.http.listen-addr=127.0.0.1:12345"]
+    volumes:
+      - ./config.alloy:/etc/alloy/config.alloy:ro
+      - ../src/FitnessApp.Server/App_Data/logs:/var/log/fitnessapp:ro
+      - alloy-data:/var/lib/alloy/data
+    networks: [logs]
+    mem_limit: 192m
+    cpus: 0.5
+    restart: unless-stopped
+    logging: *log-limits
+    security_opt: [no-new-privileges:true]
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    ports: ["127.0.0.1:3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: operator
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_LOG_LEVEL: warn
+    secrets: [grafana_admin_password]
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks: [logs, ui]
+    mem_limit: 256m
+    cpus: 0.5
+    restart: unless-stopped
+    logging: *log-limits
+    security_opt: [no-new-privileges:true]
+
+networks:
+  logs:
+    internal: true
+  ui:
+
+volumes:
+  loki-data:
+  alloy-data:
+  grafana-data:
+
+secrets:
+  grafana_admin_password:
+    file: ./.secrets/grafana-admin-password

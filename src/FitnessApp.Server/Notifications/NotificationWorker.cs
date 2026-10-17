@@ -16,10 +16,10 @@ internal sealed class NotificationWorker(IServiceScopeFactory scopes, ILogger<No
                 await scope.ServiceProvider.GetRequiredService<NotificationScheduler>().TickAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
-            catch (Exception)
+            catch (Exception exception)
             {
-                // Exceptions from providers may contain subscription endpoints/keys. Never log their contents.
-                logger.LogWarning("Notification processing failed; persisted work will be retried within its delivery window.");
+                // The shared formatter retains type/stack, never provider messages or data.
+                logger.LogWarning(new EventId(5100, "NotificationProcessingFailed"), exception, "Notification processing failed; persisted work will be retried within its delivery window.");
             }
         }
     }

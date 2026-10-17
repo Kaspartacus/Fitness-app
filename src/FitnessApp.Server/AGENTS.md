@@ -6,3 +6,5 @@ This is the ASP.NET Core host, API boundary, and composition root. It hosts the 
 - Require authorization at protected API boundaries. Derive owner and administrator identity from validated server claims; never accept submitted identity or role fields as proof.
 - Do not move persistence or business rules into endpoints. The Client reference is only for static hosting/build integration, not for API implementation.
 - For durable security and product invariants, read the relevant Fitness App vault note; report unavailable vault access. Use `$fitness-feature` for a slice and `$fitness-review` for a focused review; use the `security-reviewer` for security-sensitive diffs.
+
+- Logging uses the shared `Logging/StructuredConsoleFormatter.cs` privacy boundary. Keep application templates constant; never put secrets, URLs, bodies or private fitness/account data in messages or allowlisted operational fields. Exception messages/data are excluded; types and stacks are retained. The optional bounded spool and local dashboard are documented only in `monitoring/README.md`. Keep request IDs out of Loki labels.
