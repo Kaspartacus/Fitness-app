@@ -33,6 +33,8 @@ public sealed class RegistrationMigrationTests
     private const string ScheduledNotificationsMigration = "20261012181855_AddScheduledNotificationsAndWebPush";
     private const string PersistentSessionsMigration = "20261015103000_AddPersistentSessions";
 
+    private const string ThemePreferenceMigration = "20261015120000_AddThemePreference";
+
     [Fact]
     public async Task LatestMigrationAppliesToEmptyDatabase()
     {
@@ -50,7 +52,7 @@ public sealed class RegistrationMigrationTests
                     CompletedWorkoutOccurrenceLinkMigration, NutritionModuleMigration,
                     ConsolidateNutritionGoalsAndReceiptsMigration, UserNutritionFoodsMigration,
                     NutritionFoodAdditionReceiptsMigration, NutritionRecipeAdditionReceiptsMigration,
-                    NutritionRecipeCreationReceiptsMigration, ScheduledNotificationsMigration, PersistentSessionsMigration],
+                    NutritionRecipeCreationReceiptsMigration, ScheduledNotificationsMigration, PersistentSessionsMigration, ThemePreferenceMigration],
                 await dbContext.Database.GetAppliedMigrationsAsync());
             var columns = await ReadUserColumnsAsync(databasePath);
             Assert.Contains("RegisteredAt", columns);
@@ -73,6 +75,7 @@ public sealed class RegistrationMigrationTests
             Assert.Contains("CompletionId", await ReadColumnsAsync(databasePath, "CompletedWorkouts"));
             Assert.Contains("ScheduledOccurrenceDate", await ReadColumnsAsync(databasePath, "CompletedWorkouts"));
             Assert.Contains("TargetDate", await ReadColumnsAsync(databasePath, "CalendarOccurrenceMoves"));
+            Assert.Contains("Theme", await ReadColumnsAsync(databasePath, "UserSettings"));
             Assert.Contains("RunningNotificationsEnabled", await ReadColumnsAsync(databasePath, "UserSettings"));
             Assert.Contains("SourceKey", await ReadColumnsAsync(databasePath, "InAppNotifications"));
             Assert.Contains("CreatedFromDate", await ReadColumnsAsync(databasePath, "NutritionRecipes"));

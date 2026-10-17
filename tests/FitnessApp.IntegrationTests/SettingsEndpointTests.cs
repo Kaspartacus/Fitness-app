@@ -83,8 +83,48 @@ public sealed class SettingsEndpointTests
             $"{Settings}/nutrition-goals",
             new UpdateNutritionGoalsRequest(2200, 150, 220, 70, 40));
 
+        using var themeResponse = await client.PutAsJsonAsync($"{Settings}/theme", new UpdateThemePreferenceRequest("light"));
+        Assert.Equal(HttpStatusCode.Unauthorized, themeResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, profileResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, nutritionResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task ThemeDefaultsToDarkAndPersistsOnlyForAuthenticatedOwner()
+    {
+        using var factory = new AuthWebApplicationFactory();
+        await factory.InitializeDatabaseAsync();
+        var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        var other = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        using var client = await LoginAsync(factory, owner);
+        using var otherClient = await LoginAsync(factory, other);
+        Assert.Equal("dark", (await client.GetFromJsonAsync<SettingsOverviewResponse>(Settings))!.Theme);
+        await AssertSavedAsync(client, $"{Settings}/theme", new UpdateThemePreferenceRequest("light"));
+        await AssertSavedAsync(client, $"{Settings}/profile", new UpdateProfileSettingsRequest("Tema", 180, 75));
+        using var reloaded = await LoginAsync(factory, owner);
+        var overview = await reloaded.GetFromJsonAsync<SettingsOverviewResponse>(Settings);
+        Assert.Equal("light", overview!.Theme);
+        Assert.Equal(180, overview.Profile.HeightCm);
+        Assert.Equal("dark", (await otherClient.GetFromJsonAsync<SettingsOverviewResponse>(Settings))!.Theme);
+        await AssertSavedAsync(reloaded, $"{Settings}/theme", new UpdateThemePreferenceRequest("dark"));
+        Assert.Equal(180, (await reloaded.GetFromJsonAsync<SettingsOverviewResponse>(Settings))!.Profile.HeightCm);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("system")]
+    [InlineData("Light")]
+    public async Task InvalidThemeDoesNotOverwriteStoredPreference(string? theme)
+    {
+        using var factory = new AuthWebApplicationFactory();
+        await factory.InitializeDatabaseAsync();
+        var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        using var client = await LoginAsync(factory, owner);
+        await AssertSavedAsync(client, $"{Settings}/theme", new UpdateThemePreferenceRequest("light"));
+        using var response = await client.PutAsJsonAsync($"{Settings}/theme", new UpdateThemePreferenceRequest(theme));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("light", (await client.GetFromJsonAsync<SettingsOverviewResponse>(Settings))!.Theme);
     }
 
     private static async Task AssertSavedAsync<T>(HttpClient client, string path, T request)

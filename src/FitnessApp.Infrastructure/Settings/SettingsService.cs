@@ -34,7 +34,19 @@ internal sealed class SettingsService(
             MapProfile(user.DisplayName, settings),
             MapPreferences(settings, isAdministrator),
             MapGarmin(settings),
-            unreadNotificationCount);
+            unreadNotificationCount,
+            settings.Theme);
+    }
+
+    public async Task<ThemePreferenceResult> UpdateThemeAsync(
+        string userId, string? theme, CancellationToken cancellationToken)
+    {
+        if (theme is not ("light" or "dark")) return new(SettingsSaveStatus.Invalid);
+        if (!await UserExistsAsync(userId, cancellationToken)) return new(SettingsSaveStatus.NotFound);
+        var settings = await GetOrCreateSettingsAsync(userId, cancellationToken);
+        settings.Theme = theme;
+        await db.SaveChangesAsync(cancellationToken);
+        return new(SettingsSaveStatus.Saved, settings.Theme);
     }
 
     public async Task<ProfileSettingsResult> UpdateProfileAsync(
