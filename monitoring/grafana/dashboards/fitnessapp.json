@@ -2,7 +2,7 @@
   "uid": "fitnessapp-logs",
   "title": "FitnessApp logs",
   "schemaVersion": 39,
-  "version": 4,
+  "version": 5,
   "editable": false,
   "tags": [
     "FitnessApp",
@@ -185,16 +185,17 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max(max_over_time({application=\"FitnessApp\", environment=~\"${environment:regex}\"} | label_format loggedAt=\"{{ __timestamp__ | unixEpoch }}\" | unwrap loggedAt | __error__=\"\" [72h])) * 1000",
-          "queryType": "instant",
-          "instant": true
+          "expr": "{application=\"FitnessApp\", environment=~\"${environment:regex}\"}",
+          "queryType": "range",
+          "maxLines": 1,
+          "direction": "backward"
         }
       ],
-      "description": "Tidspunkt i den seneste app-log inden for 72 timer frem til den valgte sluttid. Følger kun Miljø; andre filtre ignoreres. En gammel eller manglende log beviser ikke en fejl: appen kan være stille. Dette er ikke en heartbeat.",
+      "description": "Tidspunkt i den seneste app-log i den valgte periode. Følger kun Miljø og perioden; andre filtre ignoreres. En gammel eller manglende log beviser ikke en fejl: appen kan være stille. Dette er ikke en heartbeat.",
       "fieldConfig": {
         "defaults": {
           "unit": "dateTimeFromNow",
-          "noValue": "Ingen logs · 72 timer",
+          "noValue": "Ingen logs i perioden",
           "color": {
             "mode": "fixed",
             "fixedColor": "blue"
@@ -207,7 +208,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "",
+          "fields": "/^Time$/",
           "values": false
         },
         "orientation": "horizontal",
