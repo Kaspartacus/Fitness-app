@@ -2,7 +2,7 @@
   "uid": "fitnessapp-logs",
   "title": "FitnessApp logs",
   "schemaVersion": 39,
-  "version": 3,
+  "version": 4,
   "editable": false,
   "tags": [
     "FitnessApp",
@@ -37,20 +37,47 @@
       {
         "name": "severity",
         "label": "Niveau",
-        "type": "query",
-        "datasource": {
-          "type": "loki",
-          "uid": "fitnessapp-loki"
-        },
-        "query": "label_values({application=\"FitnessApp\"}, severity)",
-        "refresh": 2,
+        "type": "custom",
+        "query": "Trace,Debug,Information,Warning,Error,Critical",
         "includeAll": true,
         "allValue": ".*",
         "multi": true,
         "current": {
           "text": "All",
           "value": "$__all"
-        }
+        },
+        "options": [
+          {
+            "text": "Trace",
+            "value": "Trace",
+            "selected": false
+          },
+          {
+            "text": "Debug",
+            "value": "Debug",
+            "selected": false
+          },
+          {
+            "text": "Information",
+            "value": "Information",
+            "selected": false
+          },
+          {
+            "text": "Warning",
+            "value": "Warning",
+            "selected": false
+          },
+          {
+            "text": "Error",
+            "value": "Error",
+            "selected": false
+          },
+          {
+            "text": "Critical",
+            "value": "Critical",
+            "selected": false
+          }
+        ]
       },
       {
         "name": "search",
