@@ -32,7 +32,7 @@ internal sealed class SettingsService(
 
         return new SettingsOverviewData(
             MapProfile(user.DisplayName, settings),
-            MapPreferences(settings, isAdministrator),
+            MapPreferences(settings),
             MapGarmin(settings),
             unreadNotificationCount,
             settings.Theme);
@@ -129,7 +129,7 @@ internal sealed class SettingsService(
 
         return new NotificationPreferencesResult(
             SettingsSaveStatus.Saved,
-            MapPreferences(settings, isAdministrator));
+            MapPreferences(settings));
     }
 
     public async Task<GarminMockConnectionResult> ConnectGarminDemoAsync(
@@ -227,7 +227,7 @@ internal sealed class SettingsService(
         settings.FatTargetGrams,
         settings.SugarTargetGrams);
 
-    private static NotificationPreferencesData MapPreferences(UserSettings settings, bool isAdministrator) => new(
+    private static NotificationPreferencesData MapPreferences(UserSettings settings) => new(
         settings.RunningNotificationsEnabled, settings.StrengthNotificationsEnabled,
         settings.MealRemindersEnabled, settings.NutritionProgressEnabled,
         settings.DetailedPushPreviews, settings.TimeZoneId);
