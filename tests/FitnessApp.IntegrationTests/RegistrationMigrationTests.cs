@@ -34,6 +34,7 @@ public sealed class RegistrationMigrationTests
     private const string PersistentSessionsMigration = "20261015103000_AddPersistentSessions";
 
     private const string ThemePreferenceMigration = "20261015120000_AddThemePreference";
+    private const string PrivateDiaryMigration = "20261021120000_AddPrivateDiary";
 
     [Fact]
     public async Task LatestMigrationAppliesToEmptyDatabase()
@@ -52,7 +53,7 @@ public sealed class RegistrationMigrationTests
                     CompletedWorkoutOccurrenceLinkMigration, NutritionModuleMigration,
                     ConsolidateNutritionGoalsAndReceiptsMigration, UserNutritionFoodsMigration,
                     NutritionFoodAdditionReceiptsMigration, NutritionRecipeAdditionReceiptsMigration,
-                    NutritionRecipeCreationReceiptsMigration, ScheduledNotificationsMigration, PersistentSessionsMigration, ThemePreferenceMigration],
+                    NutritionRecipeCreationReceiptsMigration, ScheduledNotificationsMigration, PersistentSessionsMigration, ThemePreferenceMigration, PrivateDiaryMigration],
                 await dbContext.Database.GetAppliedMigrationsAsync());
             var columns = await ReadUserColumnsAsync(databasePath);
             Assert.Contains("RegisteredAt", columns);
@@ -76,6 +77,15 @@ public sealed class RegistrationMigrationTests
             Assert.Contains("ScheduledOccurrenceDate", await ReadColumnsAsync(databasePath, "CompletedWorkouts"));
             Assert.Contains("TargetDate", await ReadColumnsAsync(databasePath, "CalendarOccurrenceMoves"));
             Assert.Contains("Theme", await ReadColumnsAsync(databasePath, "UserSettings"));
+            Assert.Contains("DiaryRemindersEnabled", await ReadColumnsAsync(databasePath, "UserSettings"));
+            var diaryColumns = await ReadColumnsAsync(databasePath, "DiaryEntries");
+            Assert.True(diaryColumns.SetEquals(["UserId", "Date", "Ciphertext", "Version", "ExpiresAtUtc"]));
+            Assert.True((await ReadColumnsAsync(databasePath, "DiaryProtections"))
+                .SetEquals(["UserId", "CodeHash", "FailedAttempts", "LockedUntilUtc", "Revision"]));
+            Assert.True((await ReadColumnsAsync(databasePath, "DiaryGrants"))
+                .SetEquals(["Hash", "UserId", "SessionId", "Revision", "LastActivityUtc"]));
+            Assert.True((await ReadColumnsAsync(databasePath, "DiaryMaintenance")).SetEquals(["Id", "CompletedOnUtc"]));
+            Assert.False(dbContext.Database.HasPendingModelChanges());
             Assert.Contains("RunningNotificationsEnabled", await ReadColumnsAsync(databasePath, "UserSettings"));
             Assert.Contains("SourceKey", await ReadColumnsAsync(databasePath, "InAppNotifications"));
             Assert.Contains("CreatedFromDate", await ReadColumnsAsync(databasePath, "NutritionRecipes"));

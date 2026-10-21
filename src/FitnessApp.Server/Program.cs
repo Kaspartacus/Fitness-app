@@ -18,6 +18,8 @@ using FitnessApp.Server.Authentication;
 using FitnessApp.Server.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -65,25 +67,13 @@ builder.Services.AddOptions<FitnessApp.Infrastructure.Email.SmtpOptions>()
     .Bind(builder.Configuration.GetSection(FitnessApp.Infrastructure.Email.SmtpOptions.SectionName))
     .ValidateOnStart();
 
-var dataProtectionKeyRingPath = PrivateDirectory.ResolveAndCreate(
-    builder.Configuration["DataProtection:KeyRingPath"],
-    builder.Environment.ContentRootPath,
-    builder.Environment.WebRootPath ?? Path.Combine(builder.Environment.ContentRootPath, "wwwroot"),
-    "DataProtection:KeyRingPath");
-// Diary keys must outlive deployments and must never reside in the checkout or published app.
-var diaryApplicationDirectory = new DirectoryInfo(builder.Environment.ContentRootPath);
-for (var directory = diaryApplicationDirectory; directory is not null; directory = directory.Parent)
-{
-    if (Directory.Exists(Path.Combine(directory.FullName, ".git")) || File.Exists(Path.Combine(directory.FullName, ".git")))
-    { diaryApplicationDirectory = directory; break; }
-}
-var diaryAppPrefix = diaryApplicationDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-if (dataProtectionKeyRingPath.Equals(diaryApplicationDirectory.FullName, StringComparison.OrdinalIgnoreCase) ||
-    dataProtectionKeyRingPath.StartsWith(diaryAppPrefix, StringComparison.OrdinalIgnoreCase))
-    throw new InvalidOperationException("DataProtection:KeyRingPath must be a persistent private directory outside the repository/application. Move the existing key ring with an operator-managed backup; do not replace it.");
-builder.Services.AddDataProtection()
-    .SetApplicationName("FitnessApp")
-    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyRingPath));
+// Key storage is configured from the final service provider, after host configuration callbacks.
+// One resolved directory is shared by Data Protection and the startup availability check.
+builder.Services.AddSingleton<PersistentKeyRingDirectory>();
+builder.Services.AddDataProtection().SetApplicationName("FitnessApp");
+builder.Services.AddOptions<KeyManagementOptions>()
+    .Configure<PersistentKeyRingDirectory, ILoggerFactory>((options, directory, loggers) =>
+        options.XmlRepository = new FileSystemXmlRepository(directory.Location, loggers));
 
 var configuredConnectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
@@ -215,10 +205,11 @@ if (app.Environment.IsDevelopment())
 // Never silently initialize replacement keys while encrypted diary rows depend on the old ring.
 await using (var diaryKeyScope = app.Services.CreateAsyncScope())
 {
+    var keyDirectory = diaryKeyScope.ServiceProvider.GetRequiredService<PersistentKeyRingDirectory>().Location;
     var diaryDatabase = diaryKeyScope.ServiceProvider.GetRequiredService<FitnessDbContext>();
     if ((await diaryDatabase.Database.GetAppliedMigrationsAsync()).Contains("20261021120000_AddPrivateDiary") &&
         await diaryDatabase.DiaryEntries.AnyAsync() &&
-        !Directory.EnumerateFiles(dataProtectionKeyRingPath, "key-*.xml").Any())
+        !keyDirectory.EnumerateFiles("key-*.xml").Any())
         throw new InvalidOperationException("Existing diary entries require the persistent Data Protection key ring. Restore its backup before starting the server.");
 }
 
