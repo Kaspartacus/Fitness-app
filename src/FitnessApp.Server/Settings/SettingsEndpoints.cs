@@ -132,7 +132,7 @@ internal static class SettingsEndpoints
             new UpdateNotificationPreferencesInput(
                 request.RunningNotificationsEnabled, request.StrengthNotificationsEnabled,
                 request.MealRemindersEnabled, request.NutritionProgressEnabled,
-                request.DetailedPushPreviews, request.TimeZoneId),
+                request.DetailedPushPreviews, request.TimeZoneId, request.DiaryRemindersEnabled),
             cancellationToken);
 
         return result.Status switch
@@ -207,7 +207,7 @@ internal static class SettingsEndpoints
     private static NotificationPreferencesResponse Map(NotificationPreferencesData preferences) => new(
         preferences.RunningNotificationsEnabled, preferences.StrengthNotificationsEnabled,
         preferences.MealRemindersEnabled, preferences.NutritionProgressEnabled,
-        preferences.DetailedPushPreviews, preferences.TimeZoneId);
+        preferences.DetailedPushPreviews, preferences.TimeZoneId, preferences.DiaryRemindersEnabled);
 
     private static GarminMockConnectionResponse Map(GarminMockConnectionData connection) => new(
         connection.IsConnected,

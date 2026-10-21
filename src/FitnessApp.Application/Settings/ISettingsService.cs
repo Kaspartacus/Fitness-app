@@ -19,7 +19,8 @@ public sealed record NotificationPreferencesData(
     bool MealRemindersEnabled,
     bool NutritionProgressEnabled,
     bool DetailedPushPreviews,
-    string TimeZoneId);
+    string TimeZoneId,
+    bool DiaryRemindersEnabled = false);
 
 public sealed record GarminMockConnectionData(
     bool IsConnected,
@@ -50,7 +51,8 @@ public sealed record UpdateNotificationPreferencesInput(
     bool MealRemindersEnabled,
     bool NutritionProgressEnabled,
     bool DetailedPushPreviews,
-    string TimeZoneId);
+    string TimeZoneId,
+    bool DiaryRemindersEnabled = false);
 
 public enum SettingsSaveStatus
 {

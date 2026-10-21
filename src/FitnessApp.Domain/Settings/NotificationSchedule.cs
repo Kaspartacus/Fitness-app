@@ -6,7 +6,7 @@ public static class NotificationSchedule
 {
     // A short recovery window prevents obsolete reminders being sent after an outage.
     public static readonly TimeSpan LatenessWindow = TimeSpan.FromMinutes(15);
-    private static readonly TimeOnly[] Times = [new(7, 0), new(10, 0), new(14, 0), new(19, 30)];
+    private static readonly TimeOnly[] Times = [new(7, 0), new(10, 0), new(14, 0), new(19, 30), new(20, 0)];
 
     public static bool IsValidTimeZone(string? id)
     {

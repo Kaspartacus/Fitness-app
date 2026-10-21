@@ -55,6 +55,10 @@ public static class DependencyInjection
         services.AddScoped<INutritionService, NutritionService>();
         services.AddScoped<FridaImportService>();
         services.AddScoped<ISettingsService, SettingsService>();
+        services.AddSingleton<FitnessApp.Infrastructure.Diary.DiaryOperationLocks>();
+        services.AddSingleton<FitnessApp.Infrastructure.Diary.DiaryCipher>();
+        services.AddScoped<FitnessApp.Application.Diary.IDiaryService, FitnessApp.Infrastructure.Diary.DiaryService>();
+        services.AddScoped<FitnessApp.Infrastructure.Diary.DiaryCleanup>();
         services.AddScoped<FitnessApp.Application.Notifications.INotificationService, FitnessApp.Infrastructure.Notifications.NotificationService>();
         services.AddScoped<FitnessApp.Infrastructure.Notifications.NotificationScheduler>();
         services.AddScoped<IAuthenticationService, AuthenticationService>();

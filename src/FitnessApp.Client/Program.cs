@@ -30,6 +30,7 @@ builder.Services.AddScoped<FitnessApp.Client.Running.RunningClient>();
 builder.Services.AddScoped<CalendarClient>();
 builder.Services.AddScoped<NutritionClient>();
 builder.Services.AddScoped<SettingsClient>();
+builder.Services.AddScoped<FitnessApp.Client.Diary.DiaryClient>();
 builder.Services.AddScoped<ThemePreference>();
 builder.Services.AddScoped<FitnessApp.Client.Notifications.NotificationClient>();
 

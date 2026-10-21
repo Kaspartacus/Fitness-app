@@ -1,3 +1,4 @@
+using FitnessApp.Server.Diary;
 using System.Threading.RateLimiting;
 using System.Diagnostics;
 using FitnessApp.Server.Logging;
@@ -69,6 +70,17 @@ var dataProtectionKeyRingPath = PrivateDirectory.ResolveAndCreate(
     builder.Environment.ContentRootPath,
     builder.Environment.WebRootPath ?? Path.Combine(builder.Environment.ContentRootPath, "wwwroot"),
     "DataProtection:KeyRingPath");
+// Diary keys must outlive deployments and must never reside in the checkout or published app.
+var diaryApplicationDirectory = new DirectoryInfo(builder.Environment.ContentRootPath);
+for (var directory = diaryApplicationDirectory; directory is not null; directory = directory.Parent)
+{
+    if (Directory.Exists(Path.Combine(directory.FullName, ".git")) || File.Exists(Path.Combine(directory.FullName, ".git")))
+    { diaryApplicationDirectory = directory; break; }
+}
+var diaryAppPrefix = diaryApplicationDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+if (dataProtectionKeyRingPath.Equals(diaryApplicationDirectory.FullName, StringComparison.OrdinalIgnoreCase) ||
+    dataProtectionKeyRingPath.StartsWith(diaryAppPrefix, StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException("DataProtection:KeyRingPath must be a persistent private directory outside the repository/application. Move the existing key ring with an operator-managed backup; do not replace it.");
 builder.Services.AddDataProtection()
     .SetApplicationName("FitnessApp")
     .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyRingPath));
@@ -200,6 +212,16 @@ if (app.Environment.IsDevelopment())
     }
 }
 
+// Never silently initialize replacement keys while encrypted diary rows depend on the old ring.
+await using (var diaryKeyScope = app.Services.CreateAsyncScope())
+{
+    var diaryDatabase = diaryKeyScope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+    if ((await diaryDatabase.Database.GetAppliedMigrationsAsync()).Contains("20261021120000_AddPrivateDiary") &&
+        await diaryDatabase.DiaryEntries.AnyAsync() &&
+        !Directory.EnumerateFiles(dataProtectionKeyRingPath, "key-*.xml").Any())
+        throw new InvalidOperationException("Existing diary entries require the persistent Data Protection key ring. Restore its backup before starting the server.");
+}
+
 if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
 {
     app.UseHsts();
@@ -283,9 +305,13 @@ app.Use(async (context, next) =>
         context.Request.Path.StartsWithSegments("/api/calendar") ||
         context.Request.Path.StartsWithSegments("/api/nutrition") ||
         context.Request.Path.StartsWithSegments("/api/settings") ||
-        context.Request.Path.StartsWithSegments("/api/notifications"))
+        context.Request.Path.StartsWithSegments("/api/notifications") ||
+        context.Request.Path.StartsWithSegments("/api/diary") ||
+        context.Request.Path.StartsWithSegments("/dagbog"))
     {
         AuthenticationHttpResponses.SetNoStore(context.Response);
+        if (context.Request.Path.StartsWithSegments("/api/diary") || context.Request.Path.StartsWithSegments("/dagbog"))
+            context.Response.Headers.CacheControl = "no-store, private";
     }
 
     if (context.Request.Path.StartsWithSegments("/glemt-adgangskode") ||
@@ -309,6 +335,7 @@ app.MapCalendarEndpoints();
 app.MapNutritionEndpoints();
 app.MapSettingsEndpoints();
 app.MapNotificationEndpoints();
+app.MapDiaryEndpoints();
 app.MapStaticAssets();
 app.UseEndpoints(_ => { });
 

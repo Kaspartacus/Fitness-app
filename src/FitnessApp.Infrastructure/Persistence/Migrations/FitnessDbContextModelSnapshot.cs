@@ -312,6 +312,9 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
                     b.Property<decimal?>("DailyCaloriesTarget")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("DiaryRemindersEnabled")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("DetailedPushPreviews")
                         .HasColumnType("INTEGER");
 
@@ -1711,6 +1714,64 @@ namespace FitnessApp.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("FitnessApp.Infrastructure.Persistence.ApplicationUser", b =>
                 {
                     b.Navigation("Sessions");
+                });
+
+            modelBuilder.Entity("FitnessApp.Infrastructure.Diary.DiaryEntry", b =>
+                {
+                    b.Property<string>("UserId").HasMaxLength(450).HasColumnType("TEXT");
+                    b.Property<DateOnly>("Date").HasColumnType("TEXT");
+                    b.Property<string>("Ciphertext").IsRequired().HasColumnType("TEXT");
+                    b.Property<Guid>("Version").IsConcurrencyToken().HasColumnType("TEXT");
+                    b.Property<DateTime>("ExpiresAtUtc").HasColumnType("TEXT");
+                    b.HasKey("UserId", "Date");
+                    b.HasIndex("ExpiresAtUtc");
+                    b.ToTable("DiaryEntries");
+                });
+            modelBuilder.Entity("FitnessApp.Infrastructure.Diary.DiaryProtection", b =>
+                {
+                    b.Property<string>("UserId").HasMaxLength(450).HasColumnType("TEXT");
+                    b.Property<string>("CodeHash").HasMaxLength(1024).HasColumnType("TEXT");
+                    b.Property<int>("FailedAttempts").HasColumnType("INTEGER");
+                    b.Property<DateTime?>("LockedUntilUtc").HasColumnType("TEXT");
+                    b.Property<Guid>("Revision").IsConcurrencyToken().HasColumnType("TEXT");
+                    b.HasKey("UserId");
+                    b.ToTable("DiaryProtections");
+                });
+            modelBuilder.Entity("FitnessApp.Infrastructure.Diary.DiaryGrant", b =>
+                {
+                    b.Property<string>("Hash").HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("UserId").IsRequired().HasMaxLength(450).HasColumnType("TEXT");
+                    b.Property<string>("SessionId").IsRequired().HasColumnType("TEXT");
+                    b.Property<Guid>("Revision").HasColumnType("TEXT");
+                    b.Property<DateTime>("LastActivityUtc").HasColumnType("TEXT");
+                    b.HasKey("Hash");
+                    b.HasIndex("SessionId");
+                    b.HasIndex("UserId", "SessionId");
+                    b.ToTable("DiaryGrants");
+                });
+            modelBuilder.Entity("FitnessApp.Infrastructure.Diary.DiaryMaintenance", b =>
+                {
+                    b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<DateOnly>("CompletedOnUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.ToTable("DiaryMaintenance");
+                });
+            modelBuilder.Entity("FitnessApp.Infrastructure.Diary.DiaryEntry", b =>
+                {
+                    b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null).WithMany()
+                        .HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
+            modelBuilder.Entity("FitnessApp.Infrastructure.Diary.DiaryProtection", b =>
+                {
+                    b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null).WithOne()
+                        .HasForeignKey("FitnessApp.Infrastructure.Diary.DiaryProtection", "UserId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
+            modelBuilder.Entity("FitnessApp.Infrastructure.Diary.DiaryGrant", b =>
+                {
+                    b.HasOne("FitnessApp.Infrastructure.Persistence.ApplicationUser", null).WithMany()
+                        .HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.HasOne("FitnessApp.Infrastructure.Persistence.UserSession", null).WithMany()
+                        .HasForeignKey("SessionId").OnDelete(DeleteBehavior.Cascade).IsRequired();
                 });
 #pragma warning restore 612, 618
         }

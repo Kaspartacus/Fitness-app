@@ -47,10 +47,10 @@ public sealed class NotificationTests
     }
 
     [Fact]
-    public void ScheduleUsesConfiguredZoneAndNeverAddsDiarySlot()
+    public void ScheduleUsesConfiguredZoneAndIncludesDiarySlot()
     {
         Assert.Equal(0, Assert.Single(NotificationSchedule.Due(DateTimeOffset.Parse("2026-07-01T11:00:00Z"), "America/New_York")).Slot);
-        Assert.Empty(NotificationSchedule.Due(DateTimeOffset.Parse("2026-07-01T18:00:00Z"), "Europe/Copenhagen"));
+        Assert.Equal(4, Assert.Single(NotificationSchedule.Due(DateTimeOffset.Parse("2026-07-01T18:00:00Z"), "Europe/Copenhagen")).Slot);
         Assert.False(NotificationSchedule.IsValidTimeZone("not/a-zone"));
     }
 

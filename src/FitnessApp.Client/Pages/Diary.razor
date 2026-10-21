@@ -1,0 +1,356 @@
+@page "/dagbog"
+@attribute [Authorize]
+@implements IAsyncDisposable
+@using System.Globalization
+@using FitnessApp.Client.Diary
+@using FitnessApp.Contracts.Diary
+@inject DiaryClient DiaryApi
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Dagbog</PageTitle>
+<NavigationLock ConfirmExternalNavigation="@Dirty" OnBeforeInternalNavigation="BeforeNavigation" />
+<main class="strength-app settings-app strength-with-bottom-nav diary-app" aria-labelledby="diary-title">
+    <header class="strength-back-header settings-page-header">
+        <a class="strength-icon-button" href="/indstillinger" aria-label="Tilbage til indstillinger">←</a>
+        <div><p class="strength-overline">Dit eget rum</p><h1 id="diary-title">Dagbog</h1></div>
+    </header>
+    <div class="settings-page-content">
+        <p class="diary-welcome">Giv dagen lidt plads. Her kan du samle dine tanker, én dag ad gangen.</p>
+        @if (loading) { <p role="status">Åbner din dagbog…</p> }
+        @if (error is not null) { <p class="strength-field-error" role="alert">@error</p> }
+        @if (state is null && !loading) { <button class="strength-secondary-button" @onclick="LoadStateAsync" disabled="@busy">Prøv igen</button> }
+        @if (state is { Initialized: false })
+        {
+            <section class="diary-card">
+                <h2>Velkommen til din dagbog</h2>
+                <p>Vil du bruge en særskilt Dagbogskode? Den er uafhængig af din adgangskode til kontoen. Du kan ændre dit valg senere.</p>
+                <div class="diary-actions">
+                    <button class="strength-primary-button" @onclick="OpenProtection" disabled="@busy">Vælg Dagbogskode</button>
+                    <button class="strength-secondary-button" @onclick="ContinueWithoutCodeAsync" disabled="@busy">Fortsæt uden Dagbogskode</button>
+                </div>
+            </section>
+        }
+        else if (state is { Unlocked: false } locked)
+        {
+            <section class="diary-card">
+                <h2>Din dagbog er lukket</h2>
+                @if (locked.Protected)
+                {
+                    <form @onsubmit="UnlockAsync" @onsubmit:preventDefault>
+                        <label for="diary-unlock">Dagbogskode</label>
+                        <input id="diary-unlock" type="@(showCode ? "text" : "password")" maxlength="128" autocomplete="off" @bind="code" disabled="@busy" />
+                        <button type="button" class="strength-text-action" @onclick="ToggleCode">@(showCode ? "Skjul kode" : "Vis kode")</button>
+                        <button type="submit" class="strength-primary-button" disabled="@(busy || code.Length == 0)">Lås op</button>
+                    </form>
+                    <button class="strength-text-action" @onclick="OpenRecovery" disabled="@busy">Glemt Dagbogskode?</button>
+                }
+                else { <button class="strength-primary-button" @onclick="LoadStateAsync" disabled="@busy">Åbn dagbogen igen</button> }
+                <p>Dagbogen lukkes efter 15 minutter uden aktivitet og ved genindlæsning.</p>
+            </section>
+        }
+        else if (state is { Unlocked: true } opened)
+        {
+            <div @ref="contentRoot" @key="contentKey">
+                <section class="diary-card diary-today">
+                    <div><p class="strength-overline">Et øjeblik til dig</p><h2>@Format(opened.Today)</h2></div>
+                    <button class="strength-primary-button" @onclick="WriteToday" disabled="@busy">Skriv i dag</button>
+                </section>
+                <div class="diary-actions">
+                    <button class="strength-secondary-button" @onclick="RequestProtection" disabled="@busy">@(opened.Protected ? "Skift eller fjern Dagbogskode" : "Tilføj Dagbogskode")</button>
+                    <button class="strength-text-action" @onclick="RequestLock" disabled="@busy">Luk dagbogen</button>
+                </div>
+                <section class="diary-card" aria-labelledby="diary-editor-title">
+                    <h2 id="diary-editor-title">@Format(selected)</h2>
+                    <label for="diary-text">Hvordan har din dag været?</label>
+                    <textarea id="diary-text" rows="13" maxlength="12000" spellcheck="false" autocomplete="off" @bind="text" @bind:event="oninput" disabled="@busy" placeholder="Du behøver ikke skrive noget særligt. Begynd, hvor du er."></textarea>
+                    <div class="diary-editor-meta"><span role="status">@(Dirty ? "Ikke gemt · kladden er kun i denne fane" : saved ? "Gemt" : "Ingen gemt side endnu")</span><span>@text.Length.ToString("N0", Danish) / 12.000</span></div>
+                    <div class="diary-actions">
+                        <button class="strength-primary-button" @onclick="RequestSave" disabled="@(busy || !Dirty || text.Length > 12000)">@(busy ? "Arbejder…" : "Gem")</button>
+                        @if (version is not null)
+                        {
+                            <button class="strength-secondary-button" @onclick="RequestDelete" disabled="@busy">Slet side</button>
+                            <button class="strength-text-action" @onclick="ReloadEntry" disabled="@busy">Genindlæs gemt version</button>
+                        }
+                    </div>
+                </section>
+                <section class="diary-card" aria-labelledby="diary-browse-title">
+                    <h2 id="diary-browse-title">Dine dage</h2>
+                    <div class="diary-browse-controls">
+                        <label>Måned<input type="month" value="@month.ToString("yyyy-MM")" @onchange="ChangeMonthAsync" @onfocus="RefreshDayForControlsAsync" max="@opened.Today.ToString("yyyy-MM")" disabled="@busy" /></label>
+                        <label>Åbn dato<input type="date" value="@selected.ToString("yyyy-MM-dd")" min="@opened.Today.AddYears(-1).AddDays(1).ToString("yyyy-MM-dd")" max="@opened.Today.ToString("yyyy-MM-dd")" @onchange="ChooseDate" @onfocus="RefreshDayForControlsAsync" disabled="@busy" /></label>
+                    </div>
+                    @if (dates.Length == 0) { <p class="diary-muted">Der er ingen gemte sider i denne måned. En ny dag kan begynde med et enkelt ord.</p> }
+                    else
+                    {
+                        <ul class="diary-dates">
+                            @foreach (var day in dates)
+                            { <li><button class="strength-text-action" aria-current="@(day.Date == selected ? "date" : null)" @onclick="() => RequestDate(day.Date)" disabled="@busy">@Format(day.Date)</button></li> }
+                        </ul>
+                    }
+                </section>
+            </div>
+        }
+        <p class="diary-privacy">Kladden findes kun i denne fane og slettes ved lukning, genindlæsning eller 15 minutters inaktivitet. Sider opbevares i ét kalenderår fra deres dato. Redigering forlænger ikke fristen. Teksten krypteres på serveren før lagring; serveren kan læse den. Slettede sider kan findes i ældre sikkerhedskopier, indtil de udløber.</p>
+    </div>
+    <StrengthBottomNavigation Active="settings" />
+</main>
+
+<ModalDialog IsOpen="@(dialog == "discard")" Title="Forlad din kladde?" Description="Dine ændringer er ikke gemt. Hvis du fortsætter, bliver kladden slettet fra denne fane." Destructive="true" OnDismiss="CloseDialog">
+    <div class="diary-actions"><button class="strength-secondary-button" @onclick="CloseDialog">Bliv her</button><button class="strength-primary-button" @onclick="DiscardAsync">Fortsæt uden at gemme</button></div>
+</ModalDialog>
+<ModalDialog IsOpen="@(dialog == "delete")" Title="Slet denne dagbogsside?" Description="Den gemte side og eventuelle ugemte ændringer fjernes. Handlingen kan ikke fortrydes." Destructive="true" OnDismiss="CloseDialog">
+    <div class="diary-actions"><button class="strength-secondary-button" @onclick="CloseDialog" disabled="@busy">Behold siden</button><button class="strength-primary-button" @onclick="DeleteAsync" disabled="@busy">Slet side</button></div>
+</ModalDialog>
+<ModalDialog IsOpen="@(dialog == "save")" Title="Gem ændringer på denne dato?" Description="Den gemte version bliver erstattet med dine ændringer." OnDismiss="CloseDialog">
+    <div class="diary-actions"><button class="strength-secondary-button" @onclick="CloseDialog" disabled="@busy">Fortsæt med at skrive</button><button class="strength-primary-button" @onclick="SaveAsync" disabled="@busy">Gem ændringer</button></div>
+</ModalDialog>
+<ModalDialog IsOpen="@(dialog == "protection")" Title="Dagbogskode" OnDismiss="CloseDialog" DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)">
+    <p>Vælg 1–128 tegn. Bogstaver, tal, mellemrum og specialtegn er tilladt. Koden ændrer ikke krypteringen af dine sider.</p>
+    @if (state?.Protected == true)
+    {
+        <label for="diary-current">Nuværende Dagbogskode</label><input id="diary-current" type="@(showCode ? "text" : "password")" maxlength="128" autocomplete="off" @bind="currentCode" disabled="@busy" />
+    }
+    <label for="diary-new">Ny Dagbogskode</label><input id="diary-new" type="@(showCode ? "text" : "password")" maxlength="128" autocomplete="off" @bind="newCode" disabled="@busy" />
+    <label for="diary-confirm">Bekræft Dagbogskode</label><input id="diary-confirm" type="@(showCode ? "text" : "password")" maxlength="128" autocomplete="off" @bind="confirmation" disabled="@busy" />
+    <button class="strength-text-action" @onclick="ToggleCode" disabled="@busy">@(showCode ? "Skjul koder" : "Vis koder")</button>
+    @if (dialogError is not null) { <p class="strength-field-error" role="alert">@dialogError</p> }
+    <div class="diary-actions">
+        <button class="strength-primary-button" @onclick="SetCodeAsync" disabled="@(busy || newCode.Length == 0 || newCode != confirmation || state?.Protected == true && currentCode.Length == 0)">Gem Dagbogskode</button>
+        @if (state?.Protected == true) { <button class="strength-secondary-button" @onclick="RemoveCodeAsync" disabled="@(busy || currentCode.Length == 0)">Fjern Dagbogskode</button> }
+    </div>
+</ModalDialog>
+<ModalDialog IsOpen="@(dialog == "recover")" Title="Nulstil dagbogsbeskyttelse" OnDismiss="CloseDialog" DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)">
+    <p>Indtast din adgangskode til FitnessApp igen. Beskyttelsen fjernes på alle enheder. Dine sider bevares krypteret, og du kan vælge en ny Dagbogskode bagefter.</p>
+    <label for="diary-account-password">Adgangskode til kontoen</label><input id="diary-account-password" type="@(showCode ? "text" : "password")" autocomplete="current-password" maxlength="1024" @bind="accountPassword" disabled="@busy" />
+    <button class="strength-text-action" @onclick="ToggleCode" disabled="@busy">@(showCode ? "Skjul adgangskode" : "Vis adgangskode")</button>
+    @if (dialogError is not null) { <p class="strength-field-error" role="alert">@dialogError</p> }
+    <button class="strength-primary-button" @onclick="RecoverAsync" disabled="@(busy || accountPassword.Length == 0)">Bekræft og nulstil</button>
+</ModalDialog>
+
+@code {
+    private static readonly CultureInfo Danish = CultureInfo.GetCultureInfo("da-DK");
+    private DiaryStatusResponse? state;
+    private DiaryDateResponse[] dates = [];
+    private DateOnly selected, month;
+    private Guid? version;
+    private string text = "", baseline = "", code = "", currentCode = "", newCode = "", confirmation = "", accountPassword = "";
+    private string? error, dialog, dialogError;
+    private bool loading = true, busy, saved, showCode, disposed, skipNavigation, observing;
+    private long contentGeneration;
+    private readonly string observerKey = "diary-" + Guid.NewGuid().ToString("N");
+    private Guid contentKey = Guid.NewGuid();
+    private ElementReference contentRoot;
+    private DotNetObjectReference<Diary>? reference;
+    private Func<Task>? pending;
+    private bool Dirty => text != baseline;
+    private static string Format(DateOnly date) => date.ToString("dddd 'den' d. MMMM yyyy", Danish);
+    protected override async Task OnInitializedAsync() { DiaryApi.Locked += HandleLocked; await LoadStateAsync(); }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (disposed) return;
+        if (state?.Unlocked == true && !observing)
+        {
+            reference ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("fitnessDiary.start", observerKey, contentRoot, reference);
+            observing = true;
+        }
+        else if (state?.Unlocked != true && observing)
+        { await JS.InvokeVoidAsync("fitnessDiary.stop", observerKey); observing = false; }
+    }
+    private async Task LoadStateAsync()
+    {
+        loading = true; error = null;
+        var result = await DiaryApi.StateAsync();
+        if (disposed) return;
+        loading = false;
+        if (!result.Succeeded || result.Value is null) { error = result.Error; return; }
+        state = result.Value;
+        if (state.Unlocked)
+        {
+            selected = state.Today; month = new(selected.Year, selected.Month, 1);
+            await LoadEntryAsync(selected); await LoadDatesAsync();
+        }
+    }
+    private async Task UnlockAsync()
+    {
+        if (busy) return;
+        busy = true; error = null;
+        var result = await DiaryApi.UnlockAsync(code); code = ""; showCode = false;
+        if (result.Succeeded) await LoadStateAsync(); else error = result.Error;
+        busy = false;
+    }
+    private async Task ContinueWithoutCodeAsync() => await ChangeProtectionAsync(null, null, null);
+    private async Task SetCodeAsync() => await ChangeProtectionAsync(currentCode, newCode, confirmation);
+    private async Task RemoveCodeAsync() => await ChangeProtectionAsync(currentCode, null, null);
+    private async Task ChangeProtectionAsync(string? current, string? next, string? confirm)
+    {
+        if (busy) return;
+        busy = true; dialogError = null;
+        var result = await DiaryApi.ConfigureAsync(current, next, confirm);
+        ClearSecrets();
+        if (result.Succeeded) { dialog = null; await LoadStateAsync(); }
+        else { dialogError = result.Error; error = dialog is null ? result.Error : error; }
+        busy = false;
+    }
+    private async Task RecoverAsync()
+    {
+        if (busy) return;
+        busy = true; dialogError = null;
+        var result = await DiaryApi.RecoverAsync(accountPassword); ClearSecrets();
+        if (result.Succeeded) { dialog = null; await LoadStateAsync(); }
+        else dialogError = result.Error;
+        busy = false;
+    }
+    private void ClearSecrets() { code = currentCode = newCode = confirmation = accountPassword = ""; showCode = false; }
+    private void OpenProtection() { ClearSecrets(); dialogError = null; dialog = "protection"; }
+    private void OpenRecovery() { ClearSecrets(); dialogError = null; dialog = "recover"; }
+    private void ToggleCode() => showCode = !showCode;
+    private void CloseDialog() { if (busy) return; dialog = null; pending = null; dialogError = null; ClearSecrets(); }
+    private Task RequestProtection() => Guard(() => { OpenProtection(); return Task.CompletedTask; });
+    private Task WriteToday() => Guard(() => OpenDateAsync(null));
+    private Task RequestDate(DateOnly date) => Guard(() => OpenDateAsync(date));
+    private async Task OpenDateAsync(DateOnly? requestedDate)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            if (!await RefreshDayAsync()) return;
+            // An input event may already have been queued when the controls became disabled.
+            // Recheck after the network await before replacing the currently displayed draft.
+            if (Dirty)
+            {
+                pending = () => OpenDateAsync(requestedDate);
+                dialog = "discard";
+                return;
+            }
+            var date = requestedDate ?? state!.Today;
+            await LoadEntryAsync(date, manageBusy: false);
+            if (state?.Unlocked != true || disposed) return;
+            month = new(date.Year, date.Month, 1);
+            await LoadDatesAsync();
+        }
+        finally { busy = false; }
+    }
+    private async Task RefreshDayForControlsAsync() { await RefreshDayAsync(); }
+    private async Task<bool> RefreshDayAsync()
+    {
+        var sequence = contentGeneration;
+        var result = await DiaryApi.StateAsync();
+        if (sequence != contentGeneration || disposed) return false;
+        if (!result.Succeeded || result.Value is null) { error = result.Error; return false; }
+        if (!result.Value.Unlocked) { DiaryApi.Clear(); return false; }
+        // Refresh bounds/header only; a rollover or timezone change never moves the editor or draft.
+        state = result.Value;
+        return true;
+    }
+    private Task ChooseDate(ChangeEventArgs args) =>
+        DateOnly.TryParseExact(args.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            ? RequestDate(date) : Task.CompletedTask;
+    private async Task ChangeMonthAsync(ChangeEventArgs args)
+    {
+        if (DateOnly.TryParseExact(args.Value + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        { if (!await RefreshDayAsync()) return; month = date; await LoadDatesAsync(); }
+    }
+    private async Task LoadDatesAsync()
+    {
+        var requestedMonth = month; var sequence = contentGeneration; var result = await DiaryApi.DatesAsync(month);
+        if (sequence != contentGeneration || requestedMonth != month || disposed) return;
+        if (result.Succeeded) dates = result.Value ?? []; else error = result.Error;
+    }
+    private async Task LoadEntryAsync(DateOnly date, bool manageBusy = true)
+    {
+        var sequence = ++contentGeneration;
+        if (manageBusy) busy = true;
+        error = null;
+        var result = await DiaryApi.ReadAsync(date);
+        if (sequence != contentGeneration || disposed) return;
+        if (manageBusy) busy = false;
+        if (result.Succeeded && result.Value is { } entry)
+        { selected = date; text = baseline = entry.Text; version = entry.Version; saved = true; }
+        else if (result.Status == 404)
+        { selected = date; text = baseline = ""; version = null; saved = false; }
+        else error = result.Error;
+    }
+    private Task ReloadEntry() => Guard(() => LoadEntryAsync(selected));
+    private Task RequestSave()
+    {
+        if (version is null) return SaveAsync();
+        dialog = "save";
+        return Task.CompletedTask;
+    }
+    private async Task SaveAsync()
+    {
+        if (busy || !Dirty) return;
+        busy = true; error = null; var sequence = contentGeneration;
+        var result = await DiaryApi.SaveAsync(selected, text, version);
+        if (sequence != contentGeneration || disposed) return;
+        busy = false; dialog = null;
+        if (result.Succeeded && result.Value is { } entry)
+        { text = baseline = entry.Text; version = entry.Version; saved = true; await LoadDatesAsync(); }
+        else error = result.Error;
+    }
+    private void RequestDelete() => dialog = "delete";
+    private async Task DeleteAsync()
+    {
+        if (busy || version is not { } existing) return;
+        busy = true; error = null; var sequence = contentGeneration;
+        var result = await DiaryApi.DeleteAsync(selected, existing);
+        if (sequence != contentGeneration || disposed) return;
+        busy = false; dialog = null;
+        if (result.Succeeded) { text = baseline = ""; version = null; saved = false; await LoadDatesAsync(); }
+        else error = result.Error;
+    }
+    private Task Guard(Func<Task> action)
+    {
+        if (busy) return Task.CompletedTask;
+        if (Dirty) { pending = action; dialog = "discard"; return Task.CompletedTask; }
+        // Return the operation to Blazor's event pipeline so its completion triggers a render.
+        return action();
+    }
+    private async Task DiscardAsync()
+    {
+        var action = pending; pending = null; dialog = null; text = baseline;
+        if (action is not null) await action();
+    }
+    private async Task BeforeNavigation(LocationChangingContext context)
+    {
+        if (disposed) return;
+        if (skipNavigation || !Dirty) { skipNavigation = false; return; }
+        context.PreventNavigation(); var destination = context.TargetLocation;
+        pending = () => { skipNavigation = true; Navigation.NavigateTo(destination); return Task.CompletedTask; }; dialog = "discard";
+        await InvokeAsync(StateHasChanged);
+    }
+    private Task RequestLock() => Guard(() => DiaryApi.LockAsync());
+    private void HandleLocked()
+    {
+        contentGeneration++; text = baseline = ""; version = null; dates = []; saved = false; busy = false;
+        dialog = null; pending = null; ClearSecrets();
+        if (state is { } s) state = s with { Unlocked = false };
+        contentKey = Guid.NewGuid();
+        if (!disposed) _ = InvokeAsync(StateHasChanged);
+    }
+    [JSInvokable] public async Task IdleLock() { await DiaryApi.LockAsync(); }
+    [JSInvokable] public async Task DiaryActivity()
+    {
+        if (disposed || state?.Unlocked != true) return;
+        var sequence = contentGeneration;
+        var result = await DiaryApi.ActivityAsync();
+        if (sequence != contentGeneration || disposed) return;
+        // Confirmed denial clears through DiaryClient.Locked. A transport outage must not erase a draft;
+        // the independent local idle timer still closes the view after fifteen minutes without activity.
+        if (!result.Succeeded) error = result.Error;
+        else await RefreshDayAsync();
+        // JS invocation is outside Blazor's EventCallback rendering pipeline.
+        if (sequence == contentGeneration && !disposed) await InvokeAsync(StateHasChanged);
+    }
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true; DiaryApi.Locked -= HandleLocked; contentGeneration++;
+        text = baseline = ""; dates = []; ClearSecrets();
+        try { await JS.InvokeVoidAsync("fitnessDiary.stop", observerKey); }
+        catch (JSException) { }
+        await DiaryApi.LockAsync(); reference?.Dispose();
+    }
+}

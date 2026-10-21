@@ -6,7 +6,8 @@ public enum InAppNotificationKind
     AdminRegistrationRequest, // Historical only; never generated automatically.
     MealReminder,
     NutritionProgress,
-    PushTest
+    PushTest,
+    DiaryReminder
 }
 
 public sealed class InAppNotification
