@@ -191,6 +191,76 @@ public sealed class DiaryTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SameSessionTabsKeepIndependentGrantsUntilCloseOrAccountWideProtectionChange(bool recover)
+    {
+        var clock = new DiaryClock(DateTimeOffset.Parse("2026-10-22T10:00:00Z"));
+        using var factory = new AuthWebApplicationFactory(timeProvider: clock); await factory.InitializeDatabaseAsync();
+        var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        var session = await factory.CreateSessionAsync(owner, clock.Now.AddHours(1));
+        await With(factory, async (service, db) =>
+        {
+            await service.ConfigureAsync(owner.Id, session, null, "x", "x", Ct);
+            var first = (await service.UnlockAsync(owner.Id, session, "x", Ct)).Value!;
+            var today = (await service.StateAsync(owner.Id, session, first, Ct)).Value!.Today;
+            var original = await service.SaveAsync(owner.Id, session, first, today, SyntheticText, null, Ct);
+            Assert.Equal(DiaryStatus.Success, original.Status);
+            var second = (await service.UnlockAsync(owner.Id, session, "x", Ct)).Value!;
+            Assert.NotEqual(first, second);
+            var firstRead = await service.ReadAsync(owner.Id, session, first, today, Ct);
+            var secondRead = await service.ReadAsync(owner.Id, session, second, today, Ct);
+            Assert.Equal(DiaryStatus.Success, firstRead.Status); Assert.Equal(SyntheticText, firstRead.Value!.Text);
+            Assert.Equal(DiaryStatus.Success, secondRead.Status); Assert.Equal(SyntheticText, secondRead.Value!.Text);
+            var edited = await service.SaveAsync(owner.Id, session, first, today, "Synthetic other-tab update", original.Value!.Version, Ct);
+            Assert.Equal(DiaryStatus.Success, edited.Status);
+            Assert.Equal(DiaryStatus.Conflict, (await service.SaveAsync(owner.Id, session, second, today,
+                "Synthetic preserved stale draft", original.Value.Version, Ct)).Status);
+
+            await service.LockAsync(owner.Id, session, first, Ct);
+            Assert.Equal(DiaryStatus.Locked, (await service.ReadAsync(owner.Id, session, first, today, Ct)).Status);
+            Assert.Equal("Synthetic other-tab update", (await service.ReadAsync(owner.Id, session, second, today, Ct)).Value!.Text);
+            Assert.Equal(DiaryStatus.Success, (await service.ActivityAsync(owner.Id, session, second, Ct)).Status);
+            var third = (await service.UnlockAsync(owner.Id, session, "x", Ct)).Value!;
+            Assert.Equal(2, await db.DiaryGrants.AsNoTracking().CountAsync());
+
+            if (recover)
+                Assert.Equal(DiaryStatus.Success, (await service.RecoverAsync(owner.Id, factory.ValidPassword, Ct)).Status);
+            else
+                Assert.Equal(DiaryStatus.Success, (await service.ConfigureAsync(owner.Id, session, "x", "y", "y", Ct)).Status);
+            Assert.Empty(await db.DiaryGrants.AsNoTracking().ToArrayAsync());
+            if (recover) await service.ConfigureAsync(owner.Id, session, null, "y", "y", Ct);
+            Assert.Equal(DiaryStatus.Locked, (await service.ActivityAsync(owner.Id, session, second, Ct)).Status);
+            Assert.Equal(DiaryStatus.Locked, (await service.ActivityAsync(owner.Id, session, third, Ct)).Status);
+        });
+    }
+
+    [Fact]
+    public async Task AnotherSameSessionTabUnlockAndActivityDoNotRenewAnOlderGrant()
+    {
+        var clock = new DiaryClock(DateTimeOffset.Parse("2026-10-22T10:00:00Z"));
+        using var factory = new AuthWebApplicationFactory(timeProvider: clock); await factory.InitializeDatabaseAsync();
+        var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        var session = await factory.CreateSessionAsync(owner, clock.Now.AddHours(1));
+        await With(factory, async (service, db) =>
+        {
+            await service.ConfigureAsync(owner.Id, session, null, "x", "x", Ct);
+            var first = (await service.UnlockAsync(owner.Id, session, "x", Ct)).Value!;
+            clock.Advance(TimeSpan.FromMinutes(14));
+            var second = (await service.UnlockAsync(owner.Id, session, "x", Ct)).Value!;
+            Assert.Equal(DiaryStatus.Success, (await service.ActivityAsync(owner.Id, session, second, Ct)).Status);
+            Assert.True((await service.StateAsync(owner.Id, session, first, Ct)).Value!.Unlocked);
+            clock.Advance(TimeSpan.FromMinutes(1));
+            Assert.Equal(DiaryStatus.Locked, (await service.ActivityAsync(owner.Id, session, first, Ct)).Status);
+            Assert.Equal(DiaryStatus.Success, (await service.ActivityAsync(owner.Id, session, second, Ct)).Status);
+            var third = (await service.UnlockAsync(owner.Id, session, "x", Ct)).Value!;
+            Assert.Equal(2, await db.DiaryGrants.AsNoTracking().CountAsync()); // Only the expired first grant is pruned.
+            Assert.True((await service.StateAsync(owner.Id, session, second, Ct)).Value!.Unlocked);
+            Assert.True((await service.StateAsync(owner.Id, session, third, Ct)).Value!.Unlocked);
+        });
+    }
+
     [Fact]
     public async Task CiphertextSurvivesProviderRestartIsBoundToOwnerDateAndRejectsSilentOverwrite()
     {
@@ -259,6 +329,75 @@ public sealed class DiaryTests
         await With(factory, async (_, db) =>
         { await new DiaryCleanup(db, clock).RunDailyAsync(Ct); Assert.Single(await db.DiaryMaintenance.ToArrayAsync()); });
         Assert.Equal(new DateOnly(2025, 2, 28), DiaryRules.ExpiryDate(new(2024, 2, 29)));
+    }
+
+    [Fact]
+    public async Task TimezoneChangeCannotMakeALiveEntryUneditableOrExtendItsFixedExpiry()
+    {
+        var clock = new DiaryClock(DateTimeOffset.Parse("2026-03-01T10:00:00Z"));
+        using var factory = new AuthWebApplicationFactory(timeProvider: clock); await factory.InitializeDatabaseAsync();
+        var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        var day = new DateOnly(2025, 3, 2); Guid version = default; DateTime expiry = default;
+        await With(factory, async (service, db) =>
+        {
+            await service.ConfigureAsync(owner.Id, "unused", null, null, null, Ct);
+            var saved = await service.SaveAsync(owner.Id, "unused", null, day, SyntheticText, null, Ct);
+            Assert.Equal(DiaryStatus.Success, saved.Status); version = saved.Value!.Version;
+            expiry = (await db.DiaryEntries.AsNoTracking().SingleAsync()).ExpiresAtUtc;
+            Assert.Equal(new DateTime(2026, 3, 1, 23, 0, 0, DateTimeKind.Utc), expiry);
+            db.UserSettings.Add(new() { UserId = owner.Id, TimeZoneId = "Asia/Tokyo" });
+            await db.SaveChangesAsync();
+        });
+        clock.Now = DateTimeOffset.Parse("2026-03-01T18:00:00Z"); // Already March 2 in Tokyo; five retained hours remain.
+        await With(factory, async (service, db) =>
+        {
+            Assert.Equal(DiaryStatus.Success, (await service.ReadAsync(owner.Id, "unused", null, day, Ct)).Status);
+            Assert.Equal(day, Assert.Single((await service.DatesAsync(owner.Id, "unused", null, day.Year, day.Month, Ct)).Value!).Date);
+            Assert.Equal(DiaryStatus.Invalid, (await service.SaveAsync(owner.Id, "unused", null, day, null, version, Ct)).Status);
+            Assert.Equal(DiaryStatus.Invalid, (await service.SaveAsync(owner.Id, "unused", null, day, new string('x', DiaryRules.MaximumTextLength + 1), version, Ct)).Status);
+            var saved = await service.SaveAsync(owner.Id, "unused", null, day, "Synthetic edit before original expiry", version, Ct);
+            Assert.Equal(DiaryStatus.Success, saved.Status); version = saved.Value!.Version;
+            Assert.Equal(expiry, (await db.DiaryEntries.AsNoTracking().SingleAsync()).ExpiresAtUtc);
+        });
+        clock.Now = new DateTimeOffset(DateTime.SpecifyKind(expiry, DateTimeKind.Utc));
+        await With(factory, async (service, db) =>
+        {
+            Assert.Equal(DiaryStatus.NotFound, (await service.ReadAsync(owner.Id, "unused", null, day, Ct)).Status);
+            Assert.Empty((await service.DatesAsync(owner.Id, "unused", null, day.Year, day.Month, Ct)).Value!);
+            Assert.Equal(DiaryStatus.Conflict, (await service.SaveAsync(owner.Id, "unused", null, day, SyntheticText, version, Ct)).Status);
+            Assert.Equal(DiaryStatus.Conflict, (await service.SaveAsync(owner.Id, "unused", null, day, SyntheticText, null, Ct)).Status);
+            Assert.Equal(expiry, (await db.DiaryEntries.AsNoTracking().SingleAsync()).ExpiresAtUtc);
+            await new DiaryCleanup(db, clock).RunDailyAsync(Ct);
+            Assert.Equal(DiaryStatus.Invalid, (await service.SaveAsync(owner.Id, "unused", null, day, SyntheticText, null, Ct)).Status);
+            Assert.Empty(await db.DiaryEntries.AsNoTracking().ToArrayAsync());
+        });
+    }
+
+    [Fact]
+    public async Task WestwardTimezoneChangeKeepsExistingLocallyFutureEntryEditableButRejectsNewFutureDates()
+    {
+        var clock = new DiaryClock(DateTimeOffset.Parse("2026-10-21T22:30:00Z"));
+        using var factory = new AuthWebApplicationFactory(timeProvider: clock); await factory.InitializeDatabaseAsync();
+        var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        var day = new DateOnly(2026, 10, 22); Guid version = default; DateTime expiry = default;
+        await With(factory, async (service, db) =>
+        {
+            await service.ConfigureAsync(owner.Id, "unused", null, null, null, Ct);
+            var saved = await service.SaveAsync(owner.Id, "unused", null, day, SyntheticText, null, Ct);
+            Assert.Equal(DiaryStatus.Success, saved.Status); version = saved.Value!.Version;
+            expiry = (await db.DiaryEntries.AsNoTracking().SingleAsync()).ExpiresAtUtc;
+            db.UserSettings.Add(new() { UserId = owner.Id, TimeZoneId = "America/Los_Angeles" });
+            await db.SaveChangesAsync();
+        });
+        await With(factory, async (service, db) =>
+        {
+            Assert.Equal(day.AddDays(-1), (await service.StateAsync(owner.Id, "unused", null, Ct)).Value!.Today);
+            Assert.Equal(DiaryStatus.Success, (await service.ReadAsync(owner.Id, "unused", null, day, Ct)).Status);
+            Assert.Equal(DiaryStatus.Success, (await service.SaveAsync(owner.Id, "unused", null, day, "Synthetic westward edit", version, Ct)).Status);
+            Assert.Equal(expiry, (await db.DiaryEntries.AsNoTracking().SingleAsync()).ExpiresAtUtc);
+            Assert.Equal(DiaryStatus.Invalid, (await service.SaveAsync(owner.Id, "unused", null, day.AddDays(1), SyntheticText, null, Ct)).Status);
+            Assert.Single(await db.DiaryEntries.AsNoTracking().ToArrayAsync());
+        });
     }
 
     [Fact]

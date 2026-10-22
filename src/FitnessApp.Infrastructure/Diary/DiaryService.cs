@@ -70,8 +70,8 @@ public sealed class DiaryService(FitnessDbContext db, TimeProvider clock, DiaryO
     private async Task<string> Grant(DiaryProtection protection, string session, CancellationToken ct)
     {
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        // A fresh unlock replaces this session's prior grants; expired grants never accumulate.
-        await db.DiaryGrants.Where(x => x.UserId == protection.UserId && (x.SessionId == session || x.LastActivityUtc <= Now - DiaryRules.InactivityTimeout)).ExecuteDeleteAsync(ct);
+        // Browser tabs share a login session but retain independent unlock grants and inactivity deadlines.
+        await db.DiaryGrants.Where(x => x.UserId == protection.UserId && x.LastActivityUtc <= Now - DiaryRules.InactivityTimeout).ExecuteDeleteAsync(ct);
         db.DiaryGrants.Add(new() { Hash = Hash(token), UserId = protection.UserId, SessionId = session,
             Revision = protection.Revision, LastActivityUtc = Now });
         protection.FailedAttempts = 0; protection.LockedUntilUtc = null;
@@ -169,8 +169,7 @@ public sealed class DiaryService(FitnessDbContext db, TimeProvider clock, DiaryO
     public Task<DiaryResult<DiaryEntryData>> SaveAsync(string owner, string session, string? grant, DateOnly date, string? text, Guid? version, CancellationToken ct) => Serialized(owner, async () =>
     {
         if (!await Allowed(owner, session, grant, await Protection(owner, ct), ct)) return new DiaryResult<DiaryEntryData>(DiaryStatus.Locked);
-        var (today, zone) = await LocalDay(owner, ct);
-        if (text is null || text.Length > DiaryRules.MaximumTextLength || date > today || DiaryRules.ExpiryDate(date) <= today)
+        if (text is null || text.Length > DiaryRules.MaximumTextLength)
             return new DiaryResult<DiaryEntryData>(DiaryStatus.Invalid);
         var row = await db.DiaryEntries.SingleOrDefaultAsync(x => x.UserId == owner && x.Date == date, ct);
         if (row is not null && (row.Version != version || row.ExpiresAtUtc <= Now) || row is null && version is not null)
@@ -178,6 +177,9 @@ public sealed class DiaryService(FitnessDbContext db, TimeProvider clock, DiaryO
         if (row is not null && Decode(row).Status != DiaryStatus.Success) return new DiaryResult<DiaryEntryData>(DiaryStatus.Unavailable);
         if (row is null)
         {
+            var (today, zone) = await LocalDay(owner, ct);
+            if (date > today || DiaryRules.ExpiryDate(date) <= today)
+                return new DiaryResult<DiaryEntryData>(DiaryStatus.Invalid);
             var expiry = DiaryRules.ExpiryDate(date).ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
             // Midnight may be skipped in some timezones. Expire at the first valid local instant.
             while (zone.IsInvalidTime(expiry)) expiry = expiry.AddMinutes(1);
