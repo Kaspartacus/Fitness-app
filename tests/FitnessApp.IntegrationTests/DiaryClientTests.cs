@@ -3,13 +3,164 @@ using System.Net.Http.Json;
 using System.Reflection;
 using FitnessApp.Client.Authentication;
 using FitnessApp.Client.Diary;
+using FitnessApp.Contracts.Authentication;
 using FitnessApp.Contracts.Diary;
+using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 using DiaryPage = FitnessApp.Client.Pages.Diary;
 
 namespace FitnessApp.IntegrationTests;
 
 public sealed class DiaryClientTests
 {
+    [Fact]
+    public async Task ProductionDisposalCompletesAndClearsLocallyWhileServerLockIsStillPending()
+    {
+        const string oldGrant = "synthetic-old-memory-grant";
+        var lockRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var lockResponse = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var lockFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        string? lockGrant = null;
+        var stateCarriedGrant = true;
+        using var http = new HttpClient(new AsyncHandler(async request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith("/unlock")) return Json(new DiaryUnlockResponse(oldGrant));
+            if (path.EndsWith("/lock"))
+            {
+                lockGrant = Assert.Single(request.Headers.GetValues("X-Diary-Grant"));
+                lockRequested.TrySetResult();
+                var response = await lockResponse.Task;
+                lockFinished.TrySetResult();
+                return response;
+            }
+            stateCarriedGrant = request.Headers.Contains("X-Diary-Grant");
+            return Json(new DiaryStatusResponse(true, true, false, new(2026, 10, 22), "Europe/Copenhagen"));
+        })) { BaseAddress = new("https://localhost/"), Timeout = Timeout.InfiniteTimeSpan };
+        using var api = new DiaryClient(new Factory(http), new InMemoryAuthenticationStateProvider());
+        await api.UnlockAsync("x");
+        var page = Page(api, new(2026, 10, 22));
+        typeof(DiaryPage).GetProperty("JS", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(page, new NoopJsRuntime());
+        Set(page, "text", "Synthetic private draft"); Set(page, "baseline", "Synthetic saved entry");
+        Set(page, "code", "synthetic-code");
+
+        try
+        {
+            // Call the production method directly; the probe substitutes only its own lifecycle.
+            await page.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
+            await lockRequested.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.False(lockResponse.Task.IsCompleted);
+            Assert.Equal(oldGrant, lockGrant);
+            Assert.Equal("", Field<string>(page, "text"));
+            Assert.Equal("", Field<string>(page, "baseline"));
+            Assert.Equal("", Field<string>(page, "code"));
+            await api.StateAsync();
+            Assert.False(stateCarriedGrant);
+        }
+        finally
+        {
+            lockResponse.TrySetResult(Json(true));
+            await lockFinished.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            await ((DiaryPageProbe)page).DisposeRendererAsync();
+        }
+    }
+
+    [Fact]
+    public async Task ClosingDuringNearExpiryRefreshDoesNotCancelOrSuspendTheLoginSession()
+    {
+        var state = new InMemoryAuthenticationStateProvider();
+        var user = new AuthenticatedUserResponse("synthetic@example.test", "Synthetic user", ["User"]);
+        state.SetSession(new("synthetic-token", DateTimeOffset.UtcNow.AddMinutes(15), user, "synthetic-session"));
+        var navigation = new DiaryNavigationManager();
+        var refreshRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var refreshResponse = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var lockFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken refreshCancellation = default;
+        using var sessionHttp = new HttpClient(new CancellableHandler(async (request, cancellationToken) =>
+        {
+            Assert.EndsWith("/api/auth/refresh", request.RequestUri!.AbsolutePath);
+            refreshCancellation = cancellationToken;
+            refreshRequested.TrySetResult();
+            return await refreshResponse.Task.WaitAsync(cancellationToken);
+        })) { BaseAddress = new(navigation.BaseUri), Timeout = Timeout.InfiniteTimeSpan };
+        var authentication = new AuthenticationClient(new Factory(sessionHttp), state, navigation);
+        using var authorization = new ApiAuthorizationHandler(state, navigation, authentication)
+        {
+            InnerHandler = new Handler(request =>
+            {
+                if (request.RequestUri!.AbsolutePath.EndsWith("/unlock"))
+                    return Json(new DiaryUnlockResponse("synthetic-grant"));
+                Assert.EndsWith("/api/diary/lock", request.RequestUri!.AbsolutePath);
+                Assert.Equal("synthetic-grant", Assert.Single(request.Headers.GetValues("X-Diary-Grant")));
+                lockFinished.TrySetResult();
+                return Json(true);
+            })
+        };
+        using var diaryHttp = new HttpClient(authorization) { BaseAddress = new(navigation.BaseUri), Timeout = Timeout.InfiniteTimeSpan };
+        using var api = new DiaryClient(new Factory(diaryHttp), state);
+        await api.UnlockAsync("x");
+        state.SetSession(new("synthetic-token", DateTimeOffset.UtcNow.AddSeconds(5), user, "synthetic-session"));
+        var page = Page(api, new(2026, 10, 22));
+        typeof(DiaryPage).GetProperty("JS", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(page, new NoopJsRuntime());
+        try
+        {
+            await page.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
+            await refreshRequested.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            // Exceed the former close-specific timeout while the real authentication refresh waits.
+            await Task.Delay(TimeSpan.FromMilliseconds(2200));
+            Assert.False(refreshCancellation.IsCancellationRequested);
+            Assert.Equal("synthetic-token", state.AccessToken);
+            Assert.False(authentication.IsUnavailable);
+        }
+        finally
+        {
+            refreshResponse.TrySetResult(Json(new LoginResponse("synthetic-refreshed-token",
+                DateTimeOffset.UtcNow.AddMinutes(15), user, "synthetic-session")));
+            await lockFinished.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            await ((DiaryPageProbe)page).DisposeRendererAsync();
+        }
+        Assert.Equal("synthetic-refreshed-token", state.AccessToken);
+        Assert.False(authentication.IsUnavailable);
+    }
+
+    [Fact]
+    public async Task DelayedOldLockDenialCannotClearANewerUnlockGrant()
+    {
+        var oldLockResponse = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var unlocks = 0; var locks = 0; string? stateGrant = null;
+        using var http = new HttpClient(new AsyncHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith("/unlock"))
+                return Task.FromResult(Json(new DiaryUnlockResponse(++unlocks == 1 ? "synthetic-old-grant" : "synthetic-new-grant")));
+            if (path.EndsWith("/lock"))
+            {
+                Assert.Equal("synthetic-old-grant", Assert.Single(request.Headers.GetValues("X-Diary-Grant")));
+                return oldLockResponse.Task;
+            }
+            stateGrant = Assert.Single(request.Headers.GetValues("X-Diary-Grant"));
+            return Task.FromResult(Json(new DiaryStatusResponse(true, true, true, new(2026, 10, 22), "Europe/Copenhagen")));
+        })) { BaseAddress = new("https://localhost/") };
+        using var api = new DiaryClient(new Factory(http), new InMemoryAuthenticationStateProvider());
+        await api.UnlockAsync("x"); api.Locked += () => locks++;
+        var locking = api.LockAsync();
+        try
+        {
+            Assert.Equal(1, locks);
+            Assert.True((await api.UnlockAsync("x")).Succeeded);
+            oldLockResponse.SetResult(new(HttpStatusCode.Locked));
+            await locking;
+            await api.StateAsync();
+            Assert.Equal("synthetic-new-grant", stateGrant);
+            Assert.Equal(1, locks);
+        }
+        finally
+        {
+            if (!oldLockResponse.Task.IsCompleted) oldLockResponse.TrySetResult(new(HttpStatusCode.Locked));
+            await locking.WaitAsync(TimeSpan.FromSeconds(1));
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -174,6 +325,20 @@ public sealed class DiaryClientTests
     private static object? Invoke(DiaryPage page, string name) => typeof(DiaryPage).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(page, null);
     private static HttpResponseMessage Json<T>(T value) => new(HttpStatusCode.OK) { Content = JsonContent.Create(value) };
     private sealed class Factory(HttpClient client) : IHttpClientFactory { public HttpClient CreateClient(string name) => client; }
+    private sealed class CancellableHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => respond(request, cancellationToken);
+    }
+    private sealed class NoopJsRuntime : IJSRuntime
+    {
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) => ValueTask.FromResult(default(TValue)!);
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args) => ValueTask.FromResult(default(TValue)!);
+    }
+    private sealed class DiaryNavigationManager : NavigationManager
+    {
+        public DiaryNavigationManager() => Initialize("https://localhost/", "https://localhost/dagbog");
+        protected override void NavigateToCore(string uri, bool forceLoad) => Uri = ToAbsoluteUri(uri).ToString();
+    }
     private sealed class AsyncHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> respond) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => respond(request);

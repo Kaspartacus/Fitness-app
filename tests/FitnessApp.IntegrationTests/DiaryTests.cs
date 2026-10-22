@@ -150,6 +150,48 @@ public sealed class DiaryTests
     }
 
     [Fact]
+    public async Task DelayedLockRevokesOnlyItsSuppliedGrantWithinTheOwnerAndSession()
+    {
+        using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync();
+        var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        var other = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        var session = await factory.CreateSessionAsync(owner, DateTimeOffset.UtcNow.AddHours(1));
+        var otherSession = await factory.CreateSessionAsync(owner, DateTimeOffset.UtcNow.AddHours(1));
+        var otherOwnerSession = await factory.CreateSessionAsync(other, DateTimeOffset.UtcNow.AddHours(1));
+        await With(factory, async (service, _) =>
+        {
+            await service.ConfigureAsync(owner.Id, session, null, "x", "x", Ct);
+            await service.ConfigureAsync(other.Id, otherOwnerSession, null, "y", "y", Ct);
+            var oldGrant = (await service.UnlockAsync(owner.Id, session, "x", Ct)).Value!;
+            var newGrant = (await service.UnlockAsync(owner.Id, session, "x", Ct)).Value!;
+            var otherSessionGrant = (await service.UnlockAsync(owner.Id, otherSession, "x", Ct)).Value!;
+            var otherOwnerGrant = (await service.UnlockAsync(other.Id, otherOwnerSession, "y", Ct)).Value!;
+            var today = (await service.StateAsync(owner.Id, session, newGrant, Ct)).Value!.Today;
+
+            await service.LockAsync(other.Id, session, newGrant, Ct);
+            await service.LockAsync(owner.Id, otherSession, newGrant, Ct);
+            await service.LockAsync(owner.Id, session, null, Ct);
+            await service.LockAsync(owner.Id, session, "malformed", Ct);
+            await service.LockAsync(owner.Id, session, new string('z', 64), Ct);
+            // The original page's close reaches the server after this session re-unlocks.
+            await service.LockAsync(owner.Id, session, oldGrant, Ct);
+
+            Assert.Equal(DiaryStatus.Success, (await service.SaveAsync(owner.Id, session, newGrant, today, SyntheticText, null, Ct)).Status);
+            var read = await service.ReadAsync(owner.Id, session, newGrant, today, Ct);
+            Assert.Equal(DiaryStatus.Success, read.Status); Assert.Equal(SyntheticText, read.Value!.Text);
+            Assert.Equal(DiaryStatus.Success, (await service.ActivityAsync(owner.Id, session, newGrant, Ct)).Status);
+            Assert.Equal(DiaryStatus.Locked, (await service.ReadAsync(owner.Id, session, oldGrant, today, Ct)).Status);
+            Assert.Equal(DiaryStatus.Locked, (await service.ActivityAsync(owner.Id, session, oldGrant, Ct)).Status);
+
+            await service.LockAsync(owner.Id, session, newGrant, Ct);
+            Assert.Equal(DiaryStatus.Locked, (await service.ReadAsync(owner.Id, session, newGrant, today, Ct)).Status);
+            Assert.Equal(DiaryStatus.Locked, (await service.ActivityAsync(owner.Id, session, newGrant, Ct)).Status);
+            Assert.Equal(DiaryStatus.Success, (await service.ActivityAsync(owner.Id, otherSession, otherSessionGrant, Ct)).Status);
+            Assert.Equal(DiaryStatus.Success, (await service.ActivityAsync(other.Id, otherOwnerSession, otherOwnerGrant, Ct)).Status);
+        });
+    }
+
+    [Fact]
     public async Task CiphertextSurvivesProviderRestartIsBoundToOwnerDateAndRejectsSilentOverwrite()
     {
         using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync();

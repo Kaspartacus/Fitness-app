@@ -137,10 +137,12 @@ public sealed class DiaryService(FitnessDbContext db, TimeProvider clock, DiaryO
     }, ct);
     public async Task LockAsync(string owner, string session, string? grant, CancellationToken ct)
     {
+        if (grant is not { Length: 64 } || grant.Any(character => !Uri.IsHexDigit(character))) return;
+        var hash = Hash(grant);
         await Serialized(owner, async () =>
         {
-            // Lock the whole diary session even if the caller has already discarded its token.
-            await db.DiaryGrants.Where(x => x.UserId == owner && x.SessionId == session).ExecuteDeleteAsync(ct);
+            // A delayed close must not revoke a newer unlock issued for the same session.
+            await db.DiaryGrants.Where(x => x.UserId == owner && x.SessionId == session && x.Hash == hash).ExecuteDeleteAsync(ct);
             return true;
         }, ct);
     }

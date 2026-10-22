@@ -349,8 +349,16 @@
     {
         disposed = true; DiaryApi.Locked -= HandleLocked; contentGeneration++;
         text = baseline = ""; dates = []; ClearSecrets();
+        _ = ObserveCloseLockAsync(DiaryApi.LockAsync());
         try { await JS.InvokeVoidAsync("fitnessDiary.stop", observerKey); }
         catch (JSException) { }
-        await DiaryApi.LockAsync(); reference?.Dispose();
+        reference?.Dispose();
+    }
+    private static async Task ObserveCloseLockAsync(Task locking)
+    {
+        // Closing already cleared local state. Observe best-effort server cleanup without
+        // blocking navigation, cancelling shared authentication refresh, or logging details.
+        try { await locking; }
+        catch (Exception) { }
     }
 }
