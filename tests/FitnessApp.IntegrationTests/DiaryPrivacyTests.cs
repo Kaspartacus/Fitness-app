@@ -69,9 +69,9 @@ public sealed class DiaryPrivacyTests
             // Re-rendering a dialog or input must not restart the absolute inactivity deadline.
             await renderer.Dispatcher.InvokeAsync(() => renderer.RenderAsync(componentId));
             Assert.Single(javaScript.Starts);
-            // The production subscription replaces the hidden shell when locking completes.
+            // HandleLocked schedules the replacement render on this dispatcher. Inspect that render
+            // directly: a second unchanged render has no new element-reference capture ID.
             await renderer.Dispatcher.InvokeAsync(() => api.Clear());
-            await renderer.Dispatcher.InvokeAsync(() => renderer.RenderAsync(componentId));
             var replacement = await renderer.Dispatcher.InvokeAsync(() => renderer.Inspect(componentId));
             var newRoot = Assert.Single(replacement.Elements, element => element.Attributes.ContainsKey("data-diary-privacy-root"));
             Assert.Equal(2, javaScript.Starts.Count);
