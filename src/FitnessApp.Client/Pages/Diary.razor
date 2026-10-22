@@ -10,6 +10,7 @@
 
 <PageTitle>Dagbog</PageTitle>
 <NavigationLock ConfirmExternalNavigation="@Dirty" OnBeforeInternalNavigation="BeforeNavigation" />
+<div @ref="privacyRoot" @key="privacyKey" data-diary-privacy-root="true">
 <main class="strength-app settings-app strength-with-bottom-nav diary-app" aria-labelledby="diary-title">
     <header class="strength-back-header settings-page-header">
         <a class="strength-icon-button" href="/indstillinger" aria-label="Tilbage til indstillinger">←</a>
@@ -51,7 +52,6 @@
         }
         else if (state is { Unlocked: true } opened)
         {
-            <div @ref="contentRoot" @key="contentKey">
                 <section class="diary-card diary-today">
                     <div><p class="strength-overline">Et øjeblik til dig</p><h2>@Format(opened.Today)</h2></div>
                     <button class="strength-primary-button" @onclick="WriteToday" disabled="@busy">Skriv i dag</button>
@@ -89,7 +89,6 @@
                         </ul>
                     }
                 </section>
-            </div>
         }
         <p class="diary-privacy">Kladden findes kun i denne fane og slettes ved lukning, genindlæsning eller 15 minutters inaktivitet. Sider opbevares i ét kalenderår fra deres dato. Redigering forlænger ikke fristen. Teksten krypteres på serveren før lagring; serveren kan læse den. Slettede sider kan findes i ældre sikkerhedskopier, indtil de udløber.</p>
     </div>
@@ -127,6 +126,7 @@
     @if (dialogError is not null) { <p class="strength-field-error" role="alert">@dialogError</p> }
     <button class="strength-primary-button" @onclick="RecoverAsync" disabled="@(busy || accountPassword.Length == 0)">Bekræft og nulstil</button>
 </ModalDialog>
+</div>
 
 @code {
     private static readonly CultureInfo Danish = CultureInfo.GetCultureInfo("da-DK");
@@ -136,11 +136,12 @@
     private Guid? version;
     private string text = "", baseline = "", code = "", currentCode = "", newCode = "", confirmation = "", accountPassword = "";
     private string? error, dialog, dialogError;
-    private bool loading = true, busy, saved, showCode, disposed, skipNavigation, observing;
+    private bool loading = true, busy, saved, showCode, disposed, skipNavigation;
     private long contentGeneration;
     private readonly string observerKey = "diary-" + Guid.NewGuid().ToString("N");
-    private Guid contentKey = Guid.NewGuid();
-    private ElementReference contentRoot;
+    private Guid privacyKey = Guid.NewGuid();
+    private Guid? observedPrivacyKey;
+    private ElementReference privacyRoot;
     private DotNetObjectReference<Diary>? reference;
     private Func<Task>? pending;
     private bool Dirty => text != baseline;
@@ -149,14 +150,13 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (disposed) return;
-        if (state?.Unlocked == true && !observing)
+        if (observedPrivacyKey != privacyKey)
         {
+            var renderedKey = privacyKey;
             reference ??= DotNetObjectReference.Create(this);
-            await JS.InvokeVoidAsync("fitnessDiary.start", observerKey, contentRoot, reference);
-            observing = true;
+            await JS.InvokeVoidAsync("fitnessDiary.start", observerKey, privacyRoot, reference);
+            observedPrivacyKey = renderedKey;
         }
-        else if (state?.Unlocked != true && observing)
-        { await JS.InvokeVoidAsync("fitnessDiary.stop", observerKey); observing = false; }
     }
     private async Task LoadStateAsync()
     {
@@ -328,10 +328,10 @@
         contentGeneration++; text = baseline = ""; version = null; dates = []; saved = false; busy = false;
         dialog = null; pending = null; ClearSecrets();
         if (state is { } s) state = s with { Unlocked = false };
-        contentKey = Guid.NewGuid();
+        privacyKey = Guid.NewGuid();
         if (!disposed) _ = InvokeAsync(StateHasChanged);
     }
-    [JSInvokable] public async Task IdleLock() { await DiaryApi.LockAsync(); }
+    [JSInvokable] public async Task IdleLock() { if (!disposed) await DiaryApi.LockAsync(); }
     [JSInvokable] public async Task DiaryActivity()
     {
         if (disposed || state?.Unlocked != true) return;
