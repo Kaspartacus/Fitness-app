@@ -34,5 +34,5 @@ jobs:
       - name: Audit dependencies
         run: ./scripts/verify.sh audit
 
-      - name: Verify browser session coordination
-        run: node --test tests/FitnessApp.IntegrationTests/session.test.cjs
+      - name: Verify browser session and diary lifecycle
+        run: node --test tests/FitnessApp.IntegrationTests/*.test.cjs
