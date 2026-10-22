@@ -1,4 +1,5 @@
 using FitnessApp.Server.Diary;
+using System.Security.Cryptography;
 using System.Threading.RateLimiting;
 using System.Diagnostics;
 using FitnessApp.Server.Logging;
@@ -13,6 +14,7 @@ using FitnessApp.Server.Strength;
 using FitnessApp.Server.Nutrition;
 using FitnessApp.Application.Authentication;
 using FitnessApp.Infrastructure;
+using FitnessApp.Infrastructure.Diary;
 using FitnessApp.Infrastructure.Persistence;
 using FitnessApp.Server.Authentication;
 using FitnessApp.Server.Configuration;
@@ -202,15 +204,33 @@ if (app.Environment.IsDevelopment())
     }
 }
 
-// Never silently initialize replacement keys while encrypted diary rows depend on the old ring.
+// Verify every retained entry against the actual ring before accepting requests or new diary writes.
 await using (var diaryKeyScope = app.Services.CreateAsyncScope())
 {
     var keyDirectory = diaryKeyScope.ServiceProvider.GetRequiredService<PersistentKeyRingDirectory>().Location;
     var diaryDatabase = diaryKeyScope.ServiceProvider.GetRequiredService<FitnessDbContext>();
-    if ((await diaryDatabase.Database.GetAppliedMigrationsAsync()).Contains("20261021120000_AddPrivateDiary") &&
-        await diaryDatabase.DiaryEntries.AnyAsync() &&
-        !keyDirectory.EnumerateFiles("key-*.xml").Any())
-        throw new InvalidOperationException("Existing diary entries require the persistent Data Protection key ring. Restore its backup before starting the server.");
+    if ((await diaryDatabase.Database.GetAppliedMigrationsAsync()).Contains("20261021120000_AddPrivateDiary"))
+    {
+        const string unavailableKeys = "Existing diary entries require the persistent Data Protection key ring. Restore its backup before starting the server.";
+        var now = diaryKeyScope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime;
+        var retainedEntries = diaryDatabase.DiaryEntries.AsNoTracking().Where(entry => entry.ExpiresAtUtc > now);
+        if (await retainedEntries.AnyAsync() && !keyDirectory.EnumerateFiles("key-*.xml").Any())
+            throw new InvalidOperationException(unavailableKeys);
+
+        var cipher = diaryKeyScope.ServiceProvider.GetRequiredService<DiaryCipher>();
+        await foreach (var entry in retainedEntries.Select(entry => new { entry.UserId, entry.Date, entry.Ciphertext }).AsAsyncEnumerable())
+        {
+            try
+            {
+                _ = cipher.Decrypt(entry.UserId, entry.Date, entry.Ciphertext);
+            }
+            catch (CryptographicException)
+            {
+                // Do not retain plaintext or attach cryptographic details to the startup failure.
+                throw new InvalidOperationException(unavailableKeys);
+            }
+        }
+    }
 }
 
 if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))

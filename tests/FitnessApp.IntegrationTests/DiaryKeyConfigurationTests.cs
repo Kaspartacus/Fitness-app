@@ -1,16 +1,23 @@
 using System.Text.Json;
+using System.Security.Cryptography;
 using FitnessApp.Application.Diary;
 using FitnessApp.Domain.Users;
+using FitnessApp.Infrastructure.Diary;
+using FitnessApp.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
 
 namespace FitnessApp.IntegrationTests;
 
 public sealed class DiaryKeyConfigurationTests
 {
+    private const string UnavailableKeysMessage = "Existing diary entries require the persistent Data Protection key ring. Restore its backup before starting the server.";
+
     [Fact]
     public async Task FinalHostConfigurationSelectsTheActualPersistentKeyRepository()
     {
@@ -105,18 +112,125 @@ public sealed class DiaryKeyConfigurationTests
         using (var first = new AuthWebApplicationFactory(storage: storage))
         {
             await first.InitializeDatabaseAsync();
-            var owner = await first.CreateUserAsync(AccountApprovalStatus.Approved);
-            await using var scope = first.Services.CreateAsyncScope();
-            var service = scope.ServiceProvider.GetRequiredService<IDiaryService>();
-            await service.ConfigureAsync(owner.Id, "synthetic-no-code-session", null, null, null, CancellationToken.None);
-            var today = (await service.StateAsync(owner.Id, "synthetic-no-code-session", null, CancellationToken.None)).Value!.Today;
-            Assert.Equal(DiaryStatus.Success, (await service.SaveAsync(owner.Id, "synthetic-no-code-session", null,
-                today, "Synthetic key availability check", null, CancellationToken.None)).Status);
+            await SaveSyntheticEntryAsync(first);
         }
         // Only isolated synthetic test keys are removed; no developer or deployed ring is used.
         Directory.Delete(storage.KeyRingPath, recursive: true);
         using var restarted = new AuthWebApplicationFactory(storage: storage);
         var error = await Assert.ThrowsAsync<InvalidOperationException>(restarted.InitializeDatabaseAsync);
-        Assert.Contains("Restore its backup", error.Message);
+        Assert.Equal(UnavailableKeysMessage, error.Message);
+        Assert.Null(error.InnerException);
+    }
+
+    [Fact]
+    public async Task StartupRejectsAnUnrelatedValidNonemptyKeyRing()
+    {
+        using var storage = new TestAppStorage();
+        using (var first = new AuthWebApplicationFactory(storage: storage))
+        {
+            await first.InitializeDatabaseAsync();
+            await SaveSyntheticEntryAsync(first);
+        }
+
+        // Replace only this test's isolated ring with another valid, independently generated ring.
+        Directory.Delete(storage.KeyRingPath, recursive: true);
+        var unrelated = new DiaryCipher(DataProtectionProvider.Create(new DirectoryInfo(storage.KeyRingPath),
+            builder => builder.SetApplicationName("FitnessApp")));
+        _ = unrelated.Encrypt("synthetic-unrelated-owner", DateOnly.FromDateTime(DateTime.UtcNow), "Synthetic unrelated entry");
+        Assert.NotEmpty(Directory.EnumerateFiles(storage.KeyRingPath, "key-*.xml"));
+
+        using var restarted = new AuthWebApplicationFactory(storage: storage);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(restarted.InitializeDatabaseAsync);
+        Assert.Equal(UnavailableKeysMessage, error.Message);
+        Assert.Null(error.InnerException);
+    }
+
+    [Fact]
+    public async Task StartupAcceptsTheCompleteRotatedRingButRejectsItsMissingOlderRequiredKey()
+    {
+        using var storage = new TestAppStorage();
+        Guid[] olderKeyIds;
+        string owner;
+        DateOnly today;
+        string newerCiphertext;
+        using (var first = new AuthWebApplicationFactory(storage: storage))
+        {
+            await first.InitializeDatabaseAsync();
+            (owner, today) = await SaveSyntheticEntryAsync(first);
+            var keys = first.Services.GetRequiredService<IKeyManager>();
+            olderKeyIds = keys.GetAllKeys().Select(key => key.KeyId).ToArray();
+            Assert.NotEmpty(olderKeyIds);
+            var now = DateTimeOffset.UtcNow;
+            keys.CreateNewKey(now, now.AddDays(90));
+            var rotated = new DiaryCipher(DataProtectionProvider.Create(new DirectoryInfo(storage.KeyRingPath),
+                builder => builder.SetApplicationName("FitnessApp")));
+            newerCiphertext = rotated.Encrypt(owner, today.AddDays(-1), "Synthetic rotated-key entry");
+            await using var scope = first.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+            db.DiaryEntries.Add(new DiaryEntry
+            {
+                UserId = owner,
+                Date = today.AddDays(-1),
+                Ciphertext = newerCiphertext,
+                Version = Guid.NewGuid(),
+                ExpiresAtUtc = now.UtcDateTime.AddDays(30)
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // The matching complete ring must allow a restart with entries protected by both keys.
+        using (var complete = new AuthWebApplicationFactory(storage: storage))
+        {
+            await complete.InitializeDatabaseAsync();
+            await using var scope = complete.Services.CreateAsyncScope();
+            Assert.Equal(2, await scope.ServiceProvider.GetRequiredService<FitnessDbContext>().DiaryEntries.CountAsync());
+        }
+
+        foreach (var keyId in olderKeyIds)
+            File.Delete(Path.Combine(storage.KeyRingPath, $"key-{keyId:D}.xml"));
+        Assert.NotEmpty(Directory.EnumerateFiles(storage.KeyRingPath, "key-*.xml"));
+        var incomplete = new DiaryCipher(DataProtectionProvider.Create(new DirectoryInfo(storage.KeyRingPath),
+            builder => builder.SetApplicationName("FitnessApp")));
+        Assert.Equal("Synthetic rotated-key entry", incomplete.Decrypt(owner, today.AddDays(-1), newerCiphertext));
+
+        using var restarted = new AuthWebApplicationFactory(storage: storage);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(restarted.InitializeDatabaseAsync);
+        Assert.Equal(UnavailableKeysMessage, error.Message);
+        Assert.Null(error.InnerException);
+    }
+
+    [Fact]
+    public async Task StartupDoesNotRequireExpiredEntryKeysUsingTheApplicationClock()
+    {
+        using var storage = new TestAppStorage();
+        var now = DateTimeOffset.UtcNow;
+        using (var first = new AuthWebApplicationFactory(storage: storage, timeProvider: new FixedDiaryClock(now)))
+        {
+            await first.InitializeDatabaseAsync();
+            await SaveSyntheticEntryAsync(first);
+        }
+        Directory.Delete(storage.KeyRingPath, recursive: true);
+        using var restarted = new AuthWebApplicationFactory(storage: storage,
+            timeProvider: new FixedDiaryClock(now.AddYears(2)));
+        await restarted.InitializeDatabaseAsync();
+        await using var scope = restarted.Services.CreateAsyncScope();
+        Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<FitnessDbContext>().DiaryEntries.CountAsync());
+    }
+
+    private static async Task<(string Owner, DateOnly Date)> SaveSyntheticEntryAsync(AuthWebApplicationFactory factory)
+    {
+        var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IDiaryService>();
+        await service.ConfigureAsync(owner.Id, "synthetic-no-code-session", null, null, null, CancellationToken.None);
+        var today = (await service.StateAsync(owner.Id, "synthetic-no-code-session", null, CancellationToken.None)).Value!.Today;
+        Assert.Equal(DiaryStatus.Success, (await service.SaveAsync(owner.Id, "synthetic-no-code-session", null,
+            today, "Synthetic key availability check", null, CancellationToken.None)).Status);
+        return (owner.Id, today);
+    }
+
+    private sealed class FixedDiaryClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 }
