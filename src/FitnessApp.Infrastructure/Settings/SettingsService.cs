@@ -124,7 +124,10 @@ internal sealed class SettingsService(
         settings.MealRemindersEnabled = input.MealRemindersEnabled;
         settings.NutritionProgressEnabled = input.NutritionProgressEnabled;
         settings.DetailedPushPreviews = input.DetailedPushPreviews;
-        settings.DiaryRemindersEnabled = input.DiaryRemindersEnabled;
+        if (input.DiaryRemindersEnabled.HasValue)
+        {
+            settings.DiaryRemindersEnabled = input.DiaryRemindersEnabled.Value;
+        }
         settings.TimeZoneId = input.TimeZoneId;
         await db.SaveChangesAsync(cancellationToken);
 

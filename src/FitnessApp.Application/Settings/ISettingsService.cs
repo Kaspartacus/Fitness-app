@@ -52,7 +52,7 @@ public sealed record UpdateNotificationPreferencesInput(
     bool NutritionProgressEnabled,
     bool DetailedPushPreviews,
     string TimeZoneId,
-    bool DiaryRemindersEnabled = false);
+    bool? DiaryRemindersEnabled = null);
 
 public enum SettingsSaveStatus
 {

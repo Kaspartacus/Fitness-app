@@ -41,7 +41,7 @@ public sealed record UpdateNotificationPreferencesRequest(
     bool NutritionProgressEnabled,
     bool DetailedPushPreviews,
     string TimeZoneId,
-    bool DiaryRemindersEnabled = false);
+    bool? DiaryRemindersEnabled = null);
 
 public sealed record GarminMockConnectionResponse(
     bool IsConnected,
