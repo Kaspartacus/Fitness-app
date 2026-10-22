@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FitnessApp.Application.Diary;
 using FitnessApp.Domain.Users;
 using Microsoft.AspNetCore.Hosting;
@@ -40,7 +41,7 @@ public sealed class DiaryKeyConfigurationTests
     {
         using var storage = new TestAppStorage();
         var root = Path.GetDirectoryName(storage.KeyRingPath)!;
-        var application = Path.Combine(root, "synthetic-application"); Directory.CreateDirectory(application);
+        var application = CreateSyntheticApplication(storage);
         var alias = Path.Combine(root, "synthetic-external-alias"); Directory.CreateSymbolicLink(alias, application);
         var configuredKeys = Path.Combine(alias, "not-created", "keys");
         using var factory = new AuthWebApplicationFactory(storage: storage, configurationOverrides:
@@ -56,7 +57,7 @@ public sealed class DiaryKeyConfigurationTests
     {
         using var storage = new TestAppStorage();
         var root = Path.GetDirectoryName(storage.KeyRingPath)!;
-        var application = Path.Combine(root, "synthetic-application"); Directory.CreateDirectory(application);
+        var application = CreateSyntheticApplication(storage);
         var alias = Path.Combine(root, "synthetic-content-alias"); Directory.CreateSymbolicLink(alias, application);
         using var factory = new AuthWebApplicationFactory(storage: storage, configurationOverrides:
             new Dictionary<string, string?> { ["DataProtection:KeyRingPath"] = Path.Combine(application, "keys") });
@@ -71,7 +72,7 @@ public sealed class DiaryKeyConfigurationTests
     {
         using var storage = new TestAppStorage();
         var root = Path.GetDirectoryName(storage.KeyRingPath)!;
-        var application = Path.Combine(root, "synthetic-application"); Directory.CreateDirectory(application);
+        var application = CreateSyntheticApplication(storage);
         var external = Path.Combine(root, "synthetic-private-storage"); Directory.CreateDirectory(external);
         var alias = Path.Combine(root, "synthetic-private-alias"); Directory.CreateSymbolicLink(alias, external);
         using var factory = new AuthWebApplicationFactory(storage: storage, configurationOverrides:
@@ -83,6 +84,18 @@ public sealed class DiaryKeyConfigurationTests
         Assert.True(Directory.Exists(Path.Combine(external, "nested", "keys")));
         File.WriteAllText(Path.Combine(external, "nested", "keys", "synthetic-marker"), "synthetic");
         Assert.Equal("synthetic", File.ReadAllText(Path.Combine(repository.Directory.FullName, "synthetic-marker")));
+    }
+
+    private static string CreateSyntheticApplication(TestAppStorage storage)
+    {
+        var application = Path.Combine(Path.GetDirectoryName(storage.KeyRingPath)!, "synthetic-application");
+        Directory.CreateDirectory(application);
+        // Program reads the connection string before the factory applies its final configuration.
+        File.WriteAllText(Path.Combine(application, "appsettings.json"), JsonSerializer.Serialize(new
+        {
+            ConnectionStrings = new { DefaultConnection = $"Data Source={storage.DatabasePath}" }
+        }));
+        return application;
     }
 
     [Fact]
