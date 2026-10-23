@@ -13,7 +13,10 @@ internal static class DiaryEndpoints
         group.MapGet("/state", async (HttpContext context, IDiaryService service, CancellationToken ct) =>
         {
             var r = await service.StateAsync(Owner(context), Session(context), Grant(context), ct);
-            return Reply(r, x => new DiaryStatusResponse(x.Initialized, x.Protected, x.Unlocked, x.Today, x.TimeZoneId));
+            return Reply(r, x => new DiaryStatusResponse(x.Initialized, x.Protected, x.Unlocked, x.Today, x.TimeZoneId)
+            {
+                MinimumNewEntryDate = x.MinimumNewEntryDate
+            });
         });
         group.MapPost("/unlock", async (DiaryCodeRequest request, HttpContext context, IDiaryService service, CancellationToken ct) =>
             Reply(await service.UnlockAsync(Owner(context), Session(context), request.Code, ct), x => new DiaryUnlockResponse(x)));

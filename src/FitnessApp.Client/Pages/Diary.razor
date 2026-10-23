@@ -77,8 +77,8 @@
                 <section class="diary-card" aria-labelledby="diary-browse-title">
                     <h2 id="diary-browse-title">Dine dage</h2>
                     <div class="diary-browse-controls">
-                        <label>Måned<input type="month" value="@month.ToString("yyyy-MM")" @onchange="ChangeMonthAsync" @onfocus="RefreshDayForControlsAsync" max="@opened.Today.ToString("yyyy-MM")" disabled="@busy" /></label>
-                        <label>Åbn dato<input type="date" value="@selected.ToString("yyyy-MM-dd")" min="@opened.Today.AddYears(-1).AddDays(1).ToString("yyyy-MM-dd")" max="@opened.Today.ToString("yyyy-MM-dd")" @onchange="ChooseDate" @onfocus="RefreshDayForControlsAsync" disabled="@busy" /></label>
+                        <label>Måned<input type="month" value="@month.ToString("yyyy-MM")" @onchange="ChangeMonthAsync" @onfocus="RefreshDayForControlsAsync" disabled="@busy" /></label>
+                        <label>Åbn dato<input type="date" value="@selected.ToString("yyyy-MM-dd")" min="@opened.MinimumNewEntryDate.ToString("yyyy-MM-dd")" max="@opened.Today.ToString("yyyy-MM-dd")" @onchange="ChooseDate" @onfocus="RefreshDayForControlsAsync" disabled="@busy" /></label>
                     </div>
                     @if (dates.Length == 0) { <p class="diary-muted">Der er ingen gemte sider i denne måned. En ny dag kan begynde med et enkelt ord.</p> }
                     else
@@ -270,7 +270,14 @@
         if (result.Succeeded && result.Value is { } entry)
         { selected = date; text = baseline = entry.Text; version = entry.Version; saved = true; }
         else if (result.Status == 404)
-        { selected = date; text = baseline = ""; version = null; saved = false; }
+        {
+            if (state is { } bounds && (date < bounds.MinimumNewEntryDate || date > bounds.Today))
+            {
+                error = "Datoen kan ikke bruges til en ny dagbogsside. Vælg en dato inden for datovælgerens grænser.";
+                return;
+            }
+            selected = date; text = baseline = ""; version = null; saved = false;
+        }
         else error = result.Error;
     }
     private Task ReloadEntry() => Guard(() => LoadEntryAsync(selected));

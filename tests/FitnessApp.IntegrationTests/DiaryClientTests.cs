@@ -310,6 +310,77 @@ public sealed class DiaryClientTests
         Assert.Equal("Synthetic intervening unsaved draft", Field<string>(page, "text"));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OutOfCreationWindowSelectionCannotOpenAnEmptyDraftButCanOpenARetainedEntry(bool existingEntry)
+    {
+        var today = new DateOnly(2025, 2, 28); var requested = new DateOnly(2024, 2, 29);
+        var bounds = new DiaryStatusResponse(true, false, true, today, "Asia/Tokyo")
+        {
+            MinimumNewEntryDate = new(2024, 3, 1)
+        };
+        using var http = new HttpClient(new Handler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith("/state")) return Json(bounds);
+            if (path.Contains("/entries/")) return existingEntry
+                ? Json(new DiaryEntryResponse(requested, "Synthetic retained entry", Guid.NewGuid()))
+                : new(HttpStatusCode.NotFound);
+            return Json(Array.Empty<DiaryDateResponse>());
+        })) { BaseAddress = new("https://localhost/") };
+        using var api = new DiaryClient(new Factory(http), new InMemoryAuthenticationStateProvider());
+        var page = Page(api, today);
+        Set(page, "state", bounds);
+        Set(page, "text", "Synthetic current entry"); Set(page, "baseline", "Synthetic current entry");
+        // Both a native onchange and a saved-date list button reach this production operation.
+        await (Task)typeof(DiaryPage).GetMethod("RequestDate", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(page, new object[] { requested })!;
+        Assert.Equal(existingEntry ? requested : today, Field<DateOnly>(page, "selected"));
+        Assert.Equal(existingEntry ? "Synthetic retained entry" : "Synthetic current entry", Field<string>(page, "text"));
+        if (!existingEntry) Assert.False(string.IsNullOrEmpty(Field<string?>(page, "error")));
+        await ((DiaryPageProbe)page).DisposeRendererAsync();
+    }
+
+    [Fact]
+    public async Task FutureLocalMonthBrowsingOpensRetainedEntriesButNotEmptyFutureDrafts()
+    {
+        var today = new DateOnly(2026, 11, 30); var retainedDate = new DateOnly(2026, 12, 1);
+        var bounds = new DiaryStatusResponse(true, false, true, today, "America/Los_Angeles")
+        {
+            MinimumNewEntryDate = new(2025, 12, 1)
+        };
+        using var http = new HttpClient(new Handler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (path.EndsWith("/state")) return Json(bounds);
+            if (path.Contains("/dates/"))
+            {
+                Assert.EndsWith("/dates/2026/12", path);
+                return Json(new[] { new DiaryDateResponse(retainedDate, Guid.NewGuid()) });
+            }
+            return path.EndsWith("/entries/2026-12-01")
+                ? Json(new DiaryEntryResponse(retainedDate, "Synthetic retained December entry", Guid.NewGuid()))
+                : new(HttpStatusCode.NotFound);
+        })) { BaseAddress = new("https://localhost/") };
+        using var api = new DiaryClient(new Factory(http), new InMemoryAuthenticationStateProvider());
+        var page = Page(api, today);
+        Set(page, "state", bounds);
+        await (Task)typeof(DiaryPage).GetMethod("ChangeMonthAsync", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(page, new object[] { new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = "2026-12" } })!;
+        Assert.Equal(retainedDate, Assert.Single(Field<DiaryDateResponse[]>(page, "dates")).Date);
+        await (Task)typeof(DiaryPage).GetMethod("RequestDate", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(page, new object[] { retainedDate })!;
+        Assert.Equal(retainedDate, Field<DateOnly>(page, "selected"));
+        Assert.Equal("Synthetic retained December entry", Field<string>(page, "text"));
+        await (Task)typeof(DiaryPage).GetMethod("RequestDate", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(page, new object[] { retainedDate.AddDays(1) })!;
+        Assert.Equal(retainedDate, Field<DateOnly>(page, "selected"));
+        Assert.Equal("Synthetic retained December entry", Field<string>(page, "text"));
+        Assert.False(string.IsNullOrEmpty(Field<string?>(page, "error")));
+        await ((DiaryPageProbe)page).DisposeRendererAsync();
+    }
+
     private static DiaryPage Page(DiaryClient api, DateOnly today)
     {
         var page = new DiaryPageProbe();

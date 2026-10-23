@@ -43,7 +43,10 @@ public sealed class DiaryService(FitnessDbContext db, TimeProvider clock, DiaryO
     {
         var protection = await Protection(owner, ct); var (today, zone) = await LocalDay(owner, ct);
         return new DiaryResult<DiaryState>(DiaryStatus.Success, new(protection is not null, protection?.CodeHash is not null,
-            await Allowed(owner, session, grant, protection, ct), today, zone.Id));
+            await Allowed(owner, session, grant, protection, ct), today, zone.Id)
+        {
+            MinimumNewEntryDate = DiaryRules.EarliestCreationDate(today)
+        });
     }, ct);
 
     private bool TemporarilyLocked(DiaryProtection protection) => protection.LockedUntilUtc > Now;

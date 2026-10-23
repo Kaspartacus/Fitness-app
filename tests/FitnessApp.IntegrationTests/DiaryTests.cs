@@ -303,6 +303,31 @@ public sealed class DiaryTests
         Assert.Equal(SyntheticText, (await a.GetFromJsonAsync<DiaryEntryResponse>($"api/diary/entries/{state.Today:yyyy-MM-dd}"))!.Text);
     }
 
+    [Theory]
+    [InlineData("2025-02-28", "2024-03-01")]
+    [InlineData("2029-02-28", "2028-03-01")]
+    [InlineData("2026-02-28", "2025-03-01")]
+    [InlineData("2024-02-29", "2023-03-01")]
+    [InlineData("2025-03-01", "2024-03-02")]
+    public async Task StateCreationMinimumMatchesAnniversaryExpiryAndActualSaveBoundary(string localToday, string minimumDate)
+    {
+        var today = DateOnly.Parse(localToday); var minimum = DateOnly.Parse(minimumDate);
+        Assert.Equal(minimum, DiaryRules.EarliestCreationDate(today));
+        Assert.True(DiaryRules.ExpiryDate(minimum) > today);
+        Assert.True(DiaryRules.ExpiryDate(minimum.AddDays(-1)) <= today);
+        var clock = new DiaryClock(DateTimeOffset.Parse(localToday + "T12:00:00Z"));
+        using var factory = new AuthWebApplicationFactory(timeProvider: clock); await factory.InitializeDatabaseAsync();
+        var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        await With(factory, async (service, _) =>
+        {
+            var state = (await service.StateAsync(owner.Id, "unused", null, Ct)).Value!;
+            Assert.Equal(today, state.Today); Assert.Equal(minimum, state.MinimumNewEntryDate);
+            await service.ConfigureAsync(owner.Id, "unused", null, null, null, Ct);
+            Assert.Equal(DiaryStatus.Invalid, (await service.SaveAsync(owner.Id, "unused", null, minimum.AddDays(-1), SyntheticText, null, Ct)).Status);
+            Assert.Equal(DiaryStatus.Success, (await service.SaveAsync(owner.Id, "unused", null, minimum, SyntheticText, null, Ct)).Status);
+        });
+    }
+
     [Fact]
     public async Task AnniversaryExpiryIsFixedEditingCannotExtendAndDailyCleanupResumes()
     {

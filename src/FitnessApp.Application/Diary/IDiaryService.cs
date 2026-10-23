@@ -2,7 +2,10 @@ namespace FitnessApp.Application.Diary;
 
 public enum DiaryStatus { Success, Invalid, Locked, Limited, Conflict, NotFound, Unavailable }
 public sealed record DiaryResult<T>(DiaryStatus Status, T? Value = default);
-public sealed record DiaryState(bool Initialized, bool Protected, bool Unlocked, DateOnly Today, string TimeZoneId);
+public sealed record DiaryState(bool Initialized, bool Protected, bool Unlocked, DateOnly Today, string TimeZoneId)
+{
+    public DateOnly MinimumNewEntryDate { get; init; }
+}
 public sealed record DiaryDate(DateOnly Date, Guid Version);
 public sealed record DiaryEntryData(DateOnly Date, string Text, Guid Version);
 public interface IDiaryService

@@ -24,11 +24,16 @@ public sealed class DiaryPrivacyTests
         bool initialized, bool protection, bool unlocked, string dialog, params string[] expectedFields)
     {
         var today = new DateOnly(2026, 10, 22);
+        // Deliberately differ from a client-side anniversary calculation to verify server metadata wins.
+        var minimum = new DateOnly(2025, 8, 17);
         var lockRequests = 0;
         using var http = new HttpClient(new SyntheticHandler(request =>
         {
             var path = request.RequestUri!.AbsolutePath;
-            if (path.EndsWith("/state")) return Json(new DiaryStatusResponse(initialized, protection, unlocked, today, "Europe/Copenhagen"));
+            if (path.EndsWith("/state")) return Json(new DiaryStatusResponse(initialized, protection, unlocked, today, "Europe/Copenhagen")
+            {
+                MinimumNewEntryDate = minimum
+            });
             if (path.Contains("/entries/")) return Json(new DiaryEntryResponse(today, "Synthetic private entry", Guid.NewGuid()));
             if (path.Contains("/dates/")) return Json(Array.Empty<DiaryDateResponse>());
             if (path.EndsWith("/lock")) lockRequests++;
@@ -65,6 +70,13 @@ public sealed class DiaryPrivacyTests
                 Assert.True(field.InsideRoot);
             }
             Assert.All(snapshot.Elements.Where(element => element.Name is "input" or "textarea"), element => Assert.True(element.InsideRoot));
+            if (unlocked)
+            {
+                Assert.Equal(minimum.ToString("yyyy-MM-dd"), Assert.Single(snapshot.Elements,
+                    element => element.Name == "input" && element.Attributes.GetValueOrDefault("type") == "date").Attributes["min"]);
+                Assert.False(Assert.Single(snapshot.Elements,
+                    element => element.Name == "input" && element.Attributes.GetValueOrDefault("type") == "month").Attributes.ContainsKey("max"));
+            }
 
             // Re-rendering a dialog or input must not restart the absolute inactivity deadline.
             await renderer.Dispatcher.InvokeAsync(() => renderer.RenderAsync(componentId));
