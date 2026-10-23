@@ -13,6 +13,7 @@ internal sealed class NotificationWorker(IServiceScopeFactory scopes, ILogger<No
             try
             {
                 await using var scope = scopes.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<FitnessApp.Infrastructure.Diary.DiaryCleanup>().RunDailyAsync(stoppingToken);
                 await scope.ServiceProvider.GetRequiredService<NotificationScheduler>().TickAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }

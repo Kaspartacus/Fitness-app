@@ -52,7 +52,7 @@ public sealed class NotificationService(FitnessDbContext db, TimeProvider clock,
     public static bool IsSafePath(string path) => path.Length <= 300 && !path.Contains('\\') && !path.Contains('%') && !path.Any(char.IsControl) &&
         (path.StartsWith("/loeb/plan/", StringComparison.Ordinal) || path.StartsWith("/styrke/", StringComparison.Ordinal) ||
          path.StartsWith("/kalender?", StringComparison.Ordinal) || path.StartsWith("/kost?", StringComparison.Ordinal) ||
-         path is "/indstillinger/notifikationer" or "/administration/registreringer");
+         path is "/dagbog?iDag=true" or "/indstillinger/notifikationer" or "/administration/registreringer");
     internal static string CalendarPath(DateOnly? date) => date is { } day ? $"/kalender?maaned={day:yyyy-MM}&dato={day:yyyy-MM-dd}" : "/kalender";
 
     public async Task<PushDeviceData> DeviceAsync(string owner, string session, string? binding, string? installationId, CancellationToken ct) =>

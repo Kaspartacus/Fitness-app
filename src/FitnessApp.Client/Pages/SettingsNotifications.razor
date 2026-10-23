@@ -29,10 +29,7 @@
                             <span class="settings-switch"><input type="checkbox" checked="@row.Enabled" disabled="@busy" @onchange="e => SaveToggleAsync(row.Key, e)" /><span aria-hidden="true"></span></span>
                         </label>
                     }
-                    <label class="settings-toggle-row is-unavailable">
-                        <span class="settings-toggle-copy"><strong>Dagbog · Kommer snart</strong><span>Planlagt til kl. 20.00. Ingen påmindelser sendes, før dagbogen findes.</span></span>
-                        <span class="settings-switch"><input type="checkbox" disabled aria-label="Dagbogspåmindelser kommer snart" /><span aria-hidden="true"></span></span>
-                    </label>
+
                 </div>
                 <label for="notification-timezone">Tidszone</label>
                 <input id="notification-timezone" class="notification-timezone" @bind="timeZone" list="notification-timezones" disabled="@busy" />
@@ -90,7 +87,8 @@
         ("run", "Løb", "Dagens planlagte løb kl. 07.00.", p.RunningNotificationsEnabled),
         ("strength", "Styrketræning", "Dagens planlagte styrketræning kl. 07.00.", p.StrengthNotificationsEnabled),
         ("meal", "Måltidspåmindelser", "Morgenmad kl. 10.00, frokost kl. 14.00 og aftensmad kl. 19.30, hvis måltidet er tomt.", p.MealRemindersEnabled),
-        ("progress", "Kostoversigt", "Kl. 10.00, 14.00 og 19.30, når måltidet er registreret, og der er tilføjet ny mad siden sidste oversigt.", p.NutritionProgressEnabled) ];
+        ("progress", "Kostoversigt", "Kl. 10.00, 14.00 og 19.30, når måltidet er registreret, og der er tilføjet ny mad siden sidste oversigt.", p.NutritionProgressEnabled),
+        ("diary", "Dagbog", "Kl. 20.00, hvis du endnu ikke har gemt tekst i dagens dagbog.", p.DiaryRemindersEnabled) ];
     private Task SaveToggleAsync(string key, ChangeEventArgs args)
     {
         if (preferences is null) return Task.CompletedTask;
@@ -98,6 +96,7 @@
         var next = key switch {
             "run" => preferences with { RunningNotificationsEnabled = enabled }, "strength" => preferences with { StrengthNotificationsEnabled = enabled },
             "meal" => preferences with { MealRemindersEnabled = enabled }, "progress" => preferences with { NutritionProgressEnabled = enabled },
+            "diary" => preferences with { DiaryRemindersEnabled = enabled },
             _ => preferences with { DetailedPushPreviews = enabled } };
         return SaveAsync(next);
     }
@@ -108,7 +107,7 @@
         if (busy) return;
         busy = true; actionError = null; message = null;
         var result = await SettingsApi.UpdateNotificationPreferencesAsync(new(next.RunningNotificationsEnabled, next.StrengthNotificationsEnabled,
-            next.MealRemindersEnabled, next.NutritionProgressEnabled, next.DetailedPushPreviews, next.TimeZoneId));
+            next.MealRemindersEnabled, next.NutritionProgressEnabled, next.DetailedPushPreviews, next.TimeZoneId, next.DiaryRemindersEnabled));
         if (result.Succeeded && result.Value is { } saved)
         {
             preferences = saved; timeZone = saved.TimeZoneId; message = "Indstillingerne er gemt.";

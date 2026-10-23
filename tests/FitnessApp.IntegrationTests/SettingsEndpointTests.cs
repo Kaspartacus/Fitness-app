@@ -127,6 +127,42 @@ public sealed class SettingsEndpointTests
         Assert.Equal("light", (await client.GetFromJsonAsync<SettingsOverviewResponse>(Settings))!.Theme);
     }
 
+    [Fact]
+    public async Task NotificationPreferencesPreserveDiaryRemindersWhenOmittedOrNullAndHonorExplicitFalse()
+    {
+        using var factory = new AuthWebApplicationFactory();
+        await factory.InitializeDatabaseAsync();
+        var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        using var client = await LoginAsync(factory, owner);
+        var path = $"{Settings}/notification-preferences";
+
+        await AssertSavedAsync(client, path,
+            new UpdateNotificationPreferencesRequest(true, true, true, true, false, "Europe/Copenhagen", true));
+        Assert.True((await client.GetFromJsonAsync<SettingsOverviewResponse>(Settings))!.NotificationPreferences.DiaryRemindersEnabled);
+
+        // A browser running the previous contract sends no diary preference at all.
+        await AssertSavedAsync(client, path, new
+        {
+            RunningNotificationsEnabled = false,
+            StrengthNotificationsEnabled = true,
+            MealRemindersEnabled = true,
+            NutritionProgressEnabled = true,
+            DetailedPushPreviews = false,
+            TimeZoneId = "Europe/Copenhagen"
+        });
+        var afterLegacySave = (await client.GetFromJsonAsync<SettingsOverviewResponse>(Settings))!.NotificationPreferences;
+        Assert.False(afterLegacySave.RunningNotificationsEnabled);
+        Assert.True(afterLegacySave.DiaryRemindersEnabled);
+
+        await AssertSavedAsync(client, path,
+            new UpdateNotificationPreferencesRequest(false, true, true, true, false, "Europe/Copenhagen", null));
+        Assert.True((await client.GetFromJsonAsync<SettingsOverviewResponse>(Settings))!.NotificationPreferences.DiaryRemindersEnabled);
+
+        await AssertSavedAsync(client, path,
+            new UpdateNotificationPreferencesRequest(false, true, true, true, false, "Europe/Copenhagen", false));
+        Assert.False((await client.GetFromJsonAsync<SettingsOverviewResponse>(Settings))!.NotificationPreferences.DiaryRemindersEnabled);
+    }
+
     private static async Task AssertSavedAsync<T>(HttpClient client, string path, T request)
     {
         using var response = await client.PutAsJsonAsync(path, request);

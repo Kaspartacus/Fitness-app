@@ -124,6 +124,10 @@ internal sealed class SettingsService(
         settings.MealRemindersEnabled = input.MealRemindersEnabled;
         settings.NutritionProgressEnabled = input.NutritionProgressEnabled;
         settings.DetailedPushPreviews = input.DetailedPushPreviews;
+        if (input.DiaryRemindersEnabled.HasValue)
+        {
+            settings.DiaryRemindersEnabled = input.DiaryRemindersEnabled.Value;
+        }
         settings.TimeZoneId = input.TimeZoneId;
         await db.SaveChangesAsync(cancellationToken);
 
@@ -230,7 +234,7 @@ internal sealed class SettingsService(
     private static NotificationPreferencesData MapPreferences(UserSettings settings) => new(
         settings.RunningNotificationsEnabled, settings.StrengthNotificationsEnabled,
         settings.MealRemindersEnabled, settings.NutritionProgressEnabled,
-        settings.DetailedPushPreviews, settings.TimeZoneId);
+        settings.DetailedPushPreviews, settings.TimeZoneId, settings.DiaryRemindersEnabled);
 
     private static GarminMockConnectionData MapGarmin(UserSettings settings) => new(
         settings.IsGarminDemoConnected,

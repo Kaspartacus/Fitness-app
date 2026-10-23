@@ -12,7 +12,8 @@ using Microsoft.Extensions.Options;
 namespace FitnessApp.Infrastructure.Notifications;
 
 public sealed class NotificationScheduler(FitnessDbContext db, ICalendarService calendar, INutritionService nutrition,
-    TimeProvider clock, IWebPushSender sender, IOptions<WebPushOptions> options)
+    TimeProvider clock, IWebPushSender sender, IOptions<WebPushOptions> options,
+    Microsoft.AspNetCore.DataProtection.IDataProtectionProvider? diaryProtection = null)
 {
     public async Task TickAsync(CancellationToken ct)
     {
@@ -62,6 +63,20 @@ public sealed class NotificationScheduler(FitnessDbContext db, ICalendarService 
 
     private async Task<Candidate?> CandidateAsync(string owner, UserSettings settings, DateOnly date, int slot, long previous, CancellationToken ct)
     {
+        if (slot == 4)
+        {
+            if (!settings.DiaryRemindersEnabled) return null;
+            var entry = await db.DiaryEntries.AsNoTracking().SingleOrDefaultAsync(x => x.UserId == owner && x.Date == date && x.ExpiresAtUtc > clock.GetUtcNow().UtcDateTime, ct);
+            // No plaintext content flag is persisted; the scheduler decrypts only this one row.
+            // A missing encryption key must suppress rather than send a potentially incorrect reminder.
+            bool hasContent;
+            try { hasContent = entry is not null && !string.IsNullOrWhiteSpace(new FitnessApp.Infrastructure.Diary.DiaryCipher(
+                diaryProtection ?? throw new InvalidOperationException("Diary key provider is required.")).Decrypt(owner, date, entry.Ciphertext)); }
+            catch (System.Security.Cryptography.CryptographicException) { return null; }
+            if (!FitnessApp.Domain.Diary.DiaryRules.ShouldRemind(settings.DiaryRemindersEnabled, hasContent)) return null;
+            return new(InAppNotificationKind.DiaryReminder, "Tid til din dagbog", "Har du lyst til at skrive lidt om din dag?",
+                "/dagbog?iDag=true", 0, "Har du lyst til at skrive lidt om din dag?");
+        }
         if (slot == 0)
         {
             var day = await calendar.GetRangeAsync(owner, date, date, ct);

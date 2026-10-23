@@ -24,6 +24,7 @@ public sealed class UserSettings
     public bool StrengthNotificationsEnabled { get; set; } = true;
     public bool MealRemindersEnabled { get; set; } = true;
     public bool NutritionProgressEnabled { get; set; } = true;
+    public bool DiaryRemindersEnabled { get; set; }
     public bool DetailedPushPreviews { get; set; }
     public string TimeZoneId { get; set; } = "Europe/Copenhagen";
 

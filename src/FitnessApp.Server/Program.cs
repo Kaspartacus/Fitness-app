@@ -1,3 +1,5 @@
+using FitnessApp.Server.Diary;
+using System.Security.Cryptography;
 using System.Threading.RateLimiting;
 using System.Diagnostics;
 using FitnessApp.Server.Logging;
@@ -12,11 +14,14 @@ using FitnessApp.Server.Strength;
 using FitnessApp.Server.Nutrition;
 using FitnessApp.Application.Authentication;
 using FitnessApp.Infrastructure;
+using FitnessApp.Infrastructure.Diary;
 using FitnessApp.Infrastructure.Persistence;
 using FitnessApp.Server.Authentication;
 using FitnessApp.Server.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -64,14 +69,13 @@ builder.Services.AddOptions<FitnessApp.Infrastructure.Email.SmtpOptions>()
     .Bind(builder.Configuration.GetSection(FitnessApp.Infrastructure.Email.SmtpOptions.SectionName))
     .ValidateOnStart();
 
-var dataProtectionKeyRingPath = PrivateDirectory.ResolveAndCreate(
-    builder.Configuration["DataProtection:KeyRingPath"],
-    builder.Environment.ContentRootPath,
-    builder.Environment.WebRootPath ?? Path.Combine(builder.Environment.ContentRootPath, "wwwroot"),
-    "DataProtection:KeyRingPath");
-builder.Services.AddDataProtection()
-    .SetApplicationName("FitnessApp")
-    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyRingPath));
+// Key storage is configured from the final service provider, after host configuration callbacks.
+// One resolved directory is shared by Data Protection and the startup availability check.
+builder.Services.AddSingleton<PersistentKeyRingDirectory>();
+builder.Services.AddDataProtection().SetApplicationName("FitnessApp");
+builder.Services.AddOptions<KeyManagementOptions>()
+    .Configure<PersistentKeyRingDirectory, ILoggerFactory>((options, directory, loggers) =>
+        options.XmlRepository = new FileSystemXmlRepository(directory.Location, loggers));
 
 var configuredConnectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
@@ -200,6 +204,35 @@ if (app.Environment.IsDevelopment())
     }
 }
 
+// Verify every retained entry against the actual ring before accepting requests or new diary writes.
+await using (var diaryKeyScope = app.Services.CreateAsyncScope())
+{
+    var keyDirectory = diaryKeyScope.ServiceProvider.GetRequiredService<PersistentKeyRingDirectory>().Location;
+    var diaryDatabase = diaryKeyScope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+    if ((await diaryDatabase.Database.GetAppliedMigrationsAsync()).Contains("20261021120000_AddPrivateDiary"))
+    {
+        const string unavailableKeys = "Existing diary entries require the persistent Data Protection key ring. Restore its backup before starting the server.";
+        var now = diaryKeyScope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime;
+        var retainedEntries = diaryDatabase.DiaryEntries.AsNoTracking().Where(entry => entry.ExpiresAtUtc > now);
+        if (await retainedEntries.AnyAsync() && !keyDirectory.EnumerateFiles("key-*.xml").Any())
+            throw new InvalidOperationException(unavailableKeys);
+
+        var cipher = diaryKeyScope.ServiceProvider.GetRequiredService<DiaryCipher>();
+        await foreach (var entry in retainedEntries.Select(entry => new { entry.UserId, entry.Date, entry.Ciphertext }).AsAsyncEnumerable())
+        {
+            try
+            {
+                _ = cipher.Decrypt(entry.UserId, entry.Date, entry.Ciphertext);
+            }
+            catch (CryptographicException)
+            {
+                // Do not retain plaintext or attach cryptographic details to the startup failure.
+                throw new InvalidOperationException(unavailableKeys);
+            }
+        }
+    }
+}
+
 if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
 {
     app.UseHsts();
@@ -283,9 +316,13 @@ app.Use(async (context, next) =>
         context.Request.Path.StartsWithSegments("/api/calendar") ||
         context.Request.Path.StartsWithSegments("/api/nutrition") ||
         context.Request.Path.StartsWithSegments("/api/settings") ||
-        context.Request.Path.StartsWithSegments("/api/notifications"))
+        context.Request.Path.StartsWithSegments("/api/notifications") ||
+        context.Request.Path.StartsWithSegments("/api/diary") ||
+        context.Request.Path.StartsWithSegments("/dagbog"))
     {
         AuthenticationHttpResponses.SetNoStore(context.Response);
+        if (context.Request.Path.StartsWithSegments("/api/diary") || context.Request.Path.StartsWithSegments("/dagbog"))
+            context.Response.Headers.CacheControl = "no-store, private";
     }
 
     if (context.Request.Path.StartsWithSegments("/glemt-adgangskode") ||
@@ -309,6 +346,7 @@ app.MapCalendarEndpoints();
 app.MapNutritionEndpoints();
 app.MapSettingsEndpoints();
 app.MapNotificationEndpoints();
+app.MapDiaryEndpoints();
 app.MapStaticAssets();
 app.UseEndpoints(_ => { });
 

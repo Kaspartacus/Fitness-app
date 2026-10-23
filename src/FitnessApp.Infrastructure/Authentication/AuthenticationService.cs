@@ -158,6 +158,7 @@ internal sealed class AuthenticationService(
         await dbContext.UserSessions.Where(s => s.Id == sessionId && s.RevokedAt == null)
             .ExecuteUpdateAsync(setters => setters.SetProperty(s => s.RevokedAt, now), cancellationToken);
         await dbContext.WebPushSubscriptions.Where(s => s.SessionId == sessionId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.DiaryGrants.Where(g => g.SessionId == sessionId).ExecuteDeleteAsync(cancellationToken);
     }
 
     public async Task<AuthenticatedUser?> ValidateSessionAsync(

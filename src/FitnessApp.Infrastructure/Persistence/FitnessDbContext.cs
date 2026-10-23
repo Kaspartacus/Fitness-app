@@ -1,3 +1,4 @@
+using FitnessApp.Infrastructure.Diary;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -47,9 +48,41 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
     public DbSet<WebPushSubscription> WebPushSubscriptions => Set<WebPushSubscription>();
     public DbSet<NotificationDelivery> NotificationDeliveries => Set<NotificationDelivery>();
 
+    public DbSet<DiaryEntry> DiaryEntries => Set<DiaryEntry>();
+    public DbSet<DiaryProtection> DiaryProtections => Set<DiaryProtection>();
+    public DbSet<DiaryGrant> DiaryGrants => Set<DiaryGrant>();
+    public DbSet<DiaryMaintenance> DiaryMaintenance => Set<DiaryMaintenance>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.Entity<DiaryEntry>(entity =>
+        {
+            entity.HasKey(x => new { x.UserId, x.Date });
+            entity.Property(x => x.UserId).HasMaxLength(450);
+            entity.Property(x => x.Ciphertext).IsRequired();
+            entity.Property(x => x.Version).IsConcurrencyToken();
+            entity.HasIndex(x => x.ExpiresAtUtc);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<DiaryProtection>(entity =>
+        {
+            entity.HasKey(x => x.UserId);
+            entity.Property(x => x.UserId).HasMaxLength(450);
+            entity.Property(x => x.CodeHash).HasMaxLength(1024);
+            entity.Property(x => x.Revision).IsConcurrencyToken();
+            entity.HasOne<ApplicationUser>().WithOne().HasForeignKey<DiaryProtection>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<DiaryGrant>(entity =>
+        {
+            entity.HasKey(x => x.Hash);
+            entity.Property(x => x.Hash).HasMaxLength(64);
+            entity.Property(x => x.UserId).HasMaxLength(450);
+            entity.HasIndex(x => new { x.UserId, x.SessionId });
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<UserSession>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<DiaryMaintenance>().HasKey(x => x.Id);
 
         builder.Entity<StrengthProgram>(entity =>
         {
