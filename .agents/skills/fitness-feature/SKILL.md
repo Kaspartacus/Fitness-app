@@ -10,14 +10,14 @@ Deliver one reviewable vertical slice without prebuilding future architecture.
 ## Inputs
 
 - The user's requested outcome, constraints, and acceptance criteria.
-- The root and applicable nested `AGENTS.md` files, plus the Fitness App vault overview and relevant note in the `personal` Obsidian vault. Record unavailable vault access; use a local checkpoint only when a task hand-off needs one.
+- The root and applicable nested `AGENTS.md` files, plus the Fitness App vault overview and relevant note in the local Dev vault identified by root `AGENTS.md`. Record unavailable vault access; use a local checkpoint only when a task hand-off needs one.
 - Existing implementation, tests, migrations, styling, and current design evidence.
 
 ## Workflow
 
 Use root task sizing first. The primary agent implements small/standard work itself; use the following orchestration only when delegation is warranted.
 
-1. Start in the inner `Desktop/Fitness app/Fitness-app` checkout, confirm its Git root and status, and inspect relevant code before proposing abstractions. Select a branch using `$fitness-pr` **Branch lifecycle**; do not create a sibling worktree unless the owner explicitly requests isolation. Preserve unrelated and in-progress work.
+1. Start in the Fitness App checkout identified by root `AGENTS.md`, confirm its Git root and status, and inspect relevant code before proposing abstractions. Select a branch using `$fitness-pr` **Branch lifecycle**; do not create a sibling worktree unless the owner explicitly requests isolation. Preserve unrelated and in-progress work.
 2. Translate the request into observable acceptance criteria. Ask only when a missing decision would materially change scope, security, or stored data; make routine implementation choices yourself.
 3. Inspect the relevant current design source. Record whether the result is directly verified, a consistent extension, or unavailable evidence.
 4. Trace the slice through the existing `FitnessApp.slnx` projects. Keep HTTP contracts in Contracts, orchestration contracts in Application, business rules in Domain, persistence in Infrastructure, composition and APIs in the one Server host, and UI in Client. Do not add a feature-specific solution or host.

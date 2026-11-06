@@ -15,7 +15,7 @@ No Node.js runtime, container engine, or cloud account is required.
 
 ## Repository structure
 
-The only solution file is `FitnessApp.slnx`. Run commands from the inner `Desktop/Fitness app/Fitness-app` repository directory; the outer `Fitness app` is its container. Other Git worktrees are separate checkouts of this same application, not separate solutions; their default local databases are separate, so do not use them as the ordinary startup folder.
+The only solution file is `FitnessApp.slnx`. On Dev, run commands from `/home/codex/projects/fitness-app` or the explicitly selected Fitness App worktree; confirm the Git root first. The original Mac checkout is the inner `Desktop/Fitness app/Fitness-app` directory; its outer `Fitness app` folder is only a container. Other Git worktrees are separate checkouts of this same application, not separate solutions; their default local databases are separate, so do not use them as the ordinary startup folder.
 
 In Codex, set this inner repository as the project's primary folder and start new tasks there. Changing a shell command's working directory does not retroactively load child skills or project configuration into an already-started task. Keep repository skills in `.agents/skills/`; do not copy them into the outer container. See [Codex project folders](https://learn.chatgpt.com/docs/projects) and [skill discovery](https://learn.chatgpt.com/docs/build-skills).
 
