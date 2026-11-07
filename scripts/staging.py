@@ -29,7 +29,7 @@ CONFIG = ROOT / "config"
 APP_UID = APP_GID = 1001
 SOCKET = "unix:///var/run/docker.sock"
 REPO = Path(__file__).resolve().parent.parent
-MUTATIONS = {"deploy", "start", "stop", "restart", "backup", "recover"}
+MUTATIONS = {"deploy", "start", "stop", "restart", "backup", "recover", "cleanup"}
 
 
 class Refused(Exception):
@@ -87,6 +87,93 @@ def read_state():
     return json.loads(path.read_text()) if path.exists() else None
 
 
+def cleanup_plan():
+    """Fail closed on unresolved recovery; never use daemon-wide prune."""
+    if any((ROOT / name).exists() for name in
+           ("pending.json", "restoring.json", "import-pending.json")):
+        raise Refused("Resolve pending deployment/import/recovery before cleanup")
+    state = read_state()
+    protected_images = {state["image"]} if state else set()
+    protected_releases = set()
+    def protect(deployment):
+        if deployment:
+            protected_images.add(deployment["image"])
+            for name in ("config", "compose"):
+                path = Path(deployment[name])
+                try:
+                    release = path.relative_to(ROOT / "releases").parts[0]
+                except (ValueError, IndexError):
+                    raise Refused("Unrecognized recovery release path")
+                protected_releases.add(release)
+    protect(state)
+    backups = []
+    for path in BACKUPS.iterdir():
+        if not re.fullmatch(r"[0-9a-f]{32}", path.name):
+            raise Refused("Unknown backup requires manual inspection")
+        regular_tree(path)  # reject links, devices and incomplete backup manifests
+        manifest = json.loads((path / "manifest.json").read_text())
+        for name in ("data", "keys"):
+            if regular_tree(path / name) != manifest["trees"][name]:
+                raise Refused("Corrupt backup requires inspection before cleanup")
+        backups.append((path, manifest))
+    backups.sort(key=lambda item: (item[0].stat().st_mtime_ns, item[0].name), reverse=True)
+    for path, manifest in backups[:5]:
+        protect(manifest["state"])
+    directories = [str(path) for path, _ in backups[5:]]
+    for area, keep in (("failed", 1), ("releases", None)):
+        parent = ROOT / area
+        paths = list(parent.iterdir()) if parent.exists() else []
+        for path in paths:
+            if not re.fullmatch(r"[0-9a-f]{32}", path.name):
+                raise Refused("Unknown retained directory requires inspection")
+            regular_tree(path)
+        paths.sort(key=lambda p: (p.stat().st_mtime_ns, p.name), reverse=True)
+        directories.extend(str(p) for p in paths if
+                           (p.name not in protected_releases if keep is None else p not in paths[:keep]))
+    # Protect images used by ANY container, including deliberately stopped ones.
+    containers = docker("ps", "-aq").decode().split()
+    if containers:
+        protected_images.update(json.loads(docker("inspect", "--format", "{{json .Image}}", c))
+                                for c in containers)
+    tags = docker("image", "ls", "--filter", "reference=fitness-app-staging:*",
+                  "--format", "{{.Repository}}:{{.Tag}}").decode().split()
+    images = []
+    for tag in sorted(set(tags)):
+        if not re.fullmatch(r"fitness-app-staging:[0-9a-f]{40}", tag):
+            continue
+        identity = docker("image", "inspect", "--format", "{{.Id}}", tag).decode().strip()
+        if identity not in protected_images:
+            images.append({"tag": tag, "id": identity})
+    dangling = docker("image", "ls", "--filter", "label=com.fitness-app.staging=true",
+                      "--filter", "dangling=true", "--no-trunc", "--quiet").decode().split()
+    for identity in sorted(set(dangling)):
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", identity):
+            raise Refused("Unexpected owned image identity")
+        if identity not in protected_images:
+            images.append({"tag": identity, "id": identity})
+    return {"keep_complete_backups": 5, "keep_failed_snapshots": 1,
+            "directories": sorted(directories), "images": images}
+
+
+def cleanup(expected):
+    if cleanup_plan() != expected:
+        raise Refused("Cleanup targets changed; request a fresh plan")
+    # Untag only this application's exact tags, never force removal or prune globally.
+    for image in expected["images"]:
+        docker("image", "rm", image["tag"])
+    for name in expected["directories"]:
+        shutil.rmtree(name)
+    print(f"Cleanup: removed {len(expected['directories'])} directories and {len(expected['images'])} image tags")
+
+
+def maintain_retention():
+    try:
+        cleanup(cleanup_plan())
+    except (Refused, OSError, ValueError, KeyError):
+        # Maintenance failure must not roll back or stop a successful deployment.
+        print("Staging succeeded; retention cleanup deferred for operator inspection", file=sys.stderr)
+
+
 def make_plan(operation, branch=None, backup=None):
     if any(os.environ.get(key) for key in
            ("DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "COMPOSE_FILE", "COMPOSE_PROJECT_NAME")):
@@ -102,6 +189,11 @@ def make_plan(operation, branch=None, backup=None):
         "restoring": json.loads((ROOT / "restoring.json").read_text()) if (ROOT / "restoring.json").exists() else None,
         "tooling": file_hashes(REPO, ["scripts/staging.py", "deploy/staging/compose.yaml", "Dockerfile", ".dockerignore"]),
     }
+    if operation == "cleanup":
+        plan["cleanup"] = cleanup_plan()
+    if operation in ("deploy", "backup"):
+        plan["retention"] = {"keep_complete_backups": 5, "keep_failed_snapshots": 1,
+                             "after_success_only": True, "scope": "staging backups, failed snapshots, unreferenced releases and staging image tags"}
     if operation == "deploy":
         plan["source"] = source(branch or "")
         plan["resources"]["image"] = f"fitness-app-staging:{plan['source']['commit']}"
@@ -129,6 +221,7 @@ def make_plan(operation, branch=None, backup=None):
         "deploy": ["build exact commit locally", "stop staging writers", "back up paired database/keys and old deployment",
                    "run explicit migrations", "recreate application and verify health",
                    "on failure restore paired backup and previous image/config; remove failed first-deploy container if no previous deployment"],
+        "cleanup": ["delete only the listed staging directories and unused image tags; preserve live state"],
         "start": ["start recorded staging container", "verify health; stop on failed readiness"],
         "stop": ["stop staging container; retain all data, keys and configuration"],
         "restart": ["stop and start recorded staging container", "verify health; stop on failed readiness"],
@@ -361,7 +454,7 @@ def deploy(plan):
         for name in ("Dockerfile", ".dockerignore"):
             shutil.copy2(REPO / name, Path(build) / name)
         tag = f"fitness-app-staging:{plan['source']['commit']}"
-        docker("build", "--label", f"org.opencontainers.image.revision={plan['source']['commit']}",
+        docker("build", "--label", "com.fitness-app.staging=true", "--label", f"org.opencontainers.image.revision={plan['source']['commit']}",
                "--tag", tag, build)
     image = docker("image", "inspect", "--format", "{{.Id}}", tag).decode().strip()
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", image):
@@ -446,10 +539,14 @@ def execute(plan):
             finally:
                 if active:
                     start(state)
+        elif operation == "cleanup":
+            cleanup(fresh["cleanup"])
         elif operation == "recover":
             stop(state)
             recover(plan["backup"])
             (ROOT / "pending.json").unlink(missing_ok=True)
+        if operation in ("deploy", "backup"):
+            maintain_retention()
 
 
 def confirm(plan):

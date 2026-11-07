@@ -404,5 +404,101 @@ class StagingTests(unittest.TestCase):
         self.assertIn("remove failed staging container; restore empty storage; do not start any image", plan["actions"])
         self.assertEqual("leave staging stopped", plan["actions"][-1])
 
+class RetentionTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        for name in ("backups", "data", "keys", "releases", "failed"):
+            (self.root / name).mkdir()
+        for name, value in (("ROOT", self.root), ("BACKUPS", self.root / "backups")):
+            mock = patch.object(staging, name, value); mock.start(); self.addCleanup(mock.stop)
+        self.release = self.root / "releases" / ("a" * 32)
+        self.release.mkdir()
+        self.state = {"image": "sha256:live", "config": str(self.release / "config"),
+                      "compose": str(self.release / "compose.yaml"), "active": True}
+        staging.save_state(self.state)
+
+    def backup(self, number, state=None):
+        identifier = staging.backup_state(state)
+        path = staging.BACKUPS / identifier
+        staging.os.utime(path, (number, number))
+        return path
+
+    def test_five_latest_pairs_and_their_releases_and_images_survive(self):
+        old = self.backup(1)
+        for n in range(2, 7):
+            self.backup(n, self.state)
+        unused = self.root / "releases" / ("b" * 32); unused.mkdir()
+        with patch.object(staging, "docker", return_value=b""):
+            plan = staging.cleanup_plan()
+            self.assertEqual(sorted([str(old), str(unused)]), plan["directories"])
+            staging.cleanup(plan)
+        self.assertTrue(self.release.exists())
+        self.assertTrue((self.root / "data").exists())
+        self.assertTrue((self.root / "keys").exists())
+        self.assertEqual(5, len(list(staging.BACKUPS.iterdir())))
+
+    def test_incomplete_or_corrupt_backup_blocks_all_deletion(self):
+        path = self.backup(1)
+        (path / "data" / "changed").write_text("synthetic")
+        with patch.object(staging, "docker") as docker, self.assertRaises(staging.Refused):
+            staging.cleanup_plan()
+        docker.assert_not_called()
+
+    def test_all_pending_transactions_block_cleanup(self):
+        for name in ("pending.json", "restoring.json", "import-pending.json"):
+            path = self.root / name; path.write_text("{}")
+            with self.assertRaises(staging.Refused): staging.cleanup_plan()
+            path.unlink()
+
+    def test_symlink_cannot_escape_cleanup_root(self):
+        (self.root / "failed" / ("c" * 32)).symlink_to(self.release, target_is_directory=True)
+        with self.assertRaises(staging.Refused): staging.cleanup_plan()
+        self.assertTrue(self.release.exists())
+
+    def test_only_unused_staging_tags_removed_and_stopped_containers_protected(self):
+        keep = "fitness-app-staging:" + "1" * 40
+        remove = "fitness-app-staging:" + "2" * 40
+        def docker(*args, **kwargs):
+            if args[:2] == ("ps", "-aq"): return b"stopped"
+            if args[0] == "inspect": return b'"sha256:stopped"'
+            if args[:2] == ("image", "ls") and "dangling=true" in args: return b""
+            if args[:2] == ("image", "ls"): return (keep + "\n" + remove + "\nother:latest").encode()
+            if args[:2] == ("image", "inspect"):
+                return b"sha256:stopped" if args[-1] == keep else b"sha256:unused"
+            return b""
+        with patch.object(staging, "docker", side_effect=docker) as mocked:
+            plan = staging.cleanup_plan()
+            self.assertEqual([{"tag": remove, "id": "sha256:unused"}], plan["images"])
+            staging.cleanup(plan)
+            mocked.assert_any_call("image", "rm", remove)
+            self.assertFalse(any(call.args[:2] == ("image", "rm") and call.args[-1] == keep for call in mocked.call_args_list))
+
+    def test_new_backup_invalidates_approved_cleanup_list(self):
+        with patch.object(staging, "docker", return_value=b""):
+            plan = staging.cleanup_plan()
+            orphan = self.root / "releases" / ("d" * 32); orphan.mkdir()
+            with self.assertRaises(staging.Refused): staging.cleanup(plan)
+            self.assertTrue(orphan.exists())
+
+    def test_owned_dangling_images_removed_but_unowned_images_not_queried(self):
+        identity = "sha256:" + "e" * 64
+        def docker(*args, **kwargs):
+            return identity.encode() if "dangling=true" in args else b""
+        with patch.object(staging, "docker", side_effect=docker):
+            plan = staging.cleanup_plan()
+        self.assertEqual([{"tag": identity, "id": identity}], plan["images"])
+
+    def test_cleanup_plan_exposes_actions_without_source_changes(self):
+        with patch.object(staging, "file_hashes", return_value={}), patch.object(staging, "docker", return_value=b""):
+            plan = staging.make_plan("cleanup")
+        self.assertIn("cleanup", plan)
+        self.assertIn("preserve live state", plan["actions"][0])
+
+    def test_maintenance_failure_does_not_fail_successful_operation(self):
+        with patch.object(staging, "cleanup_plan", side_effect=staging.Refused("synthetic")), redirect_stderr(io.StringIO()):
+            staging.maintain_retention()
+
 if __name__ == "__main__":
     unittest.main()

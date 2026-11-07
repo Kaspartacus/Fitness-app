@@ -77,7 +77,7 @@ capabilities, no-new-privileges, 32 MiB temporary storage, and three 10 MiB Dock
 logs. SDK builds, image caches, database/mail and backups are not covered by the
 runtime memory/disk limits. Deploy preflights at least 2 GiB free under the state
 root and 512 MiB in temporary storage; separately assess actual image/backup size
-and Dev's roughly 4 GiB RAM before approval. No automatic prune or backup deletion.
+and Dev's roughly 4 GiB RAM before approval. Successful approved deployments and backups apply the retention policy below.
 
 ## Commands through Codex
 
@@ -93,6 +93,8 @@ python3 scripts/staging.py stop
 python3 scripts/staging.py start
 python3 scripts/staging.py restart
 python3 scripts/staging.py backup
+python3 scripts/staging.py plan --operation cleanup
+python3 scripts/staging.py cleanup
 python3 scripts/staging.py plan --operation recover --backup BACKUP_ID
 python3 scripts/staging.py recover --backup BACKUP_ID
 ```
@@ -148,8 +150,21 @@ pair again. Do not remove journals, substitute a different backup or create empt
 missing directories. A pending update without a complete backup requires explicit
 operator inspection rather than automatic reset.
 
-Backups are local, not disaster recovery. Define an encrypted off-host copy and
-retention policy separately. Real SQLite/encrypted-diary restoration, permissions,
+Retention runs only after successful approved deploy/backup operations; it never
+starts staging or runs on a host timer. The operation approval includes this policy.
+Keep the five newest complete, hash-verified database/key backups and the newest
+failed-state snapshot. Preserve the live database/keys, current release, and every
+image/configuration referenced by retained backups or any existing container.
+Delete only unreferenced staging release directories and unused exact
+`fitness-app-staging:<commit>` tags and unused dangling images carrying the
+explicit `com.fitness-app.staging=true` ownership label (added to new builds). Pending deployment/import/recovery journals,
+unknown entries or corrupt backups block cleanup for operator inspection. Cleanup
+failure is reported without rolling back a healthy deployment. `cleanup` previews
+and confirms its exact targets under the same operation lock. No force removal,
+global image/volume prune, or automatic deletion of incoming transfers occurs.
+Docker build cache and unrelated images are outside this retention policy.
+
+Backups are local, not disaster recovery. Define an encrypted off-host copy separately. Real SQLite/encrypted-diary restoration, permissions,
 reboot behavior and container networking require an approved commissioning exercise;
 synthetic transaction tests do not establish those runtime results.
 
@@ -179,7 +194,7 @@ contain reset links and must never be published. External SMTP is forcibly
 replaced with Pickup unless `Staging:AllowExternalEmail` is explicitly true. Push
 configuration is cleared unless `Staging:AllowWebPush` is explicitly true. Controlled
 external tests also need valid staging credentials and explicit owner approval for
-delivery. Do not import real users/live push subscriptions. Production defaults
+delivery. Owner-authorized account imports must retain staging external-effect controls; never enable imported live push subscriptions implicitly. Production defaults
 are not silently changed.
 
 ## Verification and Phase 5
