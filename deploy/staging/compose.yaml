@@ -1,0 +1,50 @@
+name: fitness-app-staging
+services:
+  app:
+    image: ${STAGING_IMAGE:?Use the staging operation interface}
+    pull_policy: never
+    restart: unless-stopped
+    user: "1654:1654"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 1.0
+    mem_limit: 768m
+    pids_limit: 128
+    stop_grace_period: 30s
+    environment:
+      ASPNETCORE_ENVIRONMENT: Staging
+      ASPNETCORE_URLS: "https://+:8443;http://127.0.0.1:8080"
+      Kestrel__Certificates__Default__Path: /run/fitness-staging/server.pfx
+    ports:
+      - "192.168.1.193:8443:8443"
+    volumes:
+      - type: bind
+        source: /var/lib/fitness-app-staging/data
+        target: /var/lib/fitness-staging/data
+        bind: { create_host_path: false }
+      - type: bind
+        source: /var/lib/fitness-app-staging/keys
+        target: /var/lib/fitness-staging/keys
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${STAGING_CONFIG_DIR:?Use the staging operation interface}/settings.json
+        target: /run/fitness-staging/settings.json
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${STAGING_CONFIG_DIR:?Use the staging operation interface}/server.pfx
+        target: /run/fitness-staging/server.pfx
+        read_only: true
+        bind: { create_host_path: false }
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    healthcheck:
+      test: [CMD, dotnet, FitnessApp.Server.dll, staging-healthcheck]
+      interval: 15s
+      timeout: 6s
+      start_period: 30s
+      retries: 4
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }

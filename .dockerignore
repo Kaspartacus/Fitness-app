@@ -1,0 +1,19 @@
+# Allowlist: never send local databases, secrets, keys, vaults or Git metadata.
+**
+!Dockerfile
+!global.json
+!src/
+!src/**
+src/**/bin
+src/**/obj
+src/**/App_Data
+src/**/appsettings.*.local.json
+src/**/appsettings.Local.json
+src/**/secrets.json
+src/**/*.db*
+src/**/*.sqlite*
+src/**/*.pfx
+src/**/*.pem
+src/**/*.key
+src/**/.env*
+src/**/key-*.xml

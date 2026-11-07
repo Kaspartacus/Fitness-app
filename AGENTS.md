@@ -31,6 +31,8 @@ Obsidian owns durable intent, decisions, architecture, behavior explanations, an
 
 ## Working constraints
 
+- Owner deployment boundary: never merge feature branches into `main` on Dev or bypass the GitHub PR/review/human approval workflow. The existing dedicated clean main checkout may fast-forward to already-approved `origin/main` through its enabled synchronization timer; leave that host setup unchanged. Only `feature/*` may be manually deployed to staging on Dev; `main` is reserved for future automatic production on Apps. Every Docker mutation/deployment requires explicit human approval through an enforced execution boundary. Repository implementation approval is not deployment approval; no AGENTS instruction or script flag substitutes for that boundary. Do not grant Docker access or change host/certificate/firewall settings without separate authorization.
+
 - English code/technical documentation; Danish application UI.
 - Derive ownership/roles from validated server identity, never submitted values. Preserve recorded history when definitions change.
 - Never expose secrets, credentials, database contents, or real personal/account/fitness data in any output or artifact. Use synthetic examples; never inspect secret values to check presence.

@@ -31,6 +31,7 @@ internal sealed class AuthWebApplicationFactory : WebApplicationFactory<Program>
     private readonly IReadOnlyDictionary<string, string?> configurationOverrides;
     private readonly SaveChangesInterceptor? saveChangesInterceptor;
     private readonly TimeProvider? timeProvider;
+    private readonly string environmentName;
 
     public AuthWebApplicationFactory(
         int loginPermitLimit = 10,
@@ -42,7 +43,8 @@ internal sealed class AuthWebApplicationFactory : WebApplicationFactory<Program>
         RecordingEmailSender? emailSender = null,
         IReadOnlyDictionary<string, string?>? configurationOverrides = null,
         SaveChangesInterceptor? saveChangesInterceptor = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        string environmentName = "Testing")
     {
         this.loginPermitLimit = loginPermitLimit;
         this.registrationPermitLimit = registrationPermitLimit;
@@ -55,6 +57,7 @@ internal sealed class AuthWebApplicationFactory : WebApplicationFactory<Program>
         this.configurationOverrides = configurationOverrides ?? new Dictionary<string, string?>();
         this.saveChangesInterceptor = saveChangesInterceptor;
         this.timeProvider = timeProvider;
+        this.environmentName = environmentName;
     }
 
     public RecordingEmailSender EmailSender { get; }
@@ -73,7 +76,7 @@ internal sealed class AuthWebApplicationFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Testing");
+        builder.UseEnvironment(environmentName);
         builder.ConfigureLogging(logging => logging.AddProvider(LogSink));
         builder.ConfigureAppConfiguration((_, configuration) =>
         {

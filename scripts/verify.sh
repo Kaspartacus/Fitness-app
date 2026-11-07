@@ -95,6 +95,9 @@ run_verify() {
     -m:1 \
     -p:BuildInParallel=false
 
+  status 'Testing manual staging safety and recovery with synthetic state'
+  python3 -m unittest discover -s tests -p 'staging_test.py'
+
   status 'Checking whitespace in tracked working-tree changes'
   git -C "$repo_root" diff --check
   git -C "$repo_root" diff --cached --check
