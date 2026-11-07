@@ -70,10 +70,11 @@ internal sealed class EmailDeliveryOptionsValidator(IWebHostEnvironment environm
 
         if (options.Transport is "Pickup" &&
             !environment.IsDevelopment() &&
+            !environment.IsStaging() &&
             !environment.IsEnvironment("Testing"))
         {
             return ValidateOptionsResult.Fail(
-                "The Pickup email transport is restricted to Development and Testing.");
+                "The Pickup email transport is restricted to Development, Testing and Staging.");
         }
 
         if (options.Transport is "Pickup" && string.IsNullOrWhiteSpace(options.PickupDirectory))
