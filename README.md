@@ -1,8 +1,8 @@
 # FitnessApp
 
 Manual private Docker staging on Dev is documented in [the staging guide](deploy/staging/README.md).
-It requires separately approved host/certificate commissioning and an enforced human
-approval boundary; repository implementation does not activate deployment.
+It requires separately approved Docker-access/certificate commissioning and explicit
+human approval before every Docker mutation; repository implementation does not activate deployment.
 
 FitnessApp is a private, mobile-first fitness application in an intentionally public source repository. Protected functionality requires an approved ASP.NET Core Identity account. The current vertical slices provide SQLite persistence, account administration and authentication, password reset by email, strength programs, running plans and results, a shared calendar, nutrition logging, and profile/settings through the Danish UI.
 

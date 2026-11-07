@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Manual Dev staging. Mutations require an external human-approval broker.
+"""Manual Dev staging. Ask the human before every Docker mutation.
 
-The private worker is not an approval mechanism: root authority and Docker access
-must be withheld from the agent outside that broker. See deploy/staging/README.md.
+The interactive plan confirmation is an operator guard, not a security boundary
+against a user with full Docker access. See deploy/staging/README.md.
 """
 import argparse
 import fcntl
@@ -14,6 +14,7 @@ from pathlib import Path
 import re
 import shutil
 import stat
+import socket
 import subprocess
 import sys
 import tarfile
@@ -22,10 +23,10 @@ import time
 import uuid
 
 PROJECT = "fitness-app-staging"
-ROOT = Path("/var/lib/fitness-app-staging")
-BACKUPS = Path("/var/backups/fitness-app-staging")
-CONFIG = Path("/etc/fitness-app-staging")
-BROKER = Path("/usr/local/libexec/fitness-staging-approved-exec")
+ROOT = Path("/home/codex/.local/share/fitness-app-staging")
+BACKUPS = ROOT / "backups"
+CONFIG = ROOT / "config"
+APP_UID = APP_GID = 1001
 SOCKET = "unix:///var/run/docker.sock"
 REPO = Path(__file__).resolve().parent.parent
 MUTATIONS = {"deploy", "start", "stop", "restart", "backup", "recover"}
@@ -45,8 +46,7 @@ def run(argv, *, cwd=None, data=None, env=None):
 
 
 def git(*args):
-    if os.geteuid() == 0:
-        raise Refused("Privileged Git must never open caller repository metadata")
+    require_user()
     return run(["git", "-C", str(REPO), *args])
 
 
@@ -61,9 +61,6 @@ def encoded(value):
 def source(branch):
     if not re.fullmatch(r"feature/[A-Za-z0-9][A-Za-z0-9._/-]*", branch) or ".." in branch:
         raise Refused("Only named feature/* branches are eligible for Dev staging")
-    if os.geteuid() == 0:
-        commit, archive = privileged_archive(branch)
-        return {"branch": branch, "commit": commit, "archive_sha256": sha(archive)}
     if git("symbolic-ref", "--quiet", "--short", "HEAD").decode().strip() != branch:
         raise Refused("Requested branch must be checked out; detached HEAD is ineligible")
     if git("status", "--porcelain", "--untracked-files=normal").strip():
@@ -73,59 +70,6 @@ def source(branch):
         raise Refused("Cannot identify exact Git commit")
     archive = git("archive", "--format=tar", commit)
     return {"branch": branch, "commit": commit, "archive_sha256": sha(archive)}
-
-
-def trusted_regular(path):
-    info = path.lstat()
-    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
-        raise Refused("Broker source files must be immutable administrator-owned regular files")
-
-
-def privileged_archive(branch):
-    # Never copy/open caller .git/config, hooks, index, filters, alternates, replace
-    # refs or worktree metadata as root. The broker snapshots only object bytes and
-    # a validated branch/commit descriptor into this protected directory.
-    snapshot = REPO / "broker-source"
-    protected_directory(snapshot)
-    trusted_regular(snapshot / "source.json")
-    identity = json.loads((snapshot / "source.json").read_text())
-    commit = identity.get("commit", "")
-    if identity.get("branch") != branch or not re.fullmatch(r"[0-9a-f]{40}", commit):
-        raise Refused("Broker source identity does not match the requested feature")
-    objects = snapshot / "objects"
-    protected_directory(objects)
-    if not objects.is_dir():
-        raise Refused("Broker source object snapshot missing")
-    with tempfile.TemporaryDirectory(prefix="fitness-staging-git-") as temporary:
-        bare = Path(temporary) / "source.git"
-        (bare / "objects").mkdir(parents=True)
-        ref = bare / "refs/heads" / branch
-        ref.parent.mkdir(parents=True)
-        ref.write_text(commit + "\n")
-        (bare / "HEAD").write_text(f"ref: refs/heads/{branch}\n")
-        (bare / "config").write_text("[core]\nrepositoryformatversion = 0\nbare = true\n")
-        for entry in sorted(objects.rglob("*")):
-            relative = str(entry.relative_to(objects))
-            if entry.is_dir() and not entry.is_symlink():
-                if not re.fullmatch(r"[0-9a-f]{2}|pack", relative):
-                    raise Refused("Unexpected broker object directory; alternates/metadata forbidden")
-                protected_directory(entry)
-                (bare / "objects" / relative).mkdir(exist_ok=True)
-                continue
-            trusted_regular(entry)
-            if not re.fullmatch(r"[0-9a-f]{2}/[0-9a-f]{38}|pack/pack-[0-9a-f]{40}\.(pack|idx|rev)", relative):
-                raise Refused("Unexpected Git object file; executable configuration forbidden")
-            shutil.copyfile(entry, bare / "objects" / relative)
-        env = {"PATH": "/usr/bin:/bin", "HOME": temporary, "XDG_CONFIG_HOME": temporary,
-               "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_SYSTEM": "/dev/null", "GIT_CONFIG_GLOBAL": "/dev/null",
-               "GIT_CONFIG_COUNT": "0", "GIT_NO_REPLACE_OBJECTS": "1", "GIT_NO_LAZY_FETCH": "1",
-               "GIT_ALLOW_PROTOCOL": "", "GIT_TERMINAL_PROMPT": "0", "GIT_ATTR_NOSYSTEM": "1"}
-        command = ["/usr/bin/git", "--git-dir", str(bare), "-c", "core.fsmonitor=false",
-                   "-c", "core.hooksPath=/dev/null", "-c", "core.attributesFile=/dev/null",
-                   "-c", "protocol.allow=never", "-c", "credential.helper="]
-        run([*command, "fsck", "--full", "--strict", "--no-reflogs", "--no-dangling"], env=env)
-        archive = run([*command, "archive", "--format=tar", commit], env=env)
-    return commit, archive
 
 
 def file_hashes(directory, names):
@@ -150,59 +94,57 @@ def make_plan(operation, branch=None, backup=None):
     plan = {
         "version": 1, "operation": operation, "target": "Dev-VM102-192.168.1.193",
         "docker_host": SOCKET, "project": PROJECT,
+        "resources": {"container": "fitness-app-staging-app-1", "network": "fitness-app-staging_default",
+                      "image": (read_state() or {}).get("image")},
         "data": str(ROOT / "data"), "keys": str(ROOT / "keys"),
         "backups": str(BACKUPS), "state": read_state(),
         "pending": json.loads((ROOT / "pending.json").read_text()) if (ROOT / "pending.json").exists() else None,
         "restoring": json.loads((ROOT / "restoring.json").read_text()) if (ROOT / "restoring.json").exists() else None,
-        "target_identity_sha256": sha((CONFIG / "target.json").read_bytes()) if (CONFIG / "target.json").is_file() else None,
         "tooling": file_hashes(REPO, ["scripts/staging.py", "deploy/staging/compose.yaml", "Dockerfile", ".dockerignore"]),
     }
     if operation == "deploy":
         plan["source"] = source(branch or "")
+        plan["resources"]["image"] = f"fitness-app-staging:{plan['source']['commit']}"
         plan["configuration"] = file_hashes(CONFIG, ["settings.json", "server.pfx"])
     if operation == "recover":
         if not backup or not re.fullmatch(r"[0-9a-f]{32}", backup):
             raise Refused("Recovery requires an exact backup ID from an earlier operation")
         plan["backup"] = backup
-        plan["backup_manifest_sha256"] = sha((BACKUPS / backup / "manifest.json").read_bytes())
+        manifest_bytes = (BACKUPS / backup / "manifest.json").read_bytes()
+        plan["backup_manifest_sha256"] = sha(manifest_bytes)
+        restored = json.loads(manifest_bytes)["state"]
+        deployment = None if restored is None else {
+            name: restored.get(name) for name in ("branch", "commit", "image", "config", "compose", "active")
+        }
+        fingerprints = None
+        if deployment and deployment["config"] and Path(deployment["config"]).is_dir():
+            fingerprints = file_hashes(Path(deployment["config"]), ["settings.json", "server.pfx"])
+        plan["restore"] = {
+            "deployment": deployment, "configuration_fingerprints": fingerprints,
+            "start_after_restore": bool(deployment and deployment["active"]),
+            "container_action": "recreate selected backup deployment" if deployment else "remove failed staging container; restore empty storage; do not start any image",
+        }
+        plan["resources"]["image"] = deployment["image"] if deployment else None
+    plan["actions"] = {
+        "deploy": ["build exact commit locally", "stop staging writers", "back up paired database/keys and old deployment",
+                   "run explicit migrations", "recreate application and verify health",
+                   "on failure restore paired backup and previous image/config; remove failed first-deploy container if no previous deployment"],
+        "start": ["start recorded staging container", "verify health; stop on failed readiness"],
+        "stop": ["stop staging container; retain all data, keys and configuration"],
+        "restart": ["stop and start recorded staging container", "verify health; stop on failed readiness"],
+        "backup": ["stop staging writers", "copy and verify paired database/keys", "resume only if previously active"],
+        "recover": ["stop staging writers", "preserve failed state", "restore selected database/key pair",
+                    "recreate matching image/config or remove failed first-deploy container", "verify readiness if previously active"],
+    }[operation]
+    if operation == "recover":
+        plan["actions"] = ["stop staging writers", "preserve failed state", "restore selected database/key pair",
+                           plan["restore"]["container_action"],
+                           "start restored deployment and verify readiness" if plan["restore"]["start_after_restore"] else "leave staging stopped"]
     return plan
 
 
-def public_intent(operation, branch=None, backup=None):
-    # The ordinary agent must not read private state, settings, PFXs or backups.
-    # Privileged read-only preparation belongs to the external broker.
-    if any(os.environ.get(key) for key in
-           ("DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "COMPOSE_FILE", "COMPOSE_PROJECT_NAME")):
-        raise Refused("Caller-selected Docker/Compose targets are forbidden")
-    intent = {"operation": operation, "target": "Dev-VM102-192.168.1.193",
-              "tooling": file_hashes(REPO, ["scripts/staging.py", "deploy/staging/compose.yaml", "Dockerfile", ".dockerignore"])}
-    if operation == "deploy":
-        intent["source"] = source(branch or "")
-    if operation == "recover":
-        if not backup or not re.fullmatch(r"[0-9a-f]{32}", backup):
-            raise Refused("Recovery requires an exact backup ID")
-        intent["backup"] = backup
-    return intent
-
-
-def prepare(intent):
-    if os.geteuid() != 0:
-        raise Refused("Private plan preparation requires broker authority")
-    for directory in (ROOT, BACKUPS, CONFIG):
-        protected_directory(directory)
-        if not directory.is_dir():
-            raise Refused("Administrator provisioning has not been completed")
-    validate_target()
-    if intent.get("operation") not in MUTATIONS:
-        raise Refused("Unsupported mutation")
-    expected = public_intent(intent["operation"], intent.get("source", {}).get("branch"), intent.get("backup"))
-    if encoded(expected) != encoded(intent):
-        raise Refused("Intent/tooling/source changed; request a fresh plan")
-    return make_plan(intent["operation"], intent.get("source", {}).get("branch"), intent.get("backup"))
-
-
 def docker(*args, image=None, config=None, compose=None):
-    env = {"PATH": "/usr/bin:/bin", "HOME": "/root", "STAGING_IMAGE": image or "unused",
+    env = {"PATH": "/usr/bin:/bin", "HOME": "/home/codex", "STAGING_IMAGE": image or "unused",
            "STAGING_CONFIG_DIR": str(config or CONFIG)}
     argv = ["/usr/bin/docker", "--host", SOCKET, "--config", str(CONFIG / "docker-client")]
     if compose:
@@ -210,24 +152,27 @@ def docker(*args, image=None, config=None, compose=None):
     return run([*argv, *args], env=env)
 
 
-def protected_directory(path):
-    # Reject redirection and agent-writable state, including every existing ancestor.
-    for parent in [path, *path.parents]:
-        if not parent.exists():
-            continue
+def require_user():
+    if os.geteuid() != APP_UID or os.getegid() != APP_GID:
+        raise Refused("Run staging as the non-root codex account (UID/GID 1001); never sudo this script")
+
+
+def private_directory(path):
+    if not path.is_dir() or path.is_symlink():
+        raise Refused("Staging private directories must be provisioned before mutation")
+    info = path.lstat()
+    if info.st_uid != APP_UID or info.st_mode & 0o077:
+        raise Refused("Staging directories must be codex-owned and mode 0700")
+    for parent in path.parents:
         info = parent.lstat()
-        if stat.S_ISLNK(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
-            raise Refused(f"Administrator-owned, non-writable directory required: {parent}")
+        if stat.S_ISLNK(info.st_mode) or info.st_uid not in (0, APP_UID) or info.st_mode & 0o022:
+            raise Refused("Staging storage has an unsafe ancestor directory")
 
 
 def validate_target():
-    identity_path = CONFIG / "target.json"
-    identity = json.loads(identity_path.read_text())
-    info = identity_path.lstat()
-    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
-        raise Refused("Target identity must be administrator-owned and immutable to the agent")
-    if identity.get("role") != "Dev-VM102" or identity.get("machine_id") != Path("/etc/machine-id").read_text().strip():
-        raise Refused("This host is not the commissioned Dev staging target")
+    require_user()
+    if socket.gethostname() != "dev":
+        raise Refused("Staging is restricted to the Dev host")
     ip = shutil.which("ip", path="/usr/sbin:/usr/bin:/sbin:/bin")
     if not ip:
         raise Refused("Cannot establish the host's private Dev address")
@@ -343,8 +288,6 @@ def recover(identifier):
         for name in ("data", "keys"):
             staging = failed / (name + ".restore")
             shutil.copytree(destination / name, staging, copy_function=shutil.copy2)
-            for entry in [staging, *staging.rglob("*")]:
-                os.chown(entry, 1654, 1654)
             if regular_tree(staging) != manifest["trees"][name]:
                 raise Refused("Prepared restore verification failed; live state unchanged")
         temporary = ROOT / "restoring.tmp"
@@ -395,13 +338,7 @@ def deploy(plan):
     previous = plan["state"]
     if shutil.disk_usage(ROOT).free < 2 * 1024 ** 3 or shutil.disk_usage(tempfile.gettempdir()).free < 512 * 1024 ** 2:
         raise Refused("Insufficient build/backup disk headroom; no cleanup performed")
-    if os.geteuid() == 0:
-        commit, archive = privileged_archive(plan["source"]["branch"])
-        if commit != plan["source"]["commit"]:
-            raise Refused("Source commit changed after approval")
-    else:
-        # Unprivileged synthetic tests/public preparation never grant Docker authority.
-        archive = git("archive", "--format=tar", plan["source"]["commit"])
+    archive = git("archive", "--format=tar", plan["source"]["commit"])
     if sha(archive) != plan["source"]["archive_sha256"]:
         raise Refused("Source snapshot changed after approval")
     release = ROOT / "releases" / uuid.uuid4().hex
@@ -410,10 +347,7 @@ def deploy(plan):
     config.mkdir(mode=0o700)
     for name in ("settings.json", "server.pfx"):
         shutil.copy2(CONFIG / name, config / name)
-        os.chmod(config / name, 0o640)
-        os.chown(config / name, 0, 1654)
-    os.chmod(config, 0o750)
-    os.chown(config, 0, 1654)
+        os.chmod(config / name, 0o600)
     if file_hashes(config, ["settings.json", "server.pfx"]) != plan["configuration"]:
         raise Refused("Configuration changed after approval")
     compose = release / "compose.yaml"
@@ -469,16 +403,14 @@ def deploy(plan):
 
 
 def execute(plan):
-    # This is defense in depth, NOT proof of human approval. Only the external broker
-    # may grant this authority; the agent must never have independent root/socket access.
-    if os.geteuid() != 0:
-        raise Refused("Worker requires externally approved authority; no agent-side approval bypass")
+    require_user()
     if plan["operation"] not in MUTATIONS:
         raise Refused("Unsupported mutation")
     for path in (ROOT, BACKUPS, CONFIG):
-        protected_directory(path)
-        if not path.is_dir():
-            raise Refused("Administrator provisioning has not been completed")
+        private_directory(path)
+    if plan["operation"] in ("deploy", "start", "restart", "backup") and not plan["restoring"]:
+        for path in (ROOT / "data", ROOT / "keys"):
+            private_directory(path)
     validate_target()
     os.umask(0o077)
     with (ROOT / "operation.lock").open("a") as lock:
@@ -520,70 +452,47 @@ def execute(plan):
             (ROOT / "pending.json").unlink(missing_ok=True)
 
 
-def request_broker(action, intent):
-    if not BROKER.is_file():
-        raise Refused("Human approval broker is not commissioned; no Docker mutation performed")
-    protected_directory(BROKER.parent)
-    info = BROKER.lstat()
-    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
-        raise Refused("Approval broker must be an administrator-owned executable")
-    # Broker must copy/verify tooling and source BEFORE approval, display the plan,
-    # obtain a human decision outside the agent, then execute its immutable worker.
-    # It must never simply execute this writable checkout after a hash comparison.
-    result = subprocess.run([str(BROKER)], input=encoded({"action": action, "intent": intent, "repository": str(REPO)}),
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-    if result.returncode:
-        raise Refused("Human approval broker refused or failed the operation")
-    return result.stdout
-
-
-def request_approval(intent):
-    return request_broker("execute", intent)
+def confirm(plan):
+    # A TTY can be driven by Codex. This is deliberately an operator guard, not
+    # an authorization service. Codex must obtain the human's chat approval first.
+    if not sys.stdin.isatty():
+        raise Refused("A terminal confirmation is required; ask the human before running this mutation")
+    phrase = f"{plan['operation']} {sha(encoded(plan))[:16]}"
+    try:
+        answer = input(f"After explicit human approval, type '{phrase}' to execute exactly this plan: ")
+    except EOFError:
+        raise Refused("No confirmation received; no Docker mutation performed")
+    if answer != phrase:
+        raise Refused("Operation cancelled; no Docker mutation performed")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["plan", *sorted(MUTATIONS), "status", "logs", "_broker-worker", "_broker-prepare", "_broker-inspect"])
+    parser.add_argument("command", choices=["plan", *sorted(MUTATIONS), "status", "logs"])
     parser.add_argument("--operation", choices=sorted(MUTATIONS), default="deploy")
     parser.add_argument("--branch")
     parser.add_argument("--backup")
     args = parser.parse_args()
     try:
-        if args.command == "_broker-worker":
-            execute(json.load(sys.stdin))
-        elif args.command == "_broker-prepare":
-            print(json.dumps(prepare(json.load(sys.stdin)), indent=2, sort_keys=True))
-        elif args.command == "_broker-inspect":
-            if os.geteuid() != 0:
-                raise Refused("Read-only Docker inspection requires broker authority")
-            protected_directory(CONFIG)
-            validate_target()
-            intent = json.load(sys.stdin)
-            if intent != public_intent(intent.get("operation")):
-                raise Refused("Inspection intent changed")
-            if intent["operation"] == "status":
-                print(docker("ps", "-a", "--filter", f"label=com.docker.compose.project={PROJECT}",
-                             "--format", "{{.Names}}\t{{.Status}}").decode(), end="")
-            elif intent["operation"] == "logs":
-                identifier = container(read_state())
-                if not identifier:
-                    raise Refused("No staging container found")
-                print(docker("logs", "--tail", "100", identifier).decode(), end="")
-            else:
-                raise Refused("Unsupported read-only inspection")
-        elif args.command in ("status", "logs"):
-            print(request_broker("inspect", public_intent(args.command)).decode(), end="")
+        validate_target()
+        if args.command == "status":
+            print(docker("ps", "-a", "--filter", f"label=com.docker.compose.project={PROJECT}",
+                         "--format", "{{.Names}}\t{{.Status}}").decode(), end="")
+        elif args.command == "logs":
+            identifier = container(read_state())
+            if not identifier:
+                raise Refused("No staging container found")
+            print(docker("logs", "--tail", "100", identifier).decode(), end="")
         else:
             operation = args.operation if args.command == "plan" else args.command
-            intent = public_intent(operation, args.branch, args.backup)
-            if args.command == "plan":
-                print(request_broker("prepare", intent).decode(), end="")
-            else:
-                print(request_approval(intent).decode(), end="")
+            plan = make_plan(operation, args.branch, args.backup)
+            print(json.dumps(plan, indent=2, sort_keys=True), flush=True)
+            if args.command != "plan":
+                confirm(plan)
+                execute(plan)
         return 0
     except (Refused, OSError, ValueError, KeyError) as error:
-        # Errors originating outside our constant messages may contain private paths.
-        print(str(error) if isinstance(error, Refused) else "Staging operation refused; inspect protected state locally", file=sys.stderr)
+        print(str(error) if isinstance(error, Refused) else "Staging operation refused; inspect private state locally", file=sys.stderr)
         return 1
 
 

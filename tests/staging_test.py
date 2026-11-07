@@ -4,17 +4,16 @@ import io
 import json
 from pathlib import Path
 import subprocess
-import shutil
 import tarfile
 import tempfile
 import unittest
+from contextlib import redirect_stdout, redirect_stderr
 from types import SimpleNamespace
 from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location("staging", Path(__file__).resolve().parents[1] / "scripts/staging.py")
 staging = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(staging)
-
 
 class StagingTests(unittest.TestCase):
     def setUp(self):
@@ -37,8 +36,7 @@ class StagingTests(unittest.TestCase):
         for name in ("settings.json", "server.pfx"):
             (self.root / "config" / name).write_text("synthetic")
         for name, value in (("REPO", self.repo), ("ROOT", self.root / "runtime"),
-                            ("BACKUPS", self.root / "backups"), ("CONFIG", self.root / "config"),
-                            ("BROKER", self.root / "missing-broker")):
+                            ("BACKUPS", self.root / "backups"), ("CONFIG", self.root / "config")):
             mock = patch.object(staging, name, value)
             mock.start()
             self.addCleanup(mock.stop)
@@ -82,17 +80,6 @@ class StagingTests(unittest.TestCase):
             with self.subTest(key=key), patch.dict(staging.os.environ, {key: "synthetic"}), self.assertRaises(staging.Refused):
                 staging.make_plan("stop")
 
-    def test_missing_broker_never_runs_docker(self):
-        with patch.object(staging, "docker") as docker, self.assertRaises(staging.Refused):
-            staging.request_approval(staging.make_plan("stop"))
-        docker.assert_not_called()
-
-    def test_unprivileged_worker_refuses_before_any_operation(self):
-        with patch.object(staging.os, "geteuid", return_value=1001), patch.object(staging, "docker") as docker:
-            with self.assertRaises(staging.Refused):
-                staging.execute(staging.make_plan("stop"))
-            docker.assert_not_called()
-
     def test_backup_database_and_keys_are_paired_and_verified(self):
         (staging.ROOT / "data/fitnessapp.db").write_bytes(b"synthetic database")
         (staging.ROOT / "data/fitnessapp.db-wal").write_bytes(b"synthetic wal")
@@ -124,7 +111,7 @@ class StagingTests(unittest.TestCase):
         identifier = staging.backup_state(state)
         (staging.ROOT / "data/db").write_text("migrated")
         (staging.ROOT / "keys/key").write_text("new key")
-        with patch.object(staging.os, "chown"), patch.object(staging, "docker") as docker, patch.object(staging, "start") as start:
+        with patch.object(staging, "docker") as docker, patch.object(staging, "start") as start:
             staging.recover(identifier)
         self.assertEqual("old", (staging.ROOT / "data/db").read_text())
         self.assertEqual("old key", (staging.ROOT / "keys/key").read_text())
@@ -137,7 +124,7 @@ class StagingTests(unittest.TestCase):
     def test_active_recovery_starts_only_after_paired_restore(self):
         state = {"image": "old", "config": "config", "compose": "compose", "active": True}
         identifier = staging.backup_state(state)
-        with patch.object(staging.os, "chown"), patch.object(staging, "docker"), patch.object(staging, "start") as start:
+        with patch.object(staging, "docker"), patch.object(staging, "start") as start:
             staging.recover(identifier)
         start.assert_called_once_with(state)
 
@@ -198,7 +185,7 @@ class StagingTests(unittest.TestCase):
             if args[0] == "run":
                 raise staging.Refused("synthetic migration failure")
             return self.fake_docker(*args, **kwargs)
-        with patch.object(staging.os, "chown"), patch.object(staging, "docker", side_effect=docker), patch.object(staging, "running", side_effect=[True, False]), patch.object(staging, "stop"), patch.object(staging, "backup_state", return_value="b" * 32), patch.object(staging, "recover") as recover, patch.object(staging, "start") as start:
+        with patch.object(staging, "docker", side_effect=docker), patch.object(staging, "running", side_effect=[True, False]), patch.object(staging, "stop"), patch.object(staging, "backup_state", return_value="b" * 32), patch.object(staging, "recover") as recover, patch.object(staging, "start") as start:
             with self.assertRaises(staging.Refused):
                 staging.deploy(plan)
         recover.assert_called_once_with("b" * 32)
@@ -207,7 +194,7 @@ class StagingTests(unittest.TestCase):
 
     def test_health_failure_restores_pair_instead_of_old_image_new_schema(self):
         plan = self.deploy_plan()
-        with patch.object(staging.os, "chown"), patch.object(staging, "docker", side_effect=self.fake_docker), patch.object(staging, "running", side_effect=[True, False]), patch.object(staging, "stop") as stop, patch.object(staging, "backup_state", return_value="b" * 32), patch.object(staging, "recover") as recover, patch.object(staging, "start", side_effect=staging.Refused("synthetic health failure")):
+        with patch.object(staging, "docker", side_effect=self.fake_docker), patch.object(staging, "running", side_effect=[True, False]), patch.object(staging, "stop") as stop, patch.object(staging, "backup_state", return_value="b" * 32), patch.object(staging, "recover") as recover, patch.object(staging, "start", side_effect=staging.Refused("synthetic health failure")):
             with self.assertRaises(staging.Refused):
                 staging.deploy(plan)
         recover.assert_called_once_with("b" * 32)
@@ -215,14 +202,14 @@ class StagingTests(unittest.TestCase):
 
     def test_failed_recovery_preserves_pending_journal_for_explicit_recovery(self):
         plan = self.deploy_plan()
-        with patch.object(staging.os, "chown"), patch.object(staging, "docker", side_effect=self.fake_docker), patch.object(staging, "running", side_effect=[True, False]), patch.object(staging, "stop"), patch.object(staging, "backup_state", return_value="b" * 32), patch.object(staging, "recover", side_effect=staging.Refused("synthetic recovery failure")), patch.object(staging, "start", side_effect=staging.Refused("synthetic health failure")):
+        with patch.object(staging, "docker", side_effect=self.fake_docker), patch.object(staging, "running", side_effect=[True, False]), patch.object(staging, "stop"), patch.object(staging, "backup_state", return_value="b" * 32), patch.object(staging, "recover", side_effect=staging.Refused("synthetic recovery failure")), patch.object(staging, "start", side_effect=staging.Refused("synthetic health failure")):
             with self.assertRaisesRegex(staging.Refused, "recovery incomplete"):
                 staging.deploy(plan)
         self.assertEqual("b" * 32, json.loads((staging.ROOT / "pending.json").read_text())["backup"])
 
     def test_failed_backup_restarts_previous_without_running_migrations(self):
         plan = self.deploy_plan()
-        with patch.object(staging.os, "chown"), patch.object(staging, "docker", side_effect=self.fake_docker) as docker, patch.object(staging, "running", side_effect=[True, False]), patch.object(staging, "stop"), patch.object(staging, "backup_state", side_effect=staging.Refused("synthetic backup failure")), patch.object(staging, "start") as start:
+        with patch.object(staging, "docker", side_effect=self.fake_docker) as docker, patch.object(staging, "running", side_effect=[True, False]), patch.object(staging, "stop"), patch.object(staging, "backup_state", side_effect=staging.Refused("synthetic backup failure")), patch.object(staging, "start") as start:
             with self.assertRaises(staging.Refused):
                 staging.deploy(plan)
         start.assert_called_once_with(plan["state"])
@@ -230,7 +217,7 @@ class StagingTests(unittest.TestCase):
 
     def test_unsupported_feature_snapshot_rejected_before_build(self):
         plan = staging.make_plan("deploy", "feature/synthetic")
-        with patch.object(staging.os, "chown"), patch.object(staging, "docker") as docker:
+        with patch.object(staging, "docker") as docker:
             with self.assertRaisesRegex(staging.Refused, "does not support staging"):
                 staging.deploy(plan)
         docker.assert_not_called()
@@ -238,15 +225,9 @@ class StagingTests(unittest.TestCase):
     def test_changed_plan_refuses_before_mutation(self):
         plan = staging.make_plan("stop")
         self.git("checkout", "-qb", "feature/moved")
-        with patch.object(staging.os, "geteuid", return_value=0), patch.object(staging, "protected_directory"), patch.object(staging, "validate_target"), patch.object(staging, "make_plan", return_value={**plan, "state": {"image": "changed"}}), patch.object(staging, "docker") as docker:
+        with patch.object(staging, "private_directory"), patch.object(staging, "validate_target"), patch.object(staging, "make_plan", return_value={**plan, "state": {"image": "changed"}}), patch.object(staging, "docker") as docker:
             with self.assertRaisesRegex(staging.Refused, "changed since human approval"):
                 staging.execute(plan)
-        docker.assert_not_called()
-
-    def test_wrong_host_identity_refused_without_docker(self):
-        (staging.CONFIG / "target.json").write_text(json.dumps({"role": "Apps-VM101", "machine_id": "synthetic"}))
-        with patch.object(staging, "docker") as docker, self.assertRaises(staging.Refused):
-            staging.validate_target()
         docker.assert_not_called()
 
     def test_low_disk_space_refuses_before_build_or_stop(self):
@@ -255,69 +236,6 @@ class StagingTests(unittest.TestCase):
             with self.assertRaisesRegex(staging.Refused, "headroom"):
                 staging.deploy(plan)
         docker.assert_not_called()
-
-    def test_public_intent_does_not_read_private_configuration_or_state(self):
-        with patch.object(staging, "read_state", side_effect=AssertionError("private state accessed")):
-            intent = staging.public_intent("recover", backup="a" * 32)
-        self.assertNotIn("state", intent)
-        self.assertNotIn("configuration", intent)
-        self.assertEqual("a" * 32, intent["backup"])
-
-    def test_public_status_uses_read_only_broker_not_direct_docker(self):
-        with patch.object(staging.sys, "argv", ["staging.py", "status"]), patch.object(staging, "request_broker", return_value=b"synthetic status\n") as broker, patch.object(staging, "docker") as docker:
-            self.assertEqual(0, staging.main())
-        self.assertEqual("inspect", broker.call_args.args[0])
-        docker.assert_not_called()
-
-    def test_public_plan_uses_privileged_read_only_preparation(self):
-        with patch.object(staging.sys, "argv", ["staging.py", "plan", "--operation", "stop"]), patch.object(staging, "request_broker", return_value=b"synthetic plan\n") as broker, patch.object(staging, "make_plan", side_effect=AssertionError("private plan accessed")):
-            self.assertEqual(0, staging.main())
-        self.assertEqual("prepare", broker.call_args.args[0])
-
-    def test_private_prepare_cannot_run_as_agent(self):
-        with patch.object(staging.os, "geteuid", return_value=1001), self.assertRaises(staging.Refused):
-            staging.prepare(staging.public_intent("stop"))
-
-    def test_privileged_source_never_executes_caller_fsmonitor_or_filters(self):
-        marker = self.root / "unexpected-command"
-        payload = self.root / "hostile-git-feature"
-        payload.write_text(f"#!/bin/sh\ntouch '{marker}'\ncat\n")
-        payload.chmod(0o700)
-        # Commit attributes first, before enabling a malicious clean filter.
-        (self.repo / ".gitattributes").write_text("* filter=hostile\n")
-        self.git("add", ".gitattributes")
-        self.git("commit", "-qm", "Synthetic attributes")
-        commit = self.git("rev-parse", "HEAD").decode().strip()
-        expected = self.git("archive", "--format=tar", commit)
-        self.git("config", "core.fsmonitor", str(payload))
-        self.git("config", "filter.hostile.clean", str(payload))
-        self.git("config", "filter.hostile.smudge", str(payload))
-        snapshot = self.repo / "broker-source"
-        snapshot.mkdir()
-        (snapshot / "source.json").write_text(json.dumps({"branch": "feature/synthetic", "commit": commit}))
-        shutil.copytree(self.repo / ".git/objects", snapshot / "objects")
-        # Empty Git info/pack directories are not part of broker object protocol.
-        for directory in (snapshot / "objects/info",):
-            if directory.exists():
-                directory.rmdir()
-        # Simulate root authority, but run actual Git in an ordinary temporary fixture.
-        # Ownership checks are independently required in production; no real elevation.
-        with patch.object(staging.os, "geteuid", return_value=0), patch.object(staging, "protected_directory"), patch.object(staging, "trusted_regular"):
-            result = staging.source("feature/synthetic")
-            self.assertEqual(commit, result["commit"])
-            self.assertEqual(staging.sha(expected), result["archive_sha256"])
-            intent = {"operation": "deploy", "target": "Dev-VM102-192.168.1.193",
-                      "tooling": staging.file_hashes(self.repo, ["scripts/staging.py", "deploy/staging/compose.yaml", "Dockerfile", ".dockerignore"]),
-                      "source": result}
-            with patch.object(staging, "validate_target"):
-                plan = staging.prepare(intent)
-            self.assertEqual(commit, plan["source"]["commit"])
-        self.assertFalse(marker.exists(), "Caller Git features executed during privileged source preparation")
-
-    def test_privileged_ordinary_git_is_forbidden(self):
-        with patch.object(staging.os, "geteuid", return_value=0), patch.object(staging, "run") as run, self.assertRaises(staging.Refused):
-            staging.git("status")
-        run.assert_not_called()
 
     def interrupted_restore(self, fail_at):
         (staging.ROOT / "data/db").write_text("old")
@@ -334,11 +252,11 @@ class StagingTests(unittest.TestCase):
             if calls == fail_at:
                 raise OSError("synthetic interruption between paired renames")
             return rename(*args)
-        with patch.object(staging.os, "chown"), patch.object(staging.os, "rename", side_effect=interrupted), patch.object(staging, "docker"):
+        with patch.object(staging.os, "rename", side_effect=interrupted), patch.object(staging, "docker"):
             with self.assertRaises(OSError):
                 staging.recover(identifier)
         self.assertTrue((staging.ROOT / "restoring.json").exists())
-        with patch.object(staging.os, "chown"), patch.object(staging, "docker"):
+        with patch.object(staging, "docker"):
             staging.recover(identifier)
         self.assertEqual("old", (staging.ROOT / "data/db").read_text())
         self.assertEqual("old key", (staging.ROOT / "keys/key").read_text())
@@ -358,16 +276,16 @@ class StagingTests(unittest.TestCase):
         identifier = staging.backup_state(state)
         (staging.ROOT / "data/db").write_text("new schema")
         self.assertFalse((staging.ROOT / "pending.json").exists())
-        with patch.object(staging.os, "chown"), patch.object(staging, "docker", side_effect=staging.Refused("synthetic recreate failure")):
+        with patch.object(staging, "docker", side_effect=staging.Refused("synthetic recreate failure")):
             with self.assertRaises(staging.Refused):
                 staging.recover(identifier)
         self.assertEqual("container", json.loads((staging.ROOT / "restoring.json").read_text())["phase"])
         start_plan = staging.make_plan("start")
-        with patch.object(staging.os, "geteuid", return_value=0), patch.object(staging, "protected_directory"), patch.object(staging, "validate_target"), patch.object(staging, "docker") as docker:
+        with patch.object(staging, "private_directory"), patch.object(staging, "validate_target"), patch.object(staging, "docker") as docker:
             with self.assertRaisesRegex(staging.Refused, "Interrupted update"):
                 staging.execute(start_plan)
         docker.assert_not_called()
-        with patch.object(staging.os, "chown"), patch.object(staging, "docker") as docker:
+        with patch.object(staging, "docker") as docker:
             staging.recover(identifier)
         self.assertEqual("old-image", docker.call_args.kwargs["image"])
         self.assertFalse((staging.ROOT / "restoring.json").exists())
@@ -376,11 +294,115 @@ class StagingTests(unittest.TestCase):
     def test_standalone_recovery_readiness_failure_retains_guard(self):
         state = {"image": "old-image", "config": "config", "compose": "compose", "active": True}
         identifier = staging.backup_state(state)
-        with patch.object(staging.os, "chown"), patch.object(staging, "docker"), patch.object(staging, "start", side_effect=staging.Refused("synthetic readiness failure")):
+        with patch.object(staging, "docker"), patch.object(staging, "start", side_effect=staging.Refused("synthetic readiness failure")):
             with self.assertRaises(staging.Refused):
                 staging.recover(identifier)
         self.assertTrue((staging.ROOT / "restoring.json").exists())
 
+    def test_nonterminal_mutation_is_refused_without_docker(self):
+        with patch.object(staging.sys, "argv", ["staging.py", "stop"]), patch.object(staging, "validate_target"), patch.object(staging.sys.stdin, "isatty", return_value=False), patch.object(staging, "execute") as execute, redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            self.assertEqual(1, staging.main())
+        execute.assert_not_called()
+
+    def test_wrong_confirmation_is_refused_without_docker(self):
+        with patch.object(staging.sys, "argv", ["staging.py", "stop"]), patch.object(staging, "validate_target"), patch.object(staging.sys.stdin, "isatty", return_value=True), patch("builtins.input", return_value="yes"), patch.object(staging, "execute") as execute, redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            self.assertEqual(1, staging.main())
+        execute.assert_not_called()
+
+    def test_terminal_confirmation_binds_exact_operation_plan(self):
+        plan = staging.make_plan("stop")
+        phrase = f"stop {staging.sha(staging.encoded(plan))[:16]}"
+        with patch.object(staging.sys, "argv", ["staging.py", "stop"]), patch.object(staging, "validate_target"), patch.object(staging.sys.stdin, "isatty", return_value=True), patch("builtins.input", return_value=phrase), patch.object(staging, "execute") as execute, redirect_stdout(io.StringIO()):
+            self.assertEqual(0, staging.main())
+        execute.assert_called_once_with(plan)
+
+    def test_confirmation_cannot_authorize_a_changed_plan(self):
+        plan = staging.make_plan("stop")
+        phrase = f"stop {staging.sha(staging.encoded(plan))[:16]}"
+        changed = {**plan, "state": {"commit": "changed"}}
+        with patch.object(staging.sys.stdin, "isatty", return_value=True), patch("builtins.input", return_value=phrase), self.assertRaises(staging.Refused):
+            staging.confirm(changed)
+
+    def test_confirmation_eof_refuses(self):
+        with patch.object(staging.sys.stdin, "isatty", return_value=True), patch("builtins.input", side_effect=EOFError), self.assertRaises(staging.Refused):
+            staging.confirm(staging.make_plan("stop"))
+
+    def test_status_is_direct_read_only_without_confirmation(self):
+        with patch.object(staging.sys, "argv", ["staging.py", "status"]), patch.object(staging, "validate_target"), patch.object(staging, "docker", return_value=b"synthetic status\n") as docker, patch.object(staging, "confirm") as confirm, redirect_stdout(io.StringIO()):
+            self.assertEqual(0, staging.main())
+        self.assertEqual("ps", docker.call_args.args[0])
+        confirm.assert_not_called()
+
+    def test_plan_is_read_only_without_confirmation_or_docker(self):
+        with patch.object(staging.sys, "argv", ["staging.py", "plan", "--operation", "stop"]), patch.object(staging, "validate_target"), patch.object(staging, "docker") as docker, patch.object(staging, "confirm") as confirm, redirect_stdout(io.StringIO()):
+            self.assertEqual(0, staging.main())
+        docker.assert_not_called()
+        confirm.assert_not_called()
+
+    def test_root_execution_is_refused(self):
+        with patch.object(staging.os, "geteuid", return_value=0), patch.object(staging, "run") as run, self.assertRaises(staging.Refused):
+            staging.git("status")
+        run.assert_not_called()
+
+    def test_apps_hostname_is_refused_without_docker(self):
+        with patch.object(staging.socket, "gethostname", return_value="apps"), patch.object(staging, "docker") as docker, self.assertRaises(staging.Refused):
+            staging.validate_target()
+        docker.assert_not_called()
+
+    def test_wrong_host_address_is_refused_without_docker(self):
+        with patch.object(staging.socket, "gethostname", return_value="dev"), patch.object(staging.shutil, "which", return_value="/usr/sbin/ip"), patch.object(staging, "run", return_value=b'[{"addr_info":[{"local":"192.168.1.25"}]}]'), self.assertRaises(staging.Refused):
+            staging.validate_target()
+
+    def test_private_storage_rejects_public_directory(self):
+        directory = self.root / "public-storage"
+        directory.mkdir(mode=0o755)
+        directory.chmod(0o755)
+        with self.assertRaisesRegex(staging.Refused, "mode 0700"):
+            staging.private_directory(directory)
+
+    def test_private_storage_rejects_symlink(self):
+        directory = self.root / "private-link"
+        directory.symlink_to(staging.ROOT, target_is_directory=True)
+        with self.assertRaises(staging.Refused):
+            staging.private_directory(directory)
+
+    def test_planned_transaction_names_exact_resources_and_recovery_actions(self):
+        plan = self.deploy_plan()
+        self.assertEqual("fitness-app-staging-app-1", plan["resources"]["container"])
+        self.assertEqual("fitness-app-staging_default", plan["resources"]["network"])
+        self.assertEqual(f"fitness-app-staging:{plan['source']['commit']}", plan["resources"]["image"])
+        self.assertTrue(any("on failure" in action and "remove failed first-deploy" in action for action in plan["actions"]))
+
+    def test_recovery_plan_shows_backup_deployment_not_current_deployment(self):
+        config = staging.ROOT / "releases/old/config"
+        config.mkdir(parents=True)
+        (config / "settings.json").write_text("synthetic-private-old-settings")
+        (config / "server.pfx").write_text("synthetic-private-old-certificate")
+        old = {"branch": "feature/old", "commit": "a" * 40, "image": "sha256:" + "a" * 64,
+               "config": str(config), "compose": "old-compose", "active": True}
+        identifier = staging.backup_state(old)
+        current = {"branch": "feature/current", "commit": "b" * 40, "image": "sha256:" + "b" * 64,
+                   "config": "current-config", "compose": "current-compose", "active": False}
+        staging.save_state(current)
+        plan = staging.make_plan("recover", backup=identifier)
+        self.assertEqual(old, plan["restore"]["deployment"])
+        self.assertEqual(current, plan["state"])
+        self.assertEqual(old["image"], plan["resources"]["image"])
+        self.assertTrue(plan["restore"]["start_after_restore"])
+        self.assertIn("start restored deployment and verify readiness", plan["actions"])
+        self.assertEqual(staging.sha(b"synthetic-private-old-settings"), plan["restore"]["configuration_fingerprints"]["settings.json"])
+        self.assertNotIn("synthetic-private-old-settings", staging.encoded(plan).decode())
+        self.assertNotIn("synthetic-private-old-certificate", staging.encoded(plan).decode())
+
+    def test_first_deploy_recovery_plan_explicitly_removes_candidate_without_running_image(self):
+        identifier = staging.backup_state(None)
+        staging.save_state({"image": "failed-candidate", "active": True})
+        plan = staging.make_plan("recover", backup=identifier)
+        self.assertIsNone(plan["resources"]["image"])
+        self.assertIsNone(plan["restore"]["deployment"])
+        self.assertFalse(plan["restore"]["start_after_restore"])
+        self.assertIn("remove failed staging container; restore empty storage; do not start any image", plan["actions"])
+        self.assertEqual("leave staging stopped", plan["actions"][-1])
 
 if __name__ == "__main__":
     unittest.main()
