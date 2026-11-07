@@ -14,10 +14,12 @@ namespace FitnessApp.IntegrationTests;
 
 public sealed class RegistrationApprovalTests
 {
-    [Fact]
-    public async Task NewRegistrationNotifiesOnlyApprovedAdministratorsAndDuplicateDoesNotNotifyAgain()
+    [Theory]
+    [InlineData("Testing")]
+    [InlineData("Staging")]
+    public async Task NewRegistrationNotifiesOnlyApprovedAdministratorsAndDuplicateDoesNotNotifyAgain(string environment)
     {
-        using var factory = new AuthWebApplicationFactory();
+        using var factory = new AuthWebApplicationFactory(environmentName: environment);
         await factory.InitializeDatabaseAsync();
         var firstAdmin = await factory.CreateUserAsync(AccountApprovalStatus.Approved, role: AuthenticationConstants.AdminRole);
         var secondAdmin = await factory.CreateUserAsync(AccountApprovalStatus.Approved, role: AuthenticationConstants.AdminRole);
@@ -42,10 +44,12 @@ public sealed class RegistrationApprovalTests
         Assert.Single(notices.Select(x => x.SourceKey).Distinct());
     }
 
-    [Fact]
-    public async Task ExistingApprovedAccountDoesNotCreateAdminNoticeOrChangeApproval()
+    [Theory]
+    [InlineData("Testing")]
+    [InlineData("Staging")]
+    public async Task ExistingApprovedAccountDoesNotCreateAdminNoticeOrChangeApproval(string environment)
     {
-        using var factory = new AuthWebApplicationFactory();
+        using var factory = new AuthWebApplicationFactory(environmentName: environment);
         await factory.InitializeDatabaseAsync();
         await factory.CreateUserAsync(AccountApprovalStatus.Approved, role: AuthenticationConstants.AdminRole);
         var existing = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
@@ -98,10 +102,12 @@ public sealed class RegistrationApprovalTests
         Assert.Empty(await dbContext.Users.ToArrayAsync());
     }
 
-    [Fact]
-    public async Task DuplicateRegistrationIsNeutralAndDoesNotOverwriteAccount()
+    [Theory]
+    [InlineData("Testing")]
+    [InlineData("Staging")]
+    public async Task DuplicateRegistrationIsNeutralAndDoesNotOverwriteAccount(string environment)
     {
-        using var factory = new AuthWebApplicationFactory();
+        using var factory = new AuthWebApplicationFactory(environmentName: environment);
         await factory.InitializeDatabaseAsync();
         var existing = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
         var originalHash = existing.PasswordHash;
@@ -119,10 +125,12 @@ public sealed class RegistrationApprovalTests
         Assert.Null(unchanged.RegisteredAt);
     }
 
-    [Fact]
-    public async Task ConcurrentDuplicateRegistrationCreatesExactlyOneAccount()
+    [Theory]
+    [InlineData("Testing")]
+    [InlineData("Staging")]
+    public async Task ConcurrentDuplicateRegistrationCreatesExactlyOneAccount(string environment)
     {
-        using var factory = new AuthWebApplicationFactory(registrationPermitLimit: 10);
+        using var factory = new AuthWebApplicationFactory(registrationPermitLimit: 10, environmentName: environment);
         await factory.InitializeDatabaseAsync();
         var administrator = await factory.CreateUserAsync(AccountApprovalStatus.Approved, AuthenticationConstants.AdminRole);
         using var firstClient = factory.CreateHttpsClient();
@@ -259,10 +267,12 @@ public sealed class RegistrationApprovalTests
             (await client.GetAsync("api/admin/registrations/pending?limit=101")).StatusCode);
     }
 
-    [Fact]
-    public async Task ApprovalRecordsDecisionAndEnablesLogin()
+    [Theory]
+    [InlineData("Testing")]
+    [InlineData("Staging")]
+    public async Task ApprovalRecordsDecisionAndEnablesLogin(string environment)
     {
-        using var factory = new AuthWebApplicationFactory();
+        using var factory = new AuthWebApplicationFactory(environmentName: environment);
         await factory.InitializeDatabaseAsync();
         var administrator = await factory.CreateUserAsync(AccountApprovalStatus.Approved, AuthenticationConstants.AdminRole);
         using var registrationClient = factory.CreateHttpsClient();
