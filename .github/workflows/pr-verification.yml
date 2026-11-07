@@ -34,5 +34,8 @@ jobs:
       - name: Audit dependencies
         run: ./scripts/verify.sh audit
 
+      - name: Verify published hosted client boot assets
+        run: ./scripts/verify.sh publish
+
       - name: Verify browser session and diary lifecycle
         run: node --test tests/FitnessApp.IntegrationTests/*.test.cjs

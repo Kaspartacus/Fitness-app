@@ -4,7 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <!-- The classic hosted publish copies index.html as Content, rather than producing
+         the standalone SDK HTML/import map. Keep stable bootstrap entry-point names;
+         the runtime's content-addressed assets remain fingerprinted. -->
+    <OverrideHtmlAssetPlaceholders>false</OverrideHtmlAssetPlaceholders>
   </PropertyGroup>
 
   <ItemGroup>

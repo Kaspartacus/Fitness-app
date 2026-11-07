@@ -185,11 +185,18 @@ are not silently changed.
 ## Verification and Phase 5
 
 Checks: `./scripts/verify.sh verify`,
+`./scripts/verify.sh publish`,
 `node --test tests/FitnessApp.IntegrationTests/*.test.cjs`, and
 `python3 -m unittest discover -s tests -p staging_test.py` (included in Verify).
 No Docker invocation is needed by these tests. Actual Docker build/Compose, mount
 permissions, migration/restore, crash/reboot, private exposure and device trust
 checks require separately approved commissioning.
+
+The Publish check exercises the actual published HTML, bootstrap, runtime modules
+and Wasm assets through an isolated synthetic published host. It catches a working
+API/HTML shell with a broken client bootstrap; it is not a browser-render assertion.
+After an approved deployment, also verify that the login page actually renders in
+a fresh browser context and that bootstrap/runtime requests have no failures.
 
 Future production: feature → PR → human review and required tests → approved
 GitHub merge into main → GitHub Actions verification → GHCR immutable commit/digest

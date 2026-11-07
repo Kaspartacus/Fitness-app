@@ -96,7 +96,7 @@ run_verify() {
     -p:BuildInParallel=false
 
   status 'Testing manual staging safety and recovery with synthetic state'
-  python3 -m unittest discover -s tests -p 'staging_test.py'
+  python3 -m unittest discover -s tests -p '*_test.py'
 
   status 'Checking whitespace in tracked working-tree changes'
   git -C "$repo_root" diff --check
@@ -132,6 +132,19 @@ run_verify() {
   printf '\n%s\n' 'Verification passed.'
 }
 
+run_publish() {
+  publish_dir="$(mktemp -d "${TMPDIR:-/tmp}/fitnessapp-publish-check.XXXXXX")"
+  cleanup_publish() { rm -rf -- "$publish_dir"; }
+  trap cleanup_publish EXIT HUP INT TERM
+  status 'Publishing the hosted client with the Dockerfile Release command'
+  dotnet publish src/FitnessApp.Server/FitnessApp.Server.csproj -c Release -o "$publish_dir" \
+    --disable-build-servers -m:1 -p:BuildInParallel=false -p:UseAppHost=false
+  status 'Checking actual published HTML, bootstrap and transitive runtime assets over HTTP'
+  python3 "$script_dir/check-published-client.py" "$publish_dir" --serve
+  cleanup_publish
+  trap - EXIT HUP INT TERM
+}
+
 case "${1:-verify}" in
   verify)
     run_verify
@@ -142,8 +155,11 @@ case "${1:-verify}" in
   self-test)
     self_test
     ;;
+  publish)
+    run_publish
+    ;;
   *)
-    printf 'Usage: %s [verify|audit|self-test]\n' "$0" >&2
+    printf 'Usage: %s [verify|audit|self-test|publish]\n' "$0" >&2
     exit 64
     ;;
 esac

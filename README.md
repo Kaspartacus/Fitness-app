@@ -297,10 +297,15 @@ The [Project knowledge loop](AGENTS.md#project-knowledge-loop) governs relevant 
 ```bash
 ./scripts/verify.sh verify
 ./scripts/verify.sh audit
+./scripts/verify.sh publish
 node --test tests/FitnessApp.IntegrationTests/session.test.cjs
 ```
 
 The integration suite uses isolated real SQLite databases, not EF InMemory. The dependency-free Node test executes the actual browser session script in an isolated VM with controlled fetch, Web Locks and storage to verify logout/login races; it does not launch an app or browser. PR CI runs this check in addition to the unchanged Verify and Audit commands. Run the commands above for current verification evidence.
+
+The Publish check runs the Dockerfile's Release publish command, inspects the actual HTML/bootstrap/runtime resource graph, and requests its assets through the published Server using temporary synthetic SQLite, keys and configuration. It rejects unresolved HTML placeholders, missing resources, incorrect resource integrity, HTML fallback responses and wrong JS/Wasm content types. It uses no Docker or real staging data. CI runs this separately from Verify/Audit; backend readiness alone does not establish a working client, and a real-browser rendering check remains necessary before calling a deployment usable.
+
+This classic hosted WebAssembly app keeps stable `blazor.webassembly.js` and `dotnet.js` entry points: the host's referenced publish copies the client HTML as Content rather than generating the standalone SDK import map. Runtime/Wasm/assembly content fingerprints remain enabled. Do not reintroduce standalone-only HTML placeholders without verifying the complete published boot graph. See [Microsoft's WebAssembly publishing guidance](https://learn.microsoft.com/en-us/aspnet/core/blazor/host-and-deploy/webassembly/?view=aspnetcore-10.0#publish-without-an-html-document).
 
 ## Future operations
 
