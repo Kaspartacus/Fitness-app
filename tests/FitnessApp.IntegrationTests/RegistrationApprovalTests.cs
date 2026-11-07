@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using FitnessApp.Application.Authentication;
 using FitnessApp.Contracts.Authentication;
 using FitnessApp.Domain.Users;
+using FitnessApp.Domain.Settings;
 using FitnessApp.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,49 @@ namespace FitnessApp.IntegrationTests;
 
 public sealed class RegistrationApprovalTests
 {
+    [Fact]
+    public async Task NewRegistrationNotifiesOnlyApprovedAdministratorsAndDuplicateDoesNotNotifyAgain()
+    {
+        using var factory = new AuthWebApplicationFactory();
+        await factory.InitializeDatabaseAsync();
+        var firstAdmin = await factory.CreateUserAsync(AccountApprovalStatus.Approved, role: AuthenticationConstants.AdminRole);
+        var secondAdmin = await factory.CreateUserAsync(AccountApprovalStatus.Approved, role: AuthenticationConstants.AdminRole);
+        await factory.CreateUserAsync(AccountApprovalStatus.Pending, role: AuthenticationConstants.AdminRole);
+        await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        using var client = factory.CreateHttpsClient();
+        var email = NewEmail();
+        Assert.Equal(HttpStatusCode.Accepted, (await RegisterAsync(client, "Ny Bruger", email, factory.ValidPassword)).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await RegisterAsync(client, "Gentaget", email, factory.ValidPassword)).StatusCode);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+        var notices = await db.InAppNotifications.ToArrayAsync();
+        Assert.Equal(2, notices.Length);
+        Assert.Equal(new[] { firstAdmin.Id, secondAdmin.Id }.Order(), notices.Select(x => x.UserId).Order());
+        Assert.All(notices, notice =>
+        {
+            Assert.Equal(InAppNotificationKind.AdminRegistrationRequest, notice.Kind);
+            Assert.Equal("/administration/registreringer", notice.TargetPath);
+            Assert.DoesNotContain(email, notice.Message);
+            Assert.Null(notice.ReadAtUtc);
+        });
+        Assert.Single(notices.Select(x => x.SourceKey).Distinct());
+    }
+
+    [Fact]
+    public async Task ExistingApprovedAccountDoesNotCreateAdminNoticeOrChangeApproval()
+    {
+        using var factory = new AuthWebApplicationFactory();
+        await factory.InitializeDatabaseAsync();
+        await factory.CreateUserAsync(AccountApprovalStatus.Approved, role: AuthenticationConstants.AdminRole);
+        var existing = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
+        using var client = factory.CreateHttpsClient();
+        Assert.Equal(HttpStatusCode.Accepted, (await RegisterAsync(client, "Gentaget", existing.Email!, factory.ValidPassword)).StatusCode);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+        Assert.Empty(await db.InAppNotifications.ToArrayAsync());
+        Assert.Equal(AccountApprovalStatus.Approved, (await db.Users.SingleAsync(x => x.Id == existing.Id)).ApprovalStatus);
+    }
+
     [Fact]
     public async Task ValidRegistrationCreatesOnlyPendingUserWithoutSession()
     {
@@ -80,6 +124,7 @@ public sealed class RegistrationApprovalTests
     {
         using var factory = new AuthWebApplicationFactory(registrationPermitLimit: 10);
         await factory.InitializeDatabaseAsync();
+        var administrator = await factory.CreateUserAsync(AccountApprovalStatus.Approved, AuthenticationConstants.AdminRole);
         using var firstClient = factory.CreateHttpsClient();
         using var secondClient = factory.CreateHttpsClient();
         var email = NewEmail();
@@ -91,8 +136,10 @@ public sealed class RegistrationApprovalTests
         Assert.All(responses, response => Assert.Equal(HttpStatusCode.Accepted, response.StatusCode));
         await using var scope = factory.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
-        Assert.Equal(1, await dbContext.Users.CountAsync());
-        var user = await dbContext.Users.SingleAsync();
+        Assert.Equal(2, await dbContext.Users.CountAsync());
+        var user = await dbContext.Users.SingleAsync(x => x.Id != administrator.Id);
+        var notice = Assert.Single(await dbContext.InAppNotifications.ToArrayAsync());
+        Assert.Equal(administrator.Id, notice.UserId);
         Assert.Equal(AccountApprovalStatus.Pending, user.ApprovalStatus);
     }
 

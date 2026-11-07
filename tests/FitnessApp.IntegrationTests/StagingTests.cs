@@ -66,6 +66,26 @@ public sealed class StagingTests
     }
 
     [Fact]
+    public void ExplicitStagingSmtpOptInUsesConfiguredMailTransport()
+    {
+        using var factory = new AuthWebApplicationFactory(environmentName: "Staging", configurationOverrides:
+            new Dictionary<string, string?>
+            {
+                ["Email:Transport"] = "Smtp",
+                ["Staging:AllowExternalEmail"] = "true",
+                ["Smtp:Host"] = "smtp.example.test",
+                ["Smtp:Username"] = "synthetic",
+                ["Smtp:Password"] = "synthetic-not-a-secret",
+                ["Smtp:FromEmail"] = "operator@example.test",
+                ["Smtp:FromName"] = "Synthetic staging"
+            });
+        using var client = factory.CreateHttpsClient();
+        Assert.Equal("Smtp", factory.Services.GetRequiredService<IOptions<EmailDeliveryOptions>>().Value.Transport);
+        Assert.False(factory.Services.GetRequiredService<IOptions<SmtpOptions>>().Value.AllowLocalDevelopmentRevocationBypass);
+        Assert.False(factory.Services.GetRequiredService<IOptions<WebPushOptions>>().Value.Configured);
+    }
+
+    [Fact]
     public void ControlledTestOptInStillValidatesCredentials()
     {
         using var factory = new AuthWebApplicationFactory(environmentName: "Staging", configurationOverrides:
