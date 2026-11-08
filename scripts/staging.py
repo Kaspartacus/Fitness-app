@@ -92,6 +92,10 @@ def cleanup_plan():
     if any((ROOT / name).exists() for name in
            ("pending.json", "restoring.json", "import-pending.json")):
         raise Refused("Resolve pending deployment/import/recovery before cleanup")
+    # Check the roots themselves before iterdir/rglob can follow them outside staging.
+    for directory in (ROOT, BACKUPS, ROOT / "failed", ROOT / "releases"):
+        if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+            raise Refused("Retention roots must be real directories, never links")
     state = read_state()
     protected_images = {state["image"]} if state else set()
     protected_releases = set()

@@ -17,6 +17,11 @@ SPEC.loader.exec_module(staging)
 
 class StagingTests(unittest.TestCase):
     def setUp(self):
+        # Synthetic operator identity; runtime rejection checks remain explicitly tested.
+        for name in ("geteuid", "getegid"):
+            identity = patch.object(staging.os, name, return_value=1001)
+            identity.start()
+            self.addCleanup(identity.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -344,6 +349,11 @@ class StagingTests(unittest.TestCase):
             staging.git("status")
         run.assert_not_called()
 
+    def test_nonoperator_uid_or_gid_is_refused(self):
+        for uid, gid in ((2000, 1001), (1001, 2000)):
+            with patch.object(staging.os, "geteuid", return_value=uid), patch.object(staging.os, "getegid", return_value=gid), self.assertRaises(staging.Refused):
+                staging.require_user()
+
     def test_apps_hostname_is_refused_without_docker(self):
         with patch.object(staging.socket, "gethostname", return_value="apps"), patch.object(staging, "docker") as docker, self.assertRaises(staging.Refused):
             staging.validate_target()
@@ -456,6 +466,26 @@ class RetentionTests(unittest.TestCase):
         (self.root / "failed" / ("c" * 32)).symlink_to(self.release, target_is_directory=True)
         with self.assertRaises(staging.Refused): staging.cleanup_plan()
         self.assertTrue(self.release.exists())
+
+    def test_symlinked_retention_roots_never_delete_external_snapshots(self):
+        for area in ("failed", "releases", "backups"):
+            with self.subTest(area=area):
+                external = self.root / ("outside-" + area)
+                external.mkdir()
+                for number in range(7):
+                    (external / f"{number:032x}").mkdir()
+                root = self.root / area
+                saved = self.root / (area + "-saved")
+                root.rename(saved)
+                root.symlink_to(external, target_is_directory=True)
+                try:
+                    with patch.object(staging, "docker") as docker, self.assertRaises(staging.Refused):
+                        staging.cleanup_plan()
+                    docker.assert_not_called()
+                    self.assertEqual(7, len(list(external.iterdir())))
+                finally:
+                    root.unlink()
+                    saved.rename(root)
 
     def test_only_unused_staging_tags_removed_and_stopped_containers_protected(self):
         keep = "fitness-app-staging:" + "1" * 40
