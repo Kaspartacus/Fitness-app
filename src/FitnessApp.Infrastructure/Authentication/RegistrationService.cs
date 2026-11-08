@@ -1,5 +1,6 @@
 using FitnessApp.Application.Authentication;
 using FitnessApp.Domain.Users;
+using FitnessApp.Domain.Settings;
 using FitnessApp.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -70,6 +71,29 @@ internal sealed class RegistrationService(
                 return Invalid("Registreringen kunne ikke gennemføres. Prøv igen.");
             }
 
+            // Persist administrator inbox notices with the account, so a failed
+            // registration never leaves an orphan request and duplicates never spam.
+            var administrators = await (
+                from administrator in dbContext.Users
+                join membership in dbContext.UserRoles on administrator.Id equals membership.UserId
+                join role in dbContext.Roles on membership.RoleId equals role.Id
+                where administrator.ApprovalStatus == AccountApprovalStatus.Approved &&
+                      role.NormalizedName == AuthenticationConstants.AdminRole.ToUpperInvariant()
+                select administrator.Id).Distinct().ToListAsync(cancellationToken);
+            foreach (var administratorId in administrators)
+            {
+                dbContext.InAppNotifications.Add(new InAppNotification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = administratorId,
+                    Kind = InAppNotificationKind.AdminRegistrationRequest,
+                    SourceKey = $"registration:{user.Id}",
+                    Title = "Ny brugeranmodning",
+                    Message = "En ny bruger afventer din godkendelse.",
+                    TargetPath = "/administration/registreringer",
+                    CreatedAtUtc = timeProvider.GetUtcNow().UtcDateTime
+                });
+            }
             await dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return new RegistrationResult(RegistrationStatus.Created, []);

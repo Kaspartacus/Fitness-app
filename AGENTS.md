@@ -29,7 +29,13 @@ Obsidian owns durable intent, decisions, architecture, behavior explanations, an
 - If connector and permitted local access fail, use repository evidence and sanitized PR context. Ask about missing intent affecting product, security, or data. Cloud/GitHub agents cannot assume vault access: hand off specific pending corrections without copying private notes into Git/GitHub.
 - Read-only reviews report discrepancies without vault edits. No background watcher: human edits need later reconciliation. Temporary task state belongs in ignored `.codex/checkpoint.md`.
 
+## Owner-facing change summaries
+
+After every code change or implementation, finish with a simple summary in the user's language (Danish by default). Explain the outcome first, then list every added, changed or deleted file with a clickable path, what changed there and what that means in practice. Use short everyday sentences; explain necessary technical terms. Related files may share a row only when each is named. Keep operational configuration/data changes separate from repository files, never reveal secrets, and state briefly what was tested, what remains unverified, and whether changes are committed, pushed, merged or deployed. Scale the detail to the task; do not replace this overview with only a commit hash, PR link or test log. For a large task, provide a short overview plus a complete linked file summary. Do not promise automatic compliance outside the environments where these instructions are installed.
+
 ## Working constraints
+
+- Owner deployment boundary: never merge feature branches into `main` on Dev or bypass the GitHub PR/review/human approval workflow. The existing dedicated clean main checkout may fast-forward to already-approved `origin/main` through its enabled synchronization timer; leave that host setup unchanged. Only `feature/*` may be manually deployed to staging on Dev; `main` is reserved for future automatic production on Apps. The owner requests full Docker access for Codex on Dev and accepts its root-equivalent authority; no separate approval broker is required. Always show the specific operation/commit/resources and obtain explicit human approval before every Docker mutation/deployment. Read-only status/logs need no additional approval. Repository implementation approval is not deployment approval. The CLI's interactive confirmation and these instructions are operator guardrails, not a technical security boundary against full Docker access. Do not grant Docker access or change host/certificate/firewall settings without separate authorization.
 
 - English code/technical documentation; Danish application UI.
 - Derive ownership/roles from validated server identity, never submitted values. Preserve recorded history when definitions change.
