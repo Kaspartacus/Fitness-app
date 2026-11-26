@@ -1,5 +1,7 @@
 ﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Sections
 
 <div class="app-shell">
+    <SectionOutlet SectionName="desktop-navigation" />
     @Body
 </div>
