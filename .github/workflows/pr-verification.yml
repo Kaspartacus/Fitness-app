@@ -36,3 +36,31 @@ jobs:
 
       - name: Verify browser session and diary lifecycle
         run: node --test tests/FitnessApp.IntegrationTests/*.test.cjs
+
+      - name: Set up Node.js for Playwright
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: tests/FitnessApp.BrowserTests/package-lock.json
+
+      - name: Install Playwright and Chromium
+        working-directory: tests/FitnessApp.BrowserTests
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps --only-shell chromium
+
+      - name: Verify registration and navigation in Chromium
+        working-directory: tests/FitnessApp.BrowserTests
+        run: npm test
+
+      - name: Upload browser evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-browser-evidence
+          path: |
+            tests/FitnessApp.BrowserTests/test-results/**/*.png
+            tests/FitnessApp.BrowserTests/test-results/**/failure-trace.json
+          retention-days: 14
+          if-no-files-found: ignore

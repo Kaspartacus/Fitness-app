@@ -298,6 +298,25 @@ node --test tests/FitnessApp.IntegrationTests/session.test.cjs
 
 The integration suite uses isolated real SQLite databases, not EF InMemory. The dependency-free Node test executes the actual browser session script in an isolated VM with controlled fetch, Web Locks and storage to verify logout/login races; it does not launch an app or browser. PR CI runs this check in addition to the unchanged Verify and Audit commands. Run the commands above for current verification evidence.
 
+### Playwright browser verification
+
+Use Node.js 24 with npm, OpenSSL 3, and the repository's .NET SDK on Linux or macOS. Install Chromium once and rerun the last command after changes:
+
+```bash
+cd tests/FitnessApp.BrowserTests
+npm ci --ignore-scripts
+npx playwright install --only-shell chromium
+npm test
+```
+
+On Linux, use `npx playwright install --with-deps --only-shell chromium` to install missing system libraries through the OS package manager. Keep port 47192 free. Playwright starts a local Development build on HTTPS loopback with a disposable SQLite database, a synthetic administrator, local email pickup and a self-signed certificate. The host uses a fresh home directory and an explicit runtime environment. The test browser ignores certificate errors for this isolated origin and blocks outbound browser requests.
+
+The suite covers registration, the pending account's rejected login, and strength navigation at 390 × 844 and 1440 × 900. The desktop test records the existing hidden-navigation defect as an expected failure after verifying the browser history. Remove the expected-failure marker when repairing the navigation.
+
+Open `tests/FitnessApp.BrowserTests/test-results/` locally or download **playwright-browser-evidence** from the PR verification run's **Artifacts** section in GitHub Actions. CI requests 14 days of retention. PNGs show checked milestones and the page at failure. `failure-trace.json` lists named steps, durations and outcomes. The upload includes only these files. Native traces, network captures, and saved browser storage are disabled to keep credentials and session data out of evidence.
+
+Every application behavior change needs evidence in its handoff. For browser-visible changes, add or update a Playwright scenario for the changed flow and link its named screenshots on the relevant mobile and desktop sizes. Capture the screenshots after verifying the new behavior with assertions. Follow [the repository guidance](AGENTS.md#local-maps-and-procedures) for other verification evidence and reporting gaps.
+
 ## Future operations
 
 Pull requests targeting `main` run `.github/workflows/pr-verification.yml`, which calls the same shared verification script with read-only repository permissions and no production secrets or deployment. When deployment work begins, CI/CD secrets belong in GitHub Actions Secrets and the Raspberry Pi requires separate runtime secret provisioning. Evaluate a genuinely no-license-cost vault together with its operational burden before adoption; do not assume Azure Key Vault or another hosted service remains permanently free. Optional local structured-log search is available through the provisioned [Grafana + Loki + Alloy setup](monitoring/README.md). It preserves `dotnet run` and defaults to console-only logging; hosted application deployment remains future work.
