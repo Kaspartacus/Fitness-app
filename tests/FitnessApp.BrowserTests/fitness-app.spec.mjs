@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { expect, test as base } from '@playwright/test';
+import { fillTestPassword } from './test-password.mjs';
 
 const password = process.env.FITNESS_BROWSER_PASSWORD;
 const adminEmail = 'browser-admin@example.test';
@@ -52,7 +53,7 @@ const test = base.extend({
 
 async function submitLogin(page, email) {
   await page.getByLabel('E-mail', { exact: true }).fill(email);
-  await page.getByLabel('Adgangskode', { exact: true }).fill(password);
+  await fillTestPassword(page.getByLabel('Adgangskode', { exact: true }), password);
   await page.getByRole('button', { name: 'Log ind', exact: true }).click();
 }
 
@@ -70,8 +71,8 @@ test('registration shows that administrator approval is pending', async ({ page,
     await expect(page.getByRole('heading', { name: 'Opret bruger' })).toBeVisible();
     await page.getByLabel('Navn', { exact: true }).fill('Ny testbruger');
     await page.getByLabel('E-mail', { exact: true }).fill(email);
-    await page.getByLabel('Adgangskode', { exact: true }).fill(password);
-    await page.getByLabel('Gentag adgangskode', { exact: true }).fill(password);
+    await fillTestPassword(page.getByLabel('Adgangskode', { exact: true }), password);
+    await fillTestPassword(page.getByLabel('Gentag adgangskode', { exact: true }), password);
     await page.getByRole('button', { name: 'Opret bruger' }).click();
   });
   await evidence.step('Confirm that registration was accepted and login requires approval', async () => {
