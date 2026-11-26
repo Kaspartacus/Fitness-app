@@ -1,16 +1,18 @@
 @page "/styrke/{ProgramId:guid}/træninger/opret"
 @page "/styrke/{ProgramId:guid}/træninger/{WorkoutId:guid}/rediger"
 @attribute [Authorize]
+@implements IAsyncDisposable
 @using FitnessApp.Contracts.Strength
 @using FitnessApp.Client.Strength
 @inject StrengthProgramClient Programs
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <PageTitle>@(WorkoutId is null ? "Ny træning" : "Rediger træning")</PageTitle>
 
 <NavigationLock OnBeforeInternalNavigation="ConfirmNavigationAsync" />
 
-<main class="strength-app strength-form-page" aria-labelledby="workout-editor-title">
+<main class="strength-app strength-form-page" aria-labelledby="workout-editor-title" @ref="editor">
     <header class="strength-back-header">
         <button class="strength-icon-button" type="button" @onclick="TryNavigateBack" disabled="@busy" aria-label="Tilbage til program" title="Tilbage til program">←</button>
         <h1 id="workout-editor-title">@(WorkoutId is null ? "Ny træning" : "Rediger træning")</h1>
@@ -50,12 +52,13 @@
                 }
                 else
                 {
+                    <p class="strength-reorder-help" id="strength-reorder-help">Træk i håndtaget, eller brug pil op og ned med tastaturet.</p>
                     <ol class="strength-exercise-rows">
                         @for (var index = 0; index < workoutDraft.Exercises.Count; index++)
                         {
                             var exercise = workoutDraft.Exercises[index];
                             var position = index;
-                            <li class="strength-exercise-card">
+                            <li class="strength-exercise-card" data-exercise-index="@index" @key="exercise">
                                 <button class="strength-exercise-card-main" type="button" @onclick="() => OpenEditExercise(position)"
                                         aria-label="@($"Rediger øvelsen {exercise.Name}")" title="Rediger øvelse">
                                     <span class="strength-exercise-card-title">@(index + 1). @exercise.Name</span>
@@ -66,13 +69,19 @@
                                     }
                                 </button>
                                 <div class="strength-row-actions" aria-label="Handlinger for @exercise.Name">
-                                    <button type="button" class="strength-icon-action" disabled="@(index == 0)" @onclick="() => Move(position, -1)" @onclick:stopPropagation="true" aria-label="Flyt @exercise.Name op" title="Flyt op">↑</button>
-                                    <button type="button" class="strength-icon-action" disabled="@(index == workoutDraft.Exercises.Count - 1)" @onclick="() => Move(position, 1)" @onclick:stopPropagation="true" aria-label="Flyt @exercise.Name ned" title="Flyt ned">↓</button>
+                                    <button type="button" class="strength-icon-action strength-reorder-handle" data-exercise-handle
+                                            disabled="@(workoutDraft.Exercises.Count < 2)" aria-label="Flyt @exercise.Name"
+                                            aria-describedby="strength-reorder-help" aria-keyshortcuts="ArrowUp ArrowDown">
+                                        <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20">
+                                            <path d="M4 6h16M4 12h16M4 18h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                        </svg>
+                                    </button>
                                     <button type="button" class="strength-icon-action is-danger" @onclick="() => OpenExerciseDelete(position)" @onclick:stopPropagation="true" aria-label="Slet @exercise.Name" title="Slet øvelse">🗑</button>
                                 </div>
                             </li>
                         }
                     </ol>
+                    <p class="strength-reorder-status" role="status">@reorderStatus</p>
                 }
             </section>
 
@@ -94,10 +103,10 @@
         <form class="strength-modal-form" @onsubmit="SaveExercise" @onsubmit:preventDefault>
             <label class="strength-input-label" for="exercise-name">Navn på øvelse</label>
             <input class="strength-input" id="exercise-name" maxlength="100" @bind="exerciseDraft.Name" @bind:event="oninput" @bind:after="MarkExerciseDirty" placeholder="For eksempel Squat" />
-            <div class="strength-number-grid">
+            <div class="strength-exercise-number-grid">
                 <label class="strength-input-label">Vægt (kg)<input class="strength-input" type="number" min="0" max="1000" step="0.25" @bind="exerciseDraft.Weight" @bind:after="MarkExerciseDirty" /></label>
-                <label class="strength-input-label">Sæt<input class="strength-input" type="number" min="1" max="10" @bind="exerciseDraft.Sets" @bind:after="MarkExerciseDirty" /></label>
-                <label class="strength-input-label">Reps<input class="strength-input" type="number" min="1" max="30" @bind="exerciseDraft.Repetitions" @bind:after="MarkExerciseDirty" /></label>
+                <StrengthCountInput Id="exercise-sets" Label="Sæt" Maximum="10" @bind-Value="exerciseDraft.Sets" @bind-Value:after="MarkExerciseDirty" />
+                <StrengthCountInput Id="exercise-reps" Label="Gentagelser" Maximum="30" @bind-Value="exerciseDraft.Repetitions" @bind-Value:after="MarkExerciseDirty" />
             </div>
             <label class="strength-input-label" for="exercise-note">Note (valgfri)</label>
             <textarea class="strength-textarea" id="exercise-note" maxlength="250" rows="3" @bind="exerciseDraft.Note" @bind:event="oninput" @bind:after="MarkExerciseDirty" placeholder="Kort note til øvelsen"></textarea>
@@ -159,12 +168,52 @@
     private string? error;
     private string? exerciseError;
     private string? saveError;
+    private string? reorderStatus;
+    private ElementReference editor;
+    private DotNetObjectReference<StrengthWorkoutEditor>? editorReference;
+    private IJSObjectReference? reorderBinding;
+    private bool disposed;
 
     private string ExerciseModalTitle => editingIndex is null ? "Tilføj øvelse" : "Rediger øvelse";
     private bool HasExerciseToDelete => deleteExerciseIndex is not null;
     private string ExerciseDeleteDescription => deleteExerciseIndex is { } index && index < workoutDraft.Exercises!.Count
         ? $"Vil du slette øvelsen {workoutDraft.Exercises[index].Name}?"
         : "Vil du slette øvelsen?";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/strength-reorder.js");
+        if (disposed)
+        {
+            return;
+        }
+
+        editorReference = DotNetObjectReference.Create(this);
+        var binding = await module.InvokeAsync<IJSObjectReference>("attach", editor, editorReference);
+        if (disposed)
+        {
+            await binding.InvokeVoidAsync("dispose");
+            await binding.DisposeAsync();
+            return;
+        }
+        reorderBinding = binding;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        if (reorderBinding is not null)
+        {
+            await reorderBinding.InvokeVoidAsync("dispose");
+            await reorderBinding.DisposeAsync();
+        }
+        editorReference?.Dispose();
+    }
 
     protected override Task OnParametersSetAsync()
     {
@@ -353,21 +402,22 @@
         CloseExerciseDelete();
     }
 
-    private void Move(int index, int change)
+    [JSInvokable]
+    public void MoveExercise(int index, int target)
     {
-        if (busy)
+        var exercises = workoutDraft.Exercises!;
+        if (busy || exerciseModalOpen || index == target ||
+            index < 0 || index >= exercises.Count || target < 0 || target >= exercises.Count)
         {
             return;
         }
 
-        var target = index + change;
-        if (target < 0 || target >= workoutDraft.Exercises!.Count)
-        {
-            return;
-        }
-
-        (workoutDraft.Exercises[index], workoutDraft.Exercises[target]) = (workoutDraft.Exercises[target], workoutDraft.Exercises[index]);
+        var exercise = exercises[index];
+        exercises.RemoveAt(index);
+        exercises.Insert(target, exercise);
+        reorderStatus = $"{exercise.Name} flyttet til plads {target + 1} af {exercises.Count}.";
         MarkDirty();
+        StateHasChanged();
     }
 
     private void MarkDirty()

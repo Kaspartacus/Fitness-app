@@ -9,7 +9,7 @@ const adminEmail = 'browser-admin@example.test';
 async function screenshot(page, testInfo, name) {
   await page.screenshot({
     path: testInfo.outputPath(`${name}.png`),
-    mask: [page.locator('input')],
+    mask: [page.locator('input[type="password"], input[type="email"], input[autocomplete="email"]')],
     animations: 'disabled',
     timeout: 4000,
   });
@@ -60,7 +60,7 @@ async function submitLogin(page, email) {
 async function expectStrength(page) {
   await expect(page).toHaveURL('/styrke');
   await expect(page.getByRole('heading', { name: 'Styrketræning', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Ingen programmer endnu' })).toBeVisible();
+  await expect(page.getByText('Mine programmer', { exact: true })).toBeVisible();
 }
 
 test('registration shows that administrator approval is pending', async ({ page, evidence }) => {
@@ -188,4 +188,113 @@ test('strength navigation and browser history', async ({ page, evidence }, testI
     });
   }
   expect(pageErrors).toBe(0);
+});
+
+test('edit and finish a strength workout', async ({ page, evidence }, testInfo) => {
+  const programName = `Playwright styrke ${testInfo.project.name}`;
+  const exerciseList = page.locator('.strength-exercise-rows');
+  const names = ['Squat', 'Roning', 'Step-up', 'Bænkpres', 'Dødløft'];
+  const note = '1 minut pause mellem sæt';
+  const finish = page.getByRole('button', { name: 'Gem og afslut træning' });
+  const expectOrder = (order) => expect(exerciseList.locator('.strength-exercise-card-title'))
+    .toHaveText(order.map((name, index) => `${index + 1}. ${name}`));
+
+  await evidence.step('Create a workout and verify large set and rep buttons', async () => {
+    await page.goto('/login');
+    await submitLogin(page, adminEmail);
+    await expect(page.getByRole('heading', { name: 'Hej, Testadministrator' })).toBeVisible();
+    await page.goto('/styrke/opret');
+    await page.getByLabel('Navn på program').fill(programName);
+    await page.getByRole('button', { name: 'Opret program', exact: true }).click();
+    await expect(page.getByRole('heading', { name: programName })).toBeVisible();
+    await page.getByRole('link', { name: /Tilføj træning/ }).click();
+    await page.getByLabel('Navn på træning').fill('Styrkepas');
+    for (const name of names) {
+      await page.getByRole('button', { name: /Tilføj øvelse/ }).click();
+      const dialog = page.getByRole('dialog', { name: 'Tilføj øvelse' });
+      await dialog.getByLabel('Navn på øvelse').fill(name);
+      if (name === 'Squat') {
+        for (const label of ['Færre sæt', 'Flere sæt', 'Færre gentagelser', 'Flere gentagelser']) {
+          const bounds = await dialog.getByRole('button', { name: label, exact: true }).boundingBox();
+          expect(bounds?.width).toBeGreaterThanOrEqual(44);
+          expect(bounds?.height).toBeGreaterThanOrEqual(44);
+        }
+        await dialog.getByRole('button', { name: 'Flere sæt' }).click();
+        await dialog.getByRole('button', { name: 'Færre gentagelser' }).click();
+        await expect(dialog.getByRole('spinbutton', { name: 'Sæt' })).toHaveValue('4');
+        await expect(dialog.getByRole('spinbutton', { name: 'Gentagelser' })).toHaveValue('9');
+        await dialog.getByLabel('Note (valgfri)').fill(note);
+        await evidence.screenshot('strength-exercise-controls');
+      }
+      await dialog.getByRole('button', { name: 'Gem øvelse' }).click();
+      await expect(dialog).toBeHidden();
+    }
+    await expectOrder(names);
+  });
+
+  await evidence.step('Drag an exercise and reorder with the keyboard, then reload the saved workout', async () => {
+    const squat = exerciseList.getByRole('button', { name: 'Flyt Squat', exact: true });
+    const roning = exerciseList.getByRole('button', { name: 'Flyt Roning', exact: true });
+    await squat.scrollIntoViewIfNeeded();
+    const source = await squat.boundingBox();
+    const target = await roning.boundingBox();
+    const from = { x: Math.round(source.x + source.width / 2), y: Math.round(source.y + source.height / 2) };
+    const to = { x: Math.round(target.x + target.width / 2), y: Math.round(target.y + target.height / 2) };
+    if (testInfo.project.use.hasTouch) {
+      const cdp = await page.context().newCDPSession(page);
+      try {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] });
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [to] });
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      } finally {
+        await cdp.detach();
+      }
+    } else {
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(to.x, to.y, { steps: 6 });
+      await page.mouse.up();
+    }
+    await expectOrder(['Roning', 'Squat', ...names.slice(2)]);
+    await squat.press('ArrowDown');
+    const reordered = ['Roning', 'Step-up', 'Squat', ...names.slice(3)];
+    await expectOrder(reordered);
+    await expect(squat).toBeFocused();
+    await evidence.screenshot('strength-reordered');
+    await page.getByRole('button', { name: 'Gem træning', exact: true }).click();
+    await page.getByRole('link', { name: 'Rediger', exact: true }).click();
+    await expectOrder(reordered);
+    await page.getByRole('button', { name: 'Tilbage til program' }).click();
+  });
+
+  await evidence.step('Read the exercise note, use the sticky footer and retry after a save failure', async () => {
+    await page.getByRole('link', { name: 'Start træning', exact: true }).click();
+    const squat = page.locator('.strength-active-card').filter({ hasText: 'Squat' });
+    await expect(squat.getByText(note, { exact: true })).toBeVisible();
+    const footer = page.locator('.strength-workout-footer');
+    await expect(finish).toBeInViewport({ ratio: 1 });
+    const bottom = () => footer.evaluate((element) => element.getBoundingClientRect().bottom);
+    expect(await bottom()).toBeCloseTo(page.viewportSize().height, 0);
+    await evidence.screenshot('strength-active-note');
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const lastExercise = page.locator('.strength-active-card').filter({ hasText: 'Dødløft' });
+    await lastExercise.getByRole('checkbox').check();
+    await expect(lastExercise.getByRole('checkbox')).toBeChecked();
+    expect(await bottom()).toBeCloseTo(page.viewportSize().height, 0);
+    const lastBounds = await lastExercise.boundingBox();
+    const footerBounds = await footer.boundingBox();
+    expect(lastBounds.y + lastBounds.height).toBeLessThanOrEqual(footerBounds.y + 1);
+    await evidence.screenshot('strength-active-footer');
+
+    await page.route('**/complete', (route) => route.fulfill({ status: 503 }), { times: 1 });
+    await finish.click();
+    const confirm = page.getByRole('dialog', { name: 'Afslut træning?' });
+    await confirm.getByRole('button', { name: 'Gem træning' }).click();
+    await expect(footer.getByRole('alert')).toBeVisible();
+    await expect(lastExercise.getByRole('checkbox')).toBeChecked();
+    await evidence.screenshot('strength-active-save-error');
+    await finish.click();
+    await confirm.getByRole('button', { name: 'Gem træning' }).click();
+    await expect(page.getByRole('heading', { name: programName })).toBeVisible();
+  });
 });

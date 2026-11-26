@@ -28,6 +28,10 @@
             {
                 <article class="strength-active-card" @key="log.ProgramExerciseId">
                     <label class="strength-completion-row"><input type="checkbox" @bind="log.IsCompleted" /><span><strong>@log.Name</strong><small>@PerformanceLabel(log)</small></span></label>
+                    @if (!string.IsNullOrWhiteSpace(log.Note))
+                    {
+                        <p class="strength-active-note">@log.Note</p>
+                    }
                     <div class="strength-stepper-grid">
                         <div class="strength-stepper"><span>Vægt kg</span><div><button type="button" @onclick="() => ChangeWeight(log, -2.5m)">−</button><strong>@FormatWeight(log.Weight)</strong><button type="button" @onclick="() => ChangeWeight(log, 2.5m)">+</button></div></div>
                         <div class="strength-stepper"><span>Sæt</span><div><button type="button" @onclick="() => ChangeSets(log, -1)">−</button><strong>@log.Sets</strong><button type="button" @onclick="() => ChangeSets(log, 1)">+</button></div></div>
@@ -36,8 +40,10 @@
                 </article>
             }
         </div>
-        @if (saveError is not null) { <p class="strength-field-error" role="alert">@saveError</p> }
-        <button class="strength-primary-button strength-finish-button" @onclick="() => confirmFinish = true" disabled="@busy">Gem og afslut træning</button>
+        <footer class="strength-workout-footer">
+            @if (saveError is not null) { <p class="strength-field-error" role="alert">@saveError</p> }
+            <button class="strength-primary-button" @onclick="() => confirmFinish = true" disabled="@busy">Gem og afslut træning</button>
+        </footer>
     }
     <ModalDialog IsOpen="@confirmFinish" Title="Afslut træning?" Description="Din gennemførte træning gemmes, så den kan bruges som seneste præstation næste gang." InitialFocusSelector="[data-modal-cancel]" DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CloseFinish">
         <div class="app-modal-actions">
@@ -160,6 +166,7 @@
     {
         public Guid ProgramExerciseId { get; } = exercise.Id;
         public string Name { get; } = exercise.Name;
+        public string? Note { get; } = exercise.Note;
         public decimal PlannedWeight { get; } = exercise.Weight;
         public int PlannedSets { get; } = exercise.Sets;
         public int PlannedRepetitions { get; } = exercise.Repetitions;

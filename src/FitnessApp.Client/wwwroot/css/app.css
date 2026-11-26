@@ -965,6 +965,12 @@ a:focus-visible {
 .app-modal-content .nutrition-input { width: 100%; min-height: 2.85rem; box-sizing: border-box; border: 1px solid var(--color-page-muted); border-radius: .7rem; padding: .72rem .78rem; background: var(--strength-control); color: var(--strength-text); font: inherit; }
 .nutrition-custom-food-form .strength-input:focus, .nutrition-food-detail .nutrition-grams input:focus, .app-modal-content .nutrition-input:focus { border: 2px solid var(--color-focus); outline: none; }
 .strength-number-grid, .strength-stepper-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; }
+.strength-exercise-number-grid { display: grid; gap: 0.75rem; }
+.strength-count-field { display: grid; gap: 0.35rem; }
+.strength-count-controls { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 0.45rem; }
+.strength-count-controls .strength-icon-action { min-width: 44px; min-height: 44px; font-size: 1.15rem; }
+.strength-count-controls input { min-width: 0; min-height: 44px; text-align: center; appearance: textfield; }
+.strength-count-controls input::-webkit-inner-spin-button { appearance: none; }
 .strength-added-exercises { display: grid; gap: 0.65rem; }
 .strength-exercise-rows { display: grid; gap: 0.55rem; margin: 0; padding: 0; list-style: none; }
 .strength-exercise-card { display: flex; align-items: stretch; justify-content: space-between; gap: 0.55rem; border: 1px solid var(--strength-border); border-radius: 0.8rem; background: var(--strength-surface); overflow: hidden; }
@@ -975,6 +981,12 @@ a:focus-visible {
 .strength-exercise-card-title { font-size: 0.92rem; font-weight: 760; }
 .strength-exercise-card-values, .strength-exercise-card-note { color: var(--strength-muted); font-size: 0.76rem; line-height: 1.4; }
 .strength-exercise-card-note { color: var(--color-label); }
+.strength-reorder-help { margin: 0 0 0.6rem; font-size: 0.82rem; }
+.strength-icon-action.strength-reorder-handle { min-width: 44px; min-height: 44px; touch-action: none; user-select: none; cursor: grab; }
+.strength-exercise-card.is-reordering { opacity: 0.65; }
+.strength-exercise-card.is-drop-target { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+.strength-form-page .strength-exercise-card .strength-row-actions { flex-basis: auto; align-items: center; }
+.strength-reorder-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .strength-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.3rem; }
 .strength-exercise-card .strength-row-actions { align-content: center; flex: 0 0 2.25rem; justify-content: center; padding: 0.45rem 0.4rem; border-left: 1px solid var(--strength-border); background: var(--color-row-action); }
 .strength-icon-action { display: grid; width: 1.9rem; height: 1.9rem; place-items: center; border: 1px solid var(--strength-border); border-radius: 0.42rem; background: var(--strength-raised); color: var(--strength-text); font: inherit; font-size: 0.8rem; cursor: pointer; }
@@ -1000,13 +1012,25 @@ a:focus-visible {
 .strength-schedule-choices { display: grid; border-top: 1px solid var(--color-page-border); }
 .strength-schedule-choice { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 1rem; border: 0; border-bottom: 1px solid var(--color-page-border); padding: 1rem .15rem; background: transparent; color: var(--strength-text); font: inherit; text-align: left; cursor: pointer; }
 .strength-schedule-choice:hover { background: var(--color-row-hover); }.strength-schedule-choice span:first-child { display: grid; gap: .16rem; }.strength-schedule-choice small { color: var(--strength-muted); }.strength-schedule-choice.is-selected { color: var(--strength-accent); }
-.strength-active-page { padding-bottom: 7rem; }
+.strength-app.strength-active-page { display: flex; flex-direction: column; padding-bottom: 0; }
 .strength-timer { margin: .18rem 0 0 !important; color: var(--strength-accent) !important; font-variant-numeric: tabular-nums; }
 .strength-active-progress { margin-bottom: 1rem; }.strength-active-progress > div:first-child { display: flex; justify-content: space-between; margin-bottom: .6rem; font-size: .84rem; }.strength-active-progress span { color: var(--strength-accent); }
 .strength-progress-track { height: .45rem; overflow: hidden; border-radius: 99px; background: var(--color-chart-track); }.strength-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--color-chart-primary); transition: width .2s ease; }
 .strength-active-card { padding: 1rem; }.strength-completion-row { display: flex; align-items: flex-start; gap: .7rem; cursor: pointer; }.strength-completion-row input { width: 1.15rem; height: 1.15rem; margin-top: .1rem; accent-color: var(--color-chart-primary); }.strength-completion-row strong, .strength-completion-row small { display: block; }.strength-completion-row small { margin-top: .2rem; color: var(--strength-muted); font-size: .75rem; }
 .strength-stepper-grid { margin-top: 1rem; }.strength-stepper { display: grid; gap: .35rem; min-width: 0; }.strength-stepper > span { color: var(--strength-muted); font-size: .68rem; }.strength-stepper > div { display: grid; grid-template-columns: 1.75rem 1fr 1.75rem; align-items: center; min-height: 2.2rem; border: 1px solid var(--strength-border); border-radius: .55rem; background: var(--strength-control); text-align: center; }.strength-stepper button { height: 100%; border: 0; background: transparent; color: var(--strength-accent); font: inherit; font-size: 1.05rem; cursor: pointer; }.strength-stepper strong { min-width: 0; font-size: .81rem; }
-.strength-finish-button { position: fixed; z-index: 4; right: 50%; bottom: 5.25rem; width: min(calc(100% - 2.5rem), 24.5rem); transform: translateX(50%); box-shadow: 0 .7rem 1.6rem var(--color-shadow-strong); }
+.strength-app .strength-active-note { margin: 0.6rem 0 0; color: var(--color-label); font-size: 0.82rem; overflow-wrap: anywhere; }
+.strength-workout-footer {
+    position: sticky;
+    z-index: 4;
+    bottom: 0;
+    display: grid;
+    justify-items: center;
+    gap: 0.5rem;
+    margin-top: auto;
+    padding: 0.8rem 0 calc(0.8rem + env(safe-area-inset-bottom));
+    background: var(--strength-bg);
+}
+.strength-workout-footer .strength-primary-button { width: min(100%, 26rem); }
 
 /* Running — translated from the current Figma Make running flow and extended for real data states. */
 .running-app { --running-success: var(--color-success); --running-warning: var(--color-chart-warning); --running-danger: var(--color-chart-danger); }
@@ -1206,7 +1230,8 @@ a:focus-visible {
     .strength-app.strength-with-bottom-nav,
     .dashboard-page.dashboard-with-bottom-nav { padding-bottom: 3rem; }
     .strength-program-grid, .strength-workout-list { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
-    .strength-finish-button { bottom: 2rem; width: min(26rem, calc(100% - 3rem)); }
+    .strength-exercise-number-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .strength-exercise-number-grid > label { grid-column: 1 / -1; }
     .strength-app.calendar-app, .strength-app.calendar-detail-page { width: min(calc(100% - 3rem), 52rem); }
 }
 
