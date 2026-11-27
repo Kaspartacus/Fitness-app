@@ -373,3 +373,84 @@ test('find a catalog exercise and save a timed workout', async ({ page, evidence
     await expect(plank.getByText(/Sidst: .*1 min 26 sek/)).toBeVisible();
   });
 });
+
+test('enter a weight and reuse personal catalog history across programs', async ({ page, evidence }, testInfo) => {
+  const card = page.locator('.strength-active-card').filter({ hasText: 'Squat' });
+  const weight = card.getByRole('textbox', { name: 'Vægt (kg)' });
+  const finish = page.getByRole('button', { name: 'Gem og afslut træning' });
+
+  async function createProgram(name, plannedWeight) {
+    await page.goto('/styrke/opret');
+    await page.getByLabel('Navn på program').fill(name);
+    await page.getByRole('button', { name: 'Opret program', exact: true }).click();
+    await page.getByRole('link', { name: /Tilføj træning/ }).click();
+    await page.getByLabel('Navn på træning').fill('Squatpas');
+    await page.getByRole('button', { name: /Tilføj øvelse/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Tilføj øvelse' });
+    await dialog.getByRole('button', { name: 'Vælg fra katalog' }).click();
+    await dialog.getByRole('searchbox').fill('knæbøjning');
+    await dialog.getByRole('button', { name: 'Vælg Squat', exact: true }).click();
+    await dialog.getByRole('spinbutton', { name: 'Vægt (kg)' }).fill(plannedWeight);
+    await dialog.getByRole('spinbutton', { name: 'Sæt', exact: true }).fill('2');
+    await dialog.getByRole('spinbutton', { name: 'Gentagelser', exact: true }).fill('15');
+    await dialog.getByRole('button', { name: 'Gem øvelse' }).click();
+    await page.getByRole('button', { name: 'Gem træning', exact: true }).click();
+    await expect(page.getByRole('heading', { name })).toBeVisible();
+    await page.getByRole('link', { name: 'Start træning', exact: true }).click();
+  }
+
+  await evidence.step('Reject invalid weight and save a Danish decimal weight', async () => {
+    await page.goto('/login');
+    await submitLogin(page, adminEmail);
+    await expect(page.getByRole('heading', { name: 'Hej, Testadministrator' })).toBeVisible();
+    const program = `Historik A ${testInfo.project.name}`;
+    await createProgram(program, '0');
+    await weight.fill('25,5');
+    await weight.press('Tab');
+    await expect(weight).toHaveValue('25,5');
+    await expect(weight).not.toHaveAttribute('aria-invalid', 'true');
+    await weight.fill('1001');
+    await weight.press('Tab');
+    await expect(weight).toHaveAttribute('aria-invalid', 'true');
+    await expect(finish).toBeDisabled();
+    await evidence.screenshot('strength-weight-validation');
+
+    await card.getByRole('button', { name: 'Øg vægten' }).click();
+    await expect(weight).toHaveValue('28');
+    await card.getByRole('button', { name: 'Sænk vægten' }).click();
+    await expect(weight).toHaveValue('25,5');
+    await expect(weight).not.toHaveAttribute('aria-invalid', 'true');
+    await card.getByRole('checkbox').check();
+    await finish.click();
+    await page.getByRole('dialog', { name: 'Afslut træning?' }).getByRole('button', { name: 'Gem træning' }).click();
+    await expect(page.getByRole('heading', { name: program })).toBeVisible();
+  });
+
+  await evidence.step('Show the prior effort and prefer an explicit plan over the last weight', async () => {
+    const program = `Historik B ${testInfo.project.name}`;
+    await createProgram(program, '35');
+    await expect(weight).toHaveValue('35');
+    await expect(card.getByText('Sidst: 25,5 kg · 2 × 15', { exact: true })).toBeVisible();
+    await evidence.screenshot('strength-weight-planned-with-history');
+
+    await weight.fill('38.25');
+    await weight.press('Tab');
+    await expect(weight).toHaveValue('38,25');
+    await page.getByRole('link', { name: 'Afbryd og gå tilbage' }).click();
+    await page.getByRole('button', { name: 'Forlad uden at gemme' }).click();
+    await expect(page.getByRole('heading', { name: program })).toBeVisible();
+  });
+
+  await evidence.step('Prefill the last saved weight when the plan has no weight', async () => {
+    await page.getByRole('link', { name: 'Rediger', exact: true }).click();
+    await page.getByRole('button', { name: 'Rediger øvelsen Squat' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Rediger øvelse' });
+    await dialog.getByRole('spinbutton', { name: 'Vægt (kg)' }).fill('0');
+    await dialog.getByRole('button', { name: 'Gem øvelse' }).click();
+    await page.getByRole('button', { name: 'Gem træning', exact: true }).click();
+    await page.getByRole('link', { name: 'Start træning', exact: true }).click();
+    await expect(weight).toHaveValue('25,5');
+    await expect(card.getByText('Sidst: 25,5 kg · 2 × 15', { exact: true })).toBeVisible();
+    await evidence.screenshot('strength-weight-prefilled');
+  });
+});

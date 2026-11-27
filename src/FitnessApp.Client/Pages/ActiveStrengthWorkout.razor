@@ -39,7 +39,22 @@
                         }
                         else
                         {
-                            <div class="strength-stepper"><span>Vægt kg</span><div><button type="button" @onclick="() => ChangeWeight(log, -2.5m)">−</button><strong>@FormatWeight(log.Weight)</strong><button type="button" @onclick="() => ChangeWeight(log, 2.5m)">+</button></div></div>
+                            <div class="strength-stepper strength-weight-stepper">
+                                <label for="@WeightInputId(log)">Vægt (kg)</label>
+                                <div>
+                                    <button type="button" aria-label="Sænk vægten" @onclick="() => ChangeWeight(log, -2.5m)">−</button>
+                                    <input class="strength-weight-input" id="@WeightInputId(log)" type="text" inputmode="decimal"
+                                           aria-invalid="@(log.RejectedWeight is not null ? "true" : null)"
+                                           aria-describedby="@(log.RejectedWeight is not null ? WeightErrorId(log) : null)"
+                                           @bind:get="log.RejectedWeight ?? FormatWeight(log.Weight)"
+                                           @bind:set="value => SetWeight(log, value)" />
+                                    <button type="button" aria-label="Øg vægten" @onclick="() => ChangeWeight(log, 2.5m)">+</button>
+                                </div>
+                                @if (log.RejectedWeight is not null)
+                                {
+                                    <p class="strength-field-error" id="@WeightErrorId(log)" role="alert">@WeightValidationMessage</p>
+                                }
+                            </div>
                         }
                         <div class="strength-stepper"><span>Sæt</span><div><button type="button" @onclick="() => ChangeSets(log, -1)">−</button><strong>@log.Sets</strong><button type="button" @onclick="() => ChangeSets(log, 1)">+</button></div></div>
                         @if (log.DurationSeconds is null)
@@ -52,7 +67,7 @@
         </div>
         <footer class="strength-workout-footer">
             @if (saveError is not null) { <p class="strength-field-error" role="alert">@saveError</p> }
-            <button class="strength-primary-button" @onclick="() => confirmFinish = true" disabled="@busy">Gem og afslut træning</button>
+            <button class="strength-primary-button" @onclick="() => confirmFinish = true" disabled="@(busy || HasInvalidWeight)">Gem og afslut træning</button>
         </footer>
     }
     <ModalDialog IsOpen="@confirmFinish" Title="Afslut træning?" Description="Din gennemførte træning gemmes, så den kan bruges som seneste præstation næste gang." InitialFocusSelector="[data-modal-cancel]" DismissOnBackdrop="@(!busy)" DismissOnEscape="@(!busy)" ShowCloseButton="@(!busy)" OnDismiss="CloseFinish">
@@ -89,6 +104,9 @@
     private string? saveError;
     private DateTime startedAt;
     private Timer? timer;
+    private static readonly NumberFormatInfo WeightNumberFormat = new() { NumberDecimalSeparator = "," };
+    private const string WeightValidationMessage = "Indtast en vægt fra 0 til 1.000 kg med højst to decimaler.";
+    private bool HasInvalidWeight => logs.Any(log => log.RejectedWeight is not null);
 
     private string BackUrl => CalendarRoute.BackPath(RequestedMonth, RequestedDate, $"/styrke/{ProgramId}");
     private DateOnly? ScheduledOccurrenceDate => DateOnly.TryParseExact(RequestedOccurrenceDate, "yyyy-MM-dd",
@@ -121,6 +139,11 @@
     private async Task CompleteAsync()
     {
         if (busy) return;
+        if (HasInvalidWeight)
+        {
+            confirmFinish = false;
+            return;
+        }
         if (logs.Any(log => log.DurationSeconds is <= 0))
         {
             saveError = "Angiv en varighed på mindst ét sekund for tidsøvelser.";
@@ -179,10 +202,33 @@
         Navigation.NavigateTo(url);
     }
 
-    private static void ChangeWeight(WorkoutLog log, decimal change) => log.Weight = Math.Clamp(log.Weight + change, 0, 1000);
+    private static string WeightInputId(WorkoutLog log) => $"weight-{log.ProgramExerciseId}";
+    private static string WeightErrorId(WorkoutLog log) => $"weight-error-{log.ProgramExerciseId}";
+    private static void ChangeWeight(WorkoutLog log, decimal change)
+    {
+        log.Weight = Math.Clamp(log.Weight + change, 0, 1000);
+        log.RejectedWeight = null;
+    }
+
+    private static void SetWeight(WorkoutLog log, string input)
+    {
+        const NumberStyles styles = NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign;
+        var text = input.Trim();
+        if ((decimal.TryParse(text, styles, WeightNumberFormat, out var weight) ||
+             decimal.TryParse(text, styles, CultureInfo.InvariantCulture, out weight)) &&
+            weight is >= 0 and <= 1000 && decimal.Round(weight, 2) == weight)
+        {
+            log.Weight = weight;
+            log.RejectedWeight = null;
+        }
+        else
+        {
+            log.RejectedWeight = input;
+        }
+    }
     private static void ChangeSets(WorkoutLog log, int change) => log.Sets = Math.Clamp(log.Sets + change, 1, 10);
     private static void ChangeReps(WorkoutLog log, int change) => log.Repetitions = Math.Clamp(log.Repetitions + change, 1, 30);
-    private static string FormatWeight(decimal weight) => weight.ToString("0.##");
+    private static string FormatWeight(decimal weight) => weight.ToString("0.##", WeightNumberFormat);
     private static string PerformanceLabel(WorkoutLog log)
     {
         if (log.PlannedDurationSeconds is { } plannedDuration)
@@ -211,7 +257,8 @@
         public int? PreviousSets { get; } = exercise.PreviousSets;
         public int? PreviousRepetitions { get; } = exercise.PreviousRepetitions;
         public int? PreviousDurationSeconds { get; } = exercise.PreviousDurationSeconds;
-        public decimal Weight { get; set; } = exercise.Weight;
+        public decimal Weight { get; set; } = exercise.Weight > 0 ? exercise.Weight : exercise.PreviousWeight ?? exercise.Weight;
+        public string? RejectedWeight { get; set; }
         public int Sets { get; set; } = exercise.Sets;
         public int Repetitions { get; set; } = exercise.Repetitions;
         public int? DurationSeconds { get; set; } = exercise.DurationSeconds;

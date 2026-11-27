@@ -1036,6 +1036,24 @@ a:focus-visible {
 .strength-progress-track { height: .45rem; overflow: hidden; border-radius: 99px; background: var(--color-chart-track); }.strength-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--color-chart-primary); transition: width .2s ease; }
 .strength-active-card { padding: 1rem; }.strength-completion-row { display: flex; align-items: flex-start; gap: .7rem; cursor: pointer; }.strength-completion-row input { width: 1.15rem; height: 1.15rem; margin-top: .1rem; accent-color: var(--color-chart-primary); }.strength-completion-row strong, .strength-completion-row small { display: block; }.strength-completion-row small { margin-top: .2rem; color: var(--strength-muted); font-size: .75rem; }
 .strength-stepper-grid { margin-top: 1rem; }.strength-stepper { display: grid; gap: .35rem; min-width: 0; }.strength-stepper > span { color: var(--strength-muted); font-size: .68rem; }.strength-stepper > div { display: grid; grid-template-columns: 1.75rem 1fr 1.75rem; align-items: center; min-height: 2.2rem; border: 1px solid var(--strength-border); border-radius: .55rem; background: var(--strength-control); text-align: center; }.strength-stepper button { height: 100%; border: 0; background: transparent; color: var(--strength-accent); font: inherit; font-size: 1.05rem; cursor: pointer; }.strength-stepper strong { min-width: 0; font-size: .81rem; }
+.strength-weight-stepper > label { color: var(--strength-muted); font-size: .68rem; }
+.strength-weight-stepper > div { grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem; min-height: 2.75rem; }
+.strength-weight-input {
+    width: 100%;
+    min-width: 0;
+    min-height: 2.625rem;
+    border: 0;
+    background: transparent;
+    color: var(--strength-text);
+    text-align: center;
+}
+.strength-weight-input:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+.strength-weight-input[aria-invalid="true"] { outline: 2px solid var(--color-error-text); outline-offset: -2px; }
+
+@media (max-width: 47.99rem) {
+    .strength-stepper-grid:has(.strength-weight-stepper) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .strength-weight-stepper { grid-column: 1 / -1; }
+}
 .strength-app .strength-active-note { margin: 0.6rem 0 0; color: var(--color-label); font-size: 0.82rem; overflow-wrap: anywhere; }
 .strength-workout-footer {
     position: sticky;

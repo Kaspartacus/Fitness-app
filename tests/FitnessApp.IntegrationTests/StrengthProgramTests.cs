@@ -185,6 +185,75 @@ public sealed class StrengthProgramTests
     }
 
     [Fact]
+    public async Task CatalogHistoryUsesOnlyTheOwnersLatestCompletedMeasurementAcrossPrograms()
+    {
+        using var factory = new AuthWebApplicationFactory();
+        await factory.InitializeDatabaseAsync();
+        using var owner = await Login(factory);
+        using var other = await Login(factory);
+        var draft = new SaveProgramRequest
+        {
+            Name = "Styrkepas",
+            Workouts =
+            [
+                new WorkoutRequest
+                {
+                    Name = "Pas",
+                    Exercises =
+                    [
+                        new ExerciseRequest { CatalogExerciseId = "squat", Weight = 35 },
+                        new ExerciseRequest { CatalogExerciseId = "plank", DurationSeconds = 45, Repetitions = 1 },
+                        new ExerciseRequest { Name = "Squat", Weight = 10 }
+                    ]
+                }
+            ]
+        };
+        var first = await Create(owner, draft);
+        var second = await Create(owner, draft);
+        var foreign = await Create(other, draft);
+        var secondWorkout = Assert.Single(second.Workouts);
+        var activePath = $"{Programs}/{second.Id}/workouts/{secondWorkout.Id}";
+
+        await Complete(owner, first, 17.5m, 60);
+        await Complete(owner, first, 25.5m, 86);
+        await Complete(owner, first, 50m, 100, isCompleted: false);
+        await Complete(other, foreign, 90m, 150);
+
+        var active = await owner.GetFromJsonAsync<PlannedWorkoutResponse>(activePath);
+        Assert.NotNull(active);
+        var squat = Assert.Single(active.Exercises, exercise => exercise.CatalogExerciseId == "squat");
+        Assert.Equal(35m, squat.Weight);
+        Assert.Equal(25.5m, squat.PreviousWeight);
+        Assert.Equal(2, squat.PreviousSets);
+        Assert.Equal(15, squat.PreviousRepetitions);
+        Assert.Null(squat.PreviousDurationSeconds);
+        var plank = Assert.Single(active.Exercises, exercise => exercise.CatalogExerciseId == "plank");
+        Assert.Equal(86, plank.PreviousDurationSeconds);
+        Assert.Equal(2, plank.PreviousSets);
+        Assert.Null(plank.PreviousWeight);
+        Assert.Null(plank.PreviousRepetitions);
+        Assert.Null(Assert.Single(active.Exercises, exercise => exercise.CatalogExerciseId is null).PreviousWeight);
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(activePath)).StatusCode);
+
+        async Task Complete(HttpClient client, ProgramResponse program, decimal weight, int duration, bool isCompleted = true)
+        {
+            var workout = program.Workouts[0];
+            var completion = Completion(workout);
+            var exercises = completion.Exercises!;
+            exercises[0].Weight = weight;
+            exercises[0].Sets = 2;
+            exercises[0].Repetitions = 15;
+            exercises[0].IsCompleted = isCompleted;
+            exercises[1].DurationSeconds = duration;
+            exercises[1].Sets = 2;
+            exercises[1].IsCompleted = isCompleted;
+            exercises[2].IsCompleted = true;
+            var response = await client.PostAsJsonAsync($"{Programs}/{program.Id}/workouts/{workout.Id}/complete", completion);
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
+    }
+
+    [Fact]
     public async Task ProgramPersistsMultipleOrderedWorkoutsWithExerciseNotes()
     {
         using var factory = new AuthWebApplicationFactory();
@@ -346,9 +415,9 @@ public sealed class StrengthProgramTests
         return client;
     }
 
-    private static async Task<ProgramResponse> Create(HttpClient client)
+    private static async Task<ProgramResponse> Create(HttpClient client, SaveProgramRequest? draft = null)
     {
-        var response = await client.PostAsJsonAsync(Programs, Valid());
+        var response = await client.PostAsJsonAsync(Programs, draft ?? Valid());
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<ProgramResponse>())!;
     }
