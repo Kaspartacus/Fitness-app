@@ -1,0 +1,118 @@
+@using System.Text
+@using FitnessApp.Contracts.Strength
+@inject StrengthProgramClient Programs
+
+<section class="strength-catalog" aria-label="Øvelseskatalog">
+    <label class="strength-input-label" for="strength-catalog-search">Søg efter en øvelse</label>
+    <input class="strength-input" id="strength-catalog-search" type="search" maxlength="100"
+           @bind="search" @bind:event="oninput" />
+    <label class="strength-input-label" for="strength-catalog-category">Kategori</label>
+    <select class="strength-input" id="strength-catalog-category" @bind="category">
+        <option value="">Alle kategorier</option>
+        @foreach (var entry in Categories)
+        {
+            <option value="@entry.Key">@entry.Value</option>
+        }
+    </select>
+
+    @if (loading)
+    {
+        <p role="status">Indlæser øvelser…</p>
+    }
+    else if (error is not null)
+    {
+        <p role="alert">@error</p>
+        <button class="strength-secondary-button" type="button" @onclick="LoadAsync">Prøv igen</button>
+    }
+    else
+    {
+        var matches = MatchingExercises();
+        <p class="strength-catalog-status" role="status">
+            @(matches.Length switch
+            {
+                0 => "Ingen øvelser matcher din søgning.",
+                1 => "1 øvelse fundet",
+                _ => $"{matches.Length} øvelser fundet"
+            })
+        </p>
+        @if (matches.Length > 0)
+        {
+            <ul class="strength-catalog-results">
+                @foreach (var exercise in matches)
+                {
+                    <li class="strength-catalog-entry" @key="exercise.Id">
+                        <img class="strength-catalog-image" src="@($"/images/exercises/{exercise.Id}.webp")"
+                             alt="@exercise.ImageAlt" loading="lazy" width="72" height="72" />
+                        <div>
+                            <strong>@exercise.Name</strong>
+                            <p>@Categories.GetValueOrDefault(exercise.Category) · @(exercise.IsTimed ? "Tid" : "Kg")</p>
+                        </div>
+                        <button class="strength-secondary-button" type="button" aria-label="Vælg @exercise.Name"
+                                @onclick="() => Selected.InvokeAsync(exercise)">Vælg</button>
+                    </li>
+                }
+            </ul>
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public EventCallback<CatalogExerciseResponse> Selected { get; set; }
+
+    private static readonly Dictionary<string, string> Categories = new(StringComparer.Ordinal)
+    {
+        ["back"] = "Ryg",
+        ["legs"] = "Ben",
+        ["arms"] = "Arme",
+        ["chest"] = "Bryst",
+        ["core"] = "Mave og core",
+        ["full-body"] = "Hele kroppen"
+    };
+
+    private IReadOnlyList<CatalogExerciseResponse> exercises = [];
+    private string search = "";
+    private string category = "";
+    private bool loading;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        error = null;
+        var response = await Programs.GetCatalogAsync();
+        loading = false;
+        exercises = response.Value ?? [];
+        error = response.Error;
+    }
+
+    private CatalogExerciseResponse[] MatchingExercises()
+    {
+        var query = Normalize(search);
+        return exercises.Where(exercise => (category.Length == 0 || category == exercise.Category) &&
+            (query.Length == 0 || Normalize(exercise.Name).Contains(query, StringComparison.Ordinal) ||
+             exercise.SearchAliases.Any(alias => Normalize(alias).Contains(query, StringComparison.Ordinal))))
+            .ToArray();
+    }
+
+    private static string Normalize(string value)
+    {
+        var builder = new StringBuilder();
+        foreach (var character in value.ToLowerInvariant().Normalize(NormalizationForm.FormD))
+        {
+            switch (character)
+            {
+                case 'æ': builder.Append("ae"); break;
+                case 'ø': builder.Append('o'); break;
+                default:
+                    if (char.IsLetterOrDigit(character))
+                    {
+                        builder.Append(character);
+                    }
+                    break;
+            }
+        }
+        return builder.ToString();
+    }
+}

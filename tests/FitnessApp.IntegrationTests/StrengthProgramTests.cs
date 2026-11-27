@@ -72,6 +72,116 @@ public sealed class StrengthProgramTests
         Assert.Equal(["Lunges", "Squat"], workout.Exercises.Select(exercise => exercise.Name).Order());
         Assert.Equal([0, 1], workout.Exercises.OrderBy(exercise => exercise.Position).Select(exercise => exercise.Position));
         Assert.Equal("Roligt tempo", workout.Exercises.Single(exercise => exercise.Name == "Squat").Note);
+        Assert.All(workout.Exercises, exercise =>
+        {
+            Assert.Null(exercise.CatalogExerciseId);
+            Assert.Null(exercise.DurationSeconds);
+        });
+        Assert.Equal(80m, workout.Exercises.Single(exercise => exercise.Name == "Squat").Weight);
+        Assert.Equal(12, await upgraded.StrengthCatalog.CountAsync());
+    }
+
+    [Fact]
+    public async Task CatalogIdentityAndDurationSurviveTemplateChangesAndCompletionRetries()
+    {
+        using var factory = new AuthWebApplicationFactory();
+        await factory.InitializeDatabaseAsync();
+        using var owner = await Login(factory);
+        using var other = await Login(factory);
+
+        var catalog = await owner.GetFromJsonAsync<CatalogExerciseResponse[]>("/api/strength/exercises");
+        Assert.NotNull(catalog);
+        Assert.Equal(12, catalog.Select(exercise => exercise.Id).Distinct().Count());
+        var plank = Assert.Single(catalog, exercise => exercise.Id == "plank");
+        Assert.Equal("Plank", plank.Name);
+        Assert.Contains("planke", plank.SearchAliases);
+        Assert.True(plank.IsTimed);
+
+        var draft = new SaveProgramRequest
+        {
+            Name = "Core",
+            Workouts =
+            [
+                new WorkoutRequest
+                {
+                    Name = "Core",
+                    Exercises =
+                    [
+                        new ExerciseRequest { CatalogExerciseId = "plank", Name = "Et andet navn", DurationSeconds = 75, Repetitions = 1 },
+                        new ExerciseRequest { CatalogExerciseId = "squat", Name = "Knæbøjning", Weight = 20 }
+                    ]
+                }
+            ]
+        };
+        var input = draft.Workouts[0].Exercises![0];
+        input.CatalogExerciseId = "unknown-exercise";
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(Programs, draft)).StatusCode);
+        input.CatalogExerciseId = "plank";
+        input.Weight = 20;
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(Programs, draft)).StatusCode);
+        input.Weight = 0;
+        var created = await CreateCatalogProgram(draft);
+        var secondProgram = await CreateCatalogProgram(draft);
+        var workout = Assert.Single(created.Workouts);
+        var timed = workout.Exercises[0];
+        Assert.Equal("plank", timed.CatalogExerciseId);
+        Assert.Equal("Plank", timed.Name);
+        Assert.Equal(75, timed.DurationSeconds);
+        Assert.Equal("squat", workout.Exercises[1].CatalogExerciseId);
+        Assert.Null(workout.Exercises[1].DurationSeconds);
+        Assert.Equal(20m, workout.Exercises[1].Weight);
+        Assert.Equal(timed.CatalogExerciseId, secondProgram.Workouts[0].Exercises[0].CatalogExerciseId);
+        Assert.NotEqual(timed.Id, secondProgram.Workouts[0].Exercises[0].Id);
+
+        var completion = Completion(workout);
+        var completionPath = $"{Programs}/{created.Id}/workouts/{workout.Id}/complete";
+        completion.Exercises![0].DurationSeconds = null;
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(completionPath, completion)).StatusCode);
+        completion.Exercises[0].DurationSeconds = 86;
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PostAsJsonAsync(completionPath, completion)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PostAsJsonAsync(completionPath, completion)).StatusCode);
+        completion.Exercises[0].DurationSeconds = 87;
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync(completionPath, completion)).StatusCode);
+
+        var updated = Draft(created);
+        updated.Workouts![0].Exercises![0].DurationSeconds = 90;
+        Assert.Equal(HttpStatusCode.OK, (await owner.PutAsJsonAsync($"{Programs}/{created.Id}", updated)).StatusCode);
+        var active = await owner.GetFromJsonAsync<PlannedWorkoutResponse>($"{Programs}/{created.Id}/workouts/{workout.Id}");
+        Assert.Equal(90, active!.Exercises[0].DurationSeconds);
+        Assert.Equal(86, active.Exercises[0].PreviousDurationSeconds);
+
+        var current = (await owner.GetFromJsonAsync<ProgramResponse>($"{Programs}/{created.Id}"))!;
+        var oldClientDraft = Draft(current);
+        oldClientDraft.Workouts![0].Exercises![0].CatalogExerciseId = null;
+        oldClientDraft.Workouts[0].Exercises![0].DurationSeconds = null;
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync($"{Programs}/{created.Id}", oldClientDraft)).StatusCode);
+
+        var replacement = Draft(current);
+        replacement.Workouts![0].Exercises![0].CatalogExerciseId = "side-plank";
+        var replacementResponse = await owner.PutAsJsonAsync($"{Programs}/{created.Id}", replacement);
+        Assert.Equal(HttpStatusCode.OK, replacementResponse.StatusCode);
+        var replaced = (await replacementResponse.Content.ReadFromJsonAsync<ProgramResponse>())!.Workouts[0].Exercises[0];
+        Assert.Equal("side-plank", replaced.CatalogExerciseId);
+        Assert.NotEqual(timed.Id, replaced.Id);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(completionPath, Completion(workout))).StatusCode);
+        completion.Exercises[0].DurationSeconds = 86;
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PostAsJsonAsync(completionPath, completion)).StatusCode);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+        var completedId = await db.CompletedWorkouts.Select(item => item.Id).SingleAsync();
+        var historyPath = $"/api/strength/completions/{completedId}";
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(historyPath)).StatusCode);
+        var history = await owner.GetFromJsonAsync<CompletedWorkoutResponse>(historyPath);
+        Assert.Equal("plank", history!.Exercises[0].CatalogExerciseId);
+        Assert.Equal(86, history.Exercises[0].DurationSeconds);
+
+        async Task<ProgramResponse> CreateCatalogProgram(SaveProgramRequest request)
+        {
+            var response = await owner.PostAsJsonAsync(Programs, request);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return (await response.Content.ReadFromJsonAsync<ProgramResponse>())!;
+        }
     }
 
     [Fact]
@@ -220,6 +330,7 @@ public sealed class StrengthProgramTests
         if (state == "rejected") await factory.SetApprovalStatusAsync(user.Id, AccountApprovalStatus.Rejected);
         if (state == "revoked") await client.PostAsync("/api/auth/logout", null);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/strength/overview")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/strength/exercises")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"{Programs}/{program.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PutAsJsonAsync($"{Programs}/{program.Id}/schedule", new ScheduleResponse(program.Version, Week()))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync($"{Programs}/{program.Id}/workouts/{program.Workouts[0].Id}/complete", Completion(program.Workouts[0]))).StatusCode);
@@ -253,7 +364,7 @@ public sealed class StrengthProgramTests
     };
 
     private static SaveProgramRequest Draft(ProgramResponse program) => new() { Name = program.Name, Version = program.Version, Workouts = program.Workouts.Select(Copy).ToList() };
-    private static WorkoutRequest Copy(WorkoutResponse source) => new() { Id = source.Id, Name = source.Name, Exercises = source.Exercises.Select(item => new ExerciseRequest { Id = item.Id, Name = item.Name, Weight = item.Weight, Sets = item.Sets, Repetitions = item.Repetitions, Note = item.Note }).ToList() };
+    private static WorkoutRequest Copy(WorkoutResponse source) => new() { Id = source.Id, Name = source.Name, Exercises = source.Exercises.Select(item => new ExerciseRequest { Id = item.Id, Name = item.Name, Weight = item.Weight, Sets = item.Sets, Repetitions = item.Repetitions, Note = item.Note, CatalogExerciseId = item.CatalogExerciseId, DurationSeconds = item.DurationSeconds }).ToList() };
     private static List<ScheduleEntryRequest> Week() => [new(DayOfWeek.Monday, null), new(DayOfWeek.Tuesday, null), new(DayOfWeek.Wednesday, null), new(DayOfWeek.Thursday, null), new(DayOfWeek.Friday, null), new(DayOfWeek.Saturday, null), new(DayOfWeek.Sunday, null)];
-    private static CompleteWorkoutRequest Completion(WorkoutResponse workout) => new() { CompletionId = Guid.NewGuid(), Exercises = workout.Exercises.Select((exercise, index) => new CompletedExerciseRequest { ProgramExerciseId = exercise.Id, Name = exercise.Name, Weight = exercise.Weight, Sets = exercise.Sets, Repetitions = exercise.Repetitions, IsCompleted = index == 0 }).ToList() };
+    private static CompleteWorkoutRequest Completion(WorkoutResponse workout) => new() { CompletionId = Guid.NewGuid(), Exercises = workout.Exercises.Select((exercise, index) => new CompletedExerciseRequest { ProgramExerciseId = exercise.Id, Name = exercise.Name, Weight = exercise.Weight, Sets = exercise.Sets, Repetitions = exercise.Repetitions, IsCompleted = index == 0, DurationSeconds = exercise.DurationSeconds }).ToList() };
 }

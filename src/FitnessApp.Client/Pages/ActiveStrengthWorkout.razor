@@ -33,9 +33,19 @@
                         <p class="strength-active-note">@log.Note</p>
                     }
                     <div class="strength-stepper-grid">
-                        <div class="strength-stepper"><span>Vægt kg</span><div><button type="button" @onclick="() => ChangeWeight(log, -2.5m)">−</button><strong>@FormatWeight(log.Weight)</strong><button type="button" @onclick="() => ChangeWeight(log, 2.5m)">+</button></div></div>
+                        @if (log.DurationSeconds is { } duration)
+                        {
+                            <StrengthDurationInput Value="duration" ValueChanged="value => log.DurationSeconds = value" />
+                        }
+                        else
+                        {
+                            <div class="strength-stepper"><span>Vægt kg</span><div><button type="button" @onclick="() => ChangeWeight(log, -2.5m)">−</button><strong>@FormatWeight(log.Weight)</strong><button type="button" @onclick="() => ChangeWeight(log, 2.5m)">+</button></div></div>
+                        }
                         <div class="strength-stepper"><span>Sæt</span><div><button type="button" @onclick="() => ChangeSets(log, -1)">−</button><strong>@log.Sets</strong><button type="button" @onclick="() => ChangeSets(log, 1)">+</button></div></div>
-                        <div class="strength-stepper"><span>Gentagelser</span><div><button type="button" @onclick="() => ChangeReps(log, -1)">−</button><strong>@log.Repetitions</strong><button type="button" @onclick="() => ChangeReps(log, 1)">+</button></div></div>
+                        @if (log.DurationSeconds is null)
+                        {
+                            <div class="strength-stepper"><span>Gentagelser</span><div><button type="button" @onclick="() => ChangeReps(log, -1)">−</button><strong>@log.Repetitions</strong><button type="button" @onclick="() => ChangeReps(log, 1)">+</button></div></div>
+                        }
                     </div>
                 </article>
             }
@@ -111,8 +121,24 @@
     private async Task CompleteAsync()
     {
         if (busy) return;
+        if (logs.Any(log => log.DurationSeconds is <= 0))
+        {
+            saveError = "Angiv en varighed på mindst ét sekund for tidsøvelser.";
+            confirmFinish = false;
+            return;
+        }
         busy = true;
-        var request = new CompleteWorkoutRequest { CompletionId = completionId, ScheduledOccurrenceDate = ScheduledOccurrenceDate, Exercises = logs.Select(log => new CompletedExerciseRequest { ProgramExerciseId = log.ProgramExerciseId, Name = log.Name, Weight = log.Weight, Sets = log.Sets, Repetitions = log.Repetitions, IsCompleted = log.IsCompleted }).ToList() };
+        var request = new CompleteWorkoutRequest
+        {
+            CompletionId = completionId,
+            ScheduledOccurrenceDate = ScheduledOccurrenceDate,
+            Exercises = logs.Select(log => new CompletedExerciseRequest
+            {
+                ProgramExerciseId = log.ProgramExerciseId, Name = log.Name, Weight = log.Weight,
+                Sets = log.Sets, Repetitions = log.Repetitions, IsCompleted = log.IsCompleted,
+                DurationSeconds = log.DurationSeconds
+            }).ToList()
+        };
         var result = await Programs.CompleteWorkoutAsync(ProgramId, WorkoutId, request);
         busy = false;
         if (result.Succeeded) { hasActiveDraft = false; Navigation.NavigateTo(BackUrl); return; }
@@ -157,9 +183,19 @@
     private static void ChangeSets(WorkoutLog log, int change) => log.Sets = Math.Clamp(log.Sets + change, 1, 10);
     private static void ChangeReps(WorkoutLog log, int change) => log.Repetitions = Math.Clamp(log.Repetitions + change, 1, 30);
     private static string FormatWeight(decimal weight) => weight.ToString("0.##");
-    private static string PerformanceLabel(WorkoutLog log) => log.PreviousWeight is { } weight
-        ? $"Sidst: {FormatWeight(weight)} kg · {log.PreviousSets} × {log.PreviousRepetitions}"
-        : $"Plan: {FormatWeight(log.PlannedWeight)} kg · {log.PlannedSets} × {log.PlannedRepetitions}";
+    private static string PerformanceLabel(WorkoutLog log)
+    {
+        if (log.PlannedDurationSeconds is { } plannedDuration)
+        {
+            return log.PreviousDurationSeconds is { } previousDuration
+                ? $"Sidst: {log.PreviousSets} × {StrengthDurationInput.Format(previousDuration)}"
+                : $"Plan: {log.PlannedSets} × {StrengthDurationInput.Format(plannedDuration)}";
+        }
+
+        return log.PreviousWeight is { } weight
+            ? $"Sidst: {FormatWeight(weight)} kg · {log.PreviousSets} × {log.PreviousRepetitions}"
+            : $"Plan: {FormatWeight(log.PlannedWeight)} kg · {log.PlannedSets} × {log.PlannedRepetitions}";
+    }
     public void Dispose() => timer?.Dispose();
 
     private sealed class WorkoutLog(ActiveExerciseResponse exercise)
@@ -170,12 +206,15 @@
         public decimal PlannedWeight { get; } = exercise.Weight;
         public int PlannedSets { get; } = exercise.Sets;
         public int PlannedRepetitions { get; } = exercise.Repetitions;
+        public int? PlannedDurationSeconds { get; } = exercise.DurationSeconds;
         public decimal? PreviousWeight { get; } = exercise.PreviousWeight;
         public int? PreviousSets { get; } = exercise.PreviousSets;
         public int? PreviousRepetitions { get; } = exercise.PreviousRepetitions;
+        public int? PreviousDurationSeconds { get; } = exercise.PreviousDurationSeconds;
         public decimal Weight { get; set; } = exercise.Weight;
         public int Sets { get; set; } = exercise.Sets;
         public int Repetitions { get; set; } = exercise.Repetitions;
+        public int? DurationSeconds { get; set; } = exercise.DurationSeconds;
         public bool IsCompleted { get; set; }
     }
 }

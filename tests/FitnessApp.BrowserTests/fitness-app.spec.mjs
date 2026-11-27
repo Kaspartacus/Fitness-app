@@ -298,3 +298,78 @@ test('edit and finish a strength workout', async ({ page, evidence }, testInfo) 
     await expect(page.getByRole('heading', { name: programName })).toBeVisible();
   });
 });
+
+test('find a catalog exercise and save a timed workout', async ({ page, evidence }, testInfo) => {
+  const program = `Katalogtræning ${testInfo.project.name}`;
+  const dialog = page.getByRole('dialog', { name: 'Tilføj øvelse' });
+  const search = dialog.getByRole('searchbox', { name: 'Søg efter en øvelse' });
+  const minutes = (container) => container.getByRole('spinbutton', { name: 'Minutter' });
+  const seconds = (container) => container.getByRole('spinbutton', { name: 'Sekunder' });
+
+  await evidence.step('Search English, Danish and keyboard spellings in the exercise catalog', async () => {
+    await page.goto('/login');
+    await submitLogin(page, adminEmail);
+    await expect(page.getByRole('heading', { name: 'Hej, Testadministrator' })).toBeVisible();
+    await page.goto('/styrke/opret');
+    await page.getByLabel('Navn på program').fill(program);
+    await page.getByRole('button', { name: 'Opret program', exact: true }).click();
+    await page.getByRole('link', { name: /Tilføj træning/ }).click();
+    await page.getByLabel('Navn på træning').fill('Katalogpas');
+    await page.getByRole('button', { name: /Tilføj øvelse/ }).click();
+    await dialog.getByRole('button', { name: 'Vælg fra katalog' }).click();
+
+    const deadlift = dialog.getByRole('button', { name: 'Vælg Deadlift', exact: true });
+    for (const query of ['deadlift', 'dødløft', 'doedloeft']) {
+      await search.fill(query);
+      await expect(deadlift).toBeVisible();
+    }
+    const category = dialog.getByLabel('Kategori');
+    await category.selectOption({ label: 'Ben' });
+    await expect(dialog.getByText('Ingen øvelser matcher din søgning.')).toBeVisible();
+    await category.selectOption({ label: 'Hele kroppen' });
+    await expect(deadlift).toBeVisible();
+    await expect(dialog.getByText('1 øvelse fundet', { exact: true })).toBeVisible();
+    const illustration = dialog.getByRole('img', { name: /vægtstang med begge hænder foran lårene/ });
+    await expect(illustration).toBeVisible();
+    await expect.poll(() => illustration.evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
+    await evidence.screenshot('strength-catalog-danish-search');
+
+    await deadlift.click();
+    await expect(dialog.getByRole('spinbutton', { name: 'Vægt (kg)' })).toBeVisible();
+    await dialog.getByRole('spinbutton', { name: 'Vægt (kg)' }).fill('20');
+    await dialog.getByRole('button', { name: 'Gem øvelse' }).click();
+  });
+
+  await evidence.step('Save a plank using minutes and seconds and reopen the workout', async () => {
+    await page.getByRole('button', { name: /Tilføj øvelse/ }).click();
+    await dialog.getByRole('button', { name: 'Vælg fra katalog' }).click();
+    await dialog.getByLabel('Kategori').selectOption({ label: 'Mave og core' });
+    await search.fill('planke');
+    await dialog.getByRole('button', { name: 'Vælg Plank', exact: true }).click();
+    await expect(dialog.getByRole('spinbutton', { name: 'Vægt (kg)' })).toHaveCount(0);
+    await minutes(dialog).fill('1');
+    await seconds(dialog).fill('15');
+    await expect(minutes(dialog)).toHaveValue('1');
+    await expect(seconds(dialog)).toHaveValue('15');
+    await evidence.screenshot('strength-catalog-plank-duration');
+    await dialog.getByRole('button', { name: 'Gem øvelse' }).click();
+    await page.getByRole('button', { name: 'Gem træning', exact: true }).click();
+    await expect(page.getByRole('heading', { name: program })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Start træning', exact: true }).click();
+    const plank = page.locator('.strength-active-card').filter({ hasText: 'Plank' });
+    await expect(minutes(plank)).toHaveValue('1');
+    await expect(seconds(plank)).toHaveValue('15');
+    await seconds(plank).fill('26');
+    await plank.getByRole('checkbox').check();
+    await expect(seconds(plank)).toHaveValue('26');
+    await expect(plank.getByRole('checkbox')).toBeChecked();
+    await evidence.screenshot('strength-catalog-active-duration');
+    await page.getByRole('button', { name: 'Gem og afslut træning' }).click();
+    await page.getByRole('dialog', { name: 'Afslut træning?' }).getByRole('button', { name: 'Gem træning' }).click();
+    await expect(page.getByRole('heading', { name: program })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Start træning', exact: true }).click();
+    await expect(plank.getByText(/Sidst: .*1 min 26 sek/)).toBeVisible();
+  });
+});
