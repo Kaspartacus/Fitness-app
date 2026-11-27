@@ -930,6 +930,7 @@ a:focus-visible {
 .strength-bottom-nav-item:hover:not(:disabled) { color: var(--color-nav-hover); }
 .strength-bottom-nav-item:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
 .strength-bottom-nav button:disabled { color: var(--color-disabled); opacity: 1; cursor: default; }
+.app-desktop-header { display: none; }
 .nutrition-page { width: min(calc(100% - 2rem), 27rem); }
 .nutrition-header { margin-bottom: 1rem; }
 .nutrition-summary { display: grid; justify-items: center; margin-bottom: 1rem; border: 1px solid var(--strength-border); border-radius: 1rem; padding: 1rem; background: var(--strength-surface); }
@@ -1170,14 +1171,40 @@ a:focus-visible {
 }
 
 @media (min-width: 48rem) {
+    .app-desktop-header {
+        position: sticky;
+        z-index: 5;
+        top: 0;
+        display: block;
+        background: var(--color-page-surface);
+        border-bottom: 1px solid var(--color-page-border);
+    }
+
+    .app-desktop-header-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+        width: min(calc(100% - 3rem), 62rem);
+        min-height: 4rem;
+        margin-inline: auto;
+    }
+
+    .app-desktop-brand { color: var(--color-page-text); font-size: 1.125rem; font-weight: 800; }
+    .app-desktop-nav { display: flex; align-items: center; gap: 0.25rem; }
+    .app-desktop-nav .strength-bottom-nav-item { min-height: 2.75rem; padding: 0.5rem 0.875rem; }
+    .app-desktop-nav .strength-bottom-nav-icon { display: none; }
+    .app-desktop-nav .strength-bottom-nav-label { font-size: 0.9375rem; }
+    .app-desktop-nav .is-active { background: var(--color-page-raised); }
+    .strength-bottom-nav { display: none; }
+
     .strength-app {
         width: min(calc(100% - 3rem), 62rem);
         padding: 2.5rem 0 3rem;
     }
 
-    .strength-app.strength-with-bottom-nav { padding-bottom: 3rem; }
+    .strength-app.strength-with-bottom-nav,
     .dashboard-page.dashboard-with-bottom-nav { padding-bottom: 3rem; }
-    .strength-bottom-nav { display: none; }
     .strength-program-grid, .strength-workout-list { grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
     .strength-finish-button { bottom: 2rem; width: min(26rem, calc(100% - 3rem)); }
     .strength-app.calendar-app, .strength-app.calendar-detail-page { width: min(calc(100% - 3rem), 52rem); }
