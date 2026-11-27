@@ -42,12 +42,18 @@ public sealed record CompletedWorkoutExerciseData(string Name, decimal Weight, i
 }
 public sealed record CompletedWorkoutData(Guid Id, DateOnly Date, string WorkoutName,
     IReadOnlyList<CompletedWorkoutExerciseData> Exercises);
+public sealed record StrengthProgressionDayData(DateOnly Date, decimal? MaxWeight, int? MaxRepetitions,
+    decimal? VolumeKg, int? MaxDurationSeconds);
+public sealed record StrengthExerciseProgressionData(string Key, string Name, bool IsTimed,
+    IReadOnlyList<StrengthProgressionDayData> Days);
 public enum ProgramStatus { Saved, NotFound, Invalid, Conflict }
 public sealed record ProgramResult(ProgramStatus Status, ProgramData? Program = null);
 
 public interface IStrengthProgramService
 {
     Task<IReadOnlyList<CatalogExercise>> GetCatalogAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<StrengthExerciseProgressionData>> GetProgressionAsync(string userId, int days,
+        CancellationToken cancellationToken);
     Task<StrengthOverviewData> GetOverviewAsync(string userId, CancellationToken cancellationToken);
     Task<IReadOnlyList<ProgramData>> ListAsync(string userId, CancellationToken cancellationToken);
     Task<ProgramData?> GetAsync(string userId, Guid id, CancellationToken cancellationToken);

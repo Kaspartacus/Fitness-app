@@ -13,6 +13,48 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
     public async Task<IReadOnlyList<CatalogExercise>> GetCatalogAsync(CancellationToken cancellationToken) =>
         await db.StrengthCatalog.AsNoTracking().OrderBy(exercise => exercise.Name).ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<StrengthExerciseProgressionData>> GetProgressionAsync(string userId, int days,
+        CancellationToken cancellationToken)
+    {
+        var now = UtcNow();
+        var firstDay = CopenhagenDate(now).AddDays(1 - days);
+        var start = TimeZoneInfo.ConvertTimeToUtc(firstDay.ToDateTime(TimeOnly.MinValue), CopenhagenTimeZone);
+        var measurements = await (from workout in db.CompletedWorkouts.AsNoTracking()
+                                  where workout.UserId == userId && workout.CompletedAt >= start && workout.CompletedAt <= now
+                                  from exercise in workout.Exercises
+                                  where exercise.IsCompleted
+                                  orderby workout.CompletedAt descending, workout.Id descending, exercise.Position
+                                  select new
+                                  {
+                                      workout.CompletedAt, workout.WorkoutName, exercise.Name, exercise.Id,
+                                      exercise.CatalogExerciseId, exercise.ProgramExerciseId, exercise.DurationSeconds,
+                                      exercise.Weight, exercise.Sets, exercise.Repetitions
+                                  }).ToListAsync(cancellationToken);
+
+        return measurements.GroupBy(item =>
+                HistoryKey.For(item.CatalogExerciseId, item.ProgramExerciseId ?? item.Id, item.DurationSeconds))
+            .Select(exercise =>
+            {
+                var latest = exercise.First();
+                var key = exercise.Key;
+                var identity = key.CatalogId is { } id ? $"catalog:{id}" : $"manual:{key.ProgramExerciseId:N}";
+                var name = key.CatalogId is null ? $"{latest.Name} · {latest.WorkoutName}" : latest.Name;
+                var history = exercise.GroupBy(item => CopenhagenDate(item.CompletedAt))
+                    .OrderBy(day => day.Key)
+                    .Select(day => key.IsTimed
+                        ? new StrengthProgressionDayData(day.Key, null, null, null, day.Max(item => item.DurationSeconds))
+                        : new StrengthProgressionDayData(day.Key, day.Max(item => item.Weight),
+                            day.Max(item => item.Repetitions), day.Sum(item => item.Weight * item.Sets * item.Repetitions),
+                            null))
+                    .ToArray();
+                return new StrengthExerciseProgressionData($"{identity}:{(key.IsTimed ? "time" : "weight")}",
+                    name, key.IsTimed, history);
+            })
+            .OrderBy(exercise => exercise.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(exercise => exercise.Key, StringComparer.Ordinal)
+            .ToArray();
+    }
+
     public async Task<StrengthOverviewData> GetOverviewAsync(string userId, CancellationToken cancellationToken)
     {
         var programs = await QueryPrograms().Where(program => program.UserId == userId)

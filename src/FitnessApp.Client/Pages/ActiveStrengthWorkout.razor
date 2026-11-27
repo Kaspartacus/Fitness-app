@@ -210,10 +210,10 @@
         log.RejectedWeight = null;
     }
 
-    private static void SetWeight(WorkoutLog log, string input)
+    private static void SetWeight(WorkoutLog log, string? input)
     {
         const NumberStyles styles = NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign;
-        var text = input.Trim();
+        var text = input?.Trim();
         if ((decimal.TryParse(text, styles, WeightNumberFormat, out var weight) ||
              decimal.TryParse(text, styles, CultureInfo.InvariantCulture, out weight)) &&
             weight is >= 0 and <= 1000 && decimal.Round(weight, 2) == weight)
@@ -223,7 +223,7 @@
         }
         else
         {
-            log.RejectedWeight = input;
+            log.RejectedWeight = input ?? "";
         }
     }
     private static void ChangeSets(WorkoutLog log, int change) => log.Sets = Math.Clamp(log.Sets + change, 1, 10);
