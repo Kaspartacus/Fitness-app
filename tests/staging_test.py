@@ -212,6 +212,32 @@ class StagingTests(unittest.TestCase):
                 staging.deploy(plan)
         self.assertEqual("b" * 32, json.loads((staging.ROOT / "pending.json").read_text())["backup"])
 
+    def test_interrupted_pending_update_preserves_valid_journal(self):
+        plan = self.deploy_plan()
+        pending = staging.ROOT / "pending.json"
+        replace = staging.os.replace
+
+        def interrupt_after_backup(source, destination):
+            if destination == pending and pending.exists():
+                self.assertIsNone(json.loads(pending.read_text())["backup"])
+                self.assertEqual("b" * 32, json.loads(Path(source).read_text())["backup"])
+                raise OSError("synthetic interrupted journal replacement")
+            replace(source, destination)
+
+        with (
+            patch.object(staging, "docker", side_effect=self.fake_docker) as docker,
+            patch.object(staging, "running", side_effect=[True, False]),
+            patch.object(staging, "stop"),
+            patch.object(staging, "backup_state", return_value="b" * 32),
+            patch.object(staging.os, "replace", side_effect=interrupt_after_backup),
+        ):
+            with self.assertRaisesRegex(OSError, "interrupted journal replacement"):
+                staging.deploy(plan)
+        self.assertEqual(plan["source"], json.loads(pending.read_text())["candidate"])
+        self.assertIsNone(json.loads(pending.read_text())["backup"])
+        self.assertEqual([], list(staging.ROOT.glob(".pending-*.tmp")))
+        self.assertFalse(any(call.args[0] == "run" for call in docker.call_args_list))
+
     def test_failed_backup_restarts_previous_without_running_migrations(self):
         plan = self.deploy_plan()
         with patch.object(staging, "docker", side_effect=self.fake_docker) as docker, patch.object(staging, "running", side_effect=[True, False]), patch.object(staging, "stop"), patch.object(staging, "backup_state", side_effect=staging.Refused("synthetic backup failure")), patch.object(staging, "start") as start:

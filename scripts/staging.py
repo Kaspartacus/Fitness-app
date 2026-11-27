@@ -87,6 +87,20 @@ def read_state():
     return json.loads(path.read_text()) if path.exists() else None
 
 
+def save_pending(pending):
+    destination = ROOT / "pending.json"
+    handle = tempfile.NamedTemporaryFile(dir=ROOT, prefix=".pending-", suffix=".tmp", delete=False)
+    temporary = Path(handle.name)
+    try:
+        with handle:
+            handle.write(encoded(pending))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def cleanup_plan():
     """Fail closed on unresolved recovery; never use daemon-wide prune."""
     if any((ROOT / name).exists() for name in
@@ -468,7 +482,7 @@ def deploy(plan):
         raise Refused("Unrecorded staging container exists; inspect before deployment")
     if previous:
         previous["active"] = was_running
-    (ROOT / "pending.json").write_bytes(encoded({"previous": previous, "candidate": plan["source"], "backup": None}))
+    save_pending({"previous": previous, "candidate": plan["source"], "backup": None})
     stop(previous)
     if running(previous):
         raise Refused("Staging writers did not stop")
@@ -479,7 +493,7 @@ def deploy(plan):
             start(previous)
         (ROOT / "pending.json").unlink(missing_ok=True)
         raise
-    (ROOT / "pending.json").write_bytes(encoded({"previous": previous, "candidate": plan["source"], "backup": identifier}))
+    save_pending({"previous": previous, "candidate": plan["source"], "backup": identifier})
     print(f"Verified pre-migration backup: {identifier}", flush=True)
     candidate = {**plan["source"], "image": image, "config": str(config), "compose": str(compose), "active": True}
     try:
