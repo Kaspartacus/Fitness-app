@@ -261,6 +261,17 @@ test('edit and finish a strength workout', async ({ page, evidence }, testInfo) 
     await expectOrder(reordered);
     await expect(squat).toBeFocused();
     await evidence.screenshot('strength-reordered');
+
+    const editSquat = exerciseList.getByRole('button', { name: 'Rediger øvelsen Squat', exact: true });
+    await editSquat.press('Enter');
+    const dialog = page.getByRole('dialog', { name: 'Rediger øvelse' });
+    await dialog.getByRole('button', { name: 'Flere sæt', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Gem øvelse', exact: true }).press('Enter');
+    await expect(dialog).toBeHidden();
+    await expect(editSquat).toBeFocused();
+    await expect(editSquat.getByText(/5 sæt/)).toBeVisible();
+    await evidence.screenshot('strength-edit-focus-restored');
+
     await page.getByRole('button', { name: 'Gem træning', exact: true }).click();
     await page.getByRole('link', { name: 'Rediger', exact: true }).click();
     await expectOrder(reordered);

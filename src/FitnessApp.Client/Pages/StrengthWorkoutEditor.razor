@@ -303,14 +303,19 @@
             return;
         }
 
-        var copy = Copy(exerciseDraft);
         if (editingIndex is { } index)
         {
-            workoutDraft.Exercises![index] = copy;
+            // Keep the keyed row and its edit button mounted so the modal can restore focus.
+            var exercise = workoutDraft.Exercises![index];
+            exercise.Name = exerciseDraft.Name;
+            exercise.Weight = exerciseDraft.Weight;
+            exercise.Sets = exerciseDraft.Sets;
+            exercise.Repetitions = exerciseDraft.Repetitions;
+            exercise.Note = exerciseDraft.Note;
         }
         else
         {
-            workoutDraft.Exercises!.Add(copy);
+            workoutDraft.Exercises!.Add(Copy(exerciseDraft));
         }
 
         MarkDirty();
