@@ -288,29 +288,56 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
     public async Task<PlannedWorkoutData?> GetWorkoutAsync(string userId, Guid programId, Guid workoutId,
         CancellationToken cancellationToken)
     {
-        var program = await QueryPrograms().SingleOrDefaultAsync(candidate => candidate.Id == programId && candidate.UserId == userId,
-            cancellationToken);
-        var workout = program?.Workouts.SingleOrDefault(candidate => candidate.Id == workoutId);
-        if (workout is null || program is null)
+        if (await FindWorkoutAsync(userId, programId, workoutId, cancellationToken) is not { } template)
         {
             return null;
         }
 
-        var previous = await (from exercise in db.CompletedWorkoutExercises.AsNoTracking()
-                              join completed in db.CompletedWorkouts.AsNoTracking() on exercise.CompletedWorkoutId equals completed.Id
-                              where completed.UserId == userId && completed.ProgramId == programId && completed.WorkoutId == workoutId &&
-                                    exercise.ProgramExerciseId != null && exercise.IsCompleted
-                              orderby completed.CompletedAt descending
-                              select new { ProgramExerciseId = exercise.ProgramExerciseId!.Value, exercise.CatalogExerciseId,
-                                  exercise.Weight, exercise.Sets, exercise.Repetitions, exercise.DurationSeconds })
-            .ToListAsync(cancellationToken);
-        var latest = previous.GroupBy(item => (item.ProgramExerciseId, (string?)item.CatalogExerciseId))
-            .ToDictionary(group => group.Key, group => group.First());
+        var (program, workout) = template;
+        var keys = workout.Exercises.Select(exercise =>
+            HistoryKey.For(exercise.CatalogExerciseId, exercise.Id, exercise.DurationSeconds)).ToHashSet();
+        var weightCatalogIds = keys.Where(key => !key.IsTimed).Select(key => key.CatalogId).OfType<string>().ToArray();
+        var timedCatalogIds = keys.Where(key => key.IsTimed).Select(key => key.CatalogId).OfType<string>().ToArray();
+        var manualIds = keys.Select(key => key.ProgramExerciseId).OfType<Guid>().ToArray();
+        var previous = from exercise in db.CompletedWorkoutExercises.AsNoTracking()
+                       join completed in db.CompletedWorkouts.AsNoTracking() on exercise.CompletedWorkoutId equals completed.Id
+                       where completed.UserId == userId && exercise.IsCompleted &&
+                             (exercise.DurationSeconds == null && weightCatalogIds.Contains(exercise.CatalogExerciseId!) ||
+                              exercise.DurationSeconds != null && timedCatalogIds.Contains(exercise.CatalogExerciseId!) ||
+                              exercise.CatalogExerciseId == null && exercise.ProgramExerciseId != null &&
+                              completed.ProgramId == programId && completed.WorkoutId == workoutId &&
+                              manualIds.Contains(exercise.ProgramExerciseId.Value))
+                       orderby completed.CompletedAt descending, completed.Id descending, exercise.Position
+                       select new
+                       {
+                           exercise.ProgramExerciseId, exercise.CatalogExerciseId, exercise.Weight,
+                           exercise.Sets, exercise.Repetitions, exercise.DurationSeconds
+                       };
+
+        var latest = new Dictionary<HistoryKey, PreviousPerformance>();
+        if (keys.Count > 0)
+        {
+            await foreach (var item in previous.AsAsyncEnumerable().WithCancellation(cancellationToken))
+            {
+                var key = HistoryKey.For(item.CatalogExerciseId, item.ProgramExerciseId, item.DurationSeconds);
+                if (keys.Contains(key))
+                {
+                    latest.TryAdd(key, new PreviousPerformance(item.Weight, item.Sets, item.Repetitions, item.DurationSeconds));
+                }
+                if (latest.Count == keys.Count)
+                {
+                    break;
+                }
+            }
+        }
+
         return new PlannedWorkoutData(program.Id, program.Name, workout.Id, workout.Name,
             workout.Exercises.OrderBy(exercise => exercise.Position).Select(exercise =>
             {
-                latest.TryGetValue((exercise.Id, exercise.CatalogExerciseId), out var performance);
-                return MapActive(exercise, performance?.Weight, performance?.Sets, performance?.Repetitions,
+                var key = HistoryKey.For(exercise.CatalogExerciseId, exercise.Id, exercise.DurationSeconds);
+                latest.TryGetValue(key, out var performance);
+                return MapActive(exercise, key.IsTimed ? null : performance?.Weight, performance?.Sets,
+                    key.IsTimed ? null : performance?.Repetitions,
                     performance?.DurationSeconds);
             }).ToArray());
     }
@@ -329,11 +356,11 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
             return MatchesCompletion(existing, programId, workoutId, input) ? ProgramStatus.Saved : ProgramStatus.Conflict;
         }
 
-        var planned = await GetWorkoutAsync(userId, programId, workoutId, cancellationToken);
-        if (planned is null)
+        if (await FindWorkoutAsync(userId, programId, workoutId, cancellationToken) is not { } template)
         {
             return ProgramStatus.NotFound;
         }
+        var planned = PlannedWorkout(template.Program, template.Workout);
 
         if (input.ScheduledOccurrenceDate is { } scheduledOccurrenceDate &&
             !await CanCompleteScheduledOccurrenceAsync(userId, programId, workoutId, scheduledOccurrenceDate,
@@ -418,6 +445,16 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
     private IQueryable<StrengthProgram> QueryPrograms() => db.StrengthPrograms.AsNoTracking()
         .Include(program => program.Workouts).ThenInclude(workout => workout.Exercises)
         .Include(program => program.Schedule);
+
+    private async Task<(StrengthProgram Program, ProgramWorkout Workout)?> FindWorkoutAsync(
+        string userId, Guid programId, Guid workoutId, CancellationToken cancellationToken)
+    {
+        var program = await QueryPrograms().SingleOrDefaultAsync(candidate => candidate.Id == programId && candidate.UserId == userId,
+            cancellationToken);
+        return program?.Workouts.SingleOrDefault(candidate => candidate.Id == workoutId) is { } workout
+            ? (program, workout)
+            : null;
+    }
 
     private static bool IsValidProgramStructure(ProgramInput input) =>
         StrengthRules.IsValidName(input.Name) && input.Workouts is { Count: <= StrengthRules.MaxWorkouts } &&
@@ -561,4 +598,12 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
         completed.Exercises.Count == exercises.Count;
 
     private readonly record struct StrengthOccurrenceKey(Guid ProgramId, Guid WorkoutId, DateOnly OriginalDate);
+
+    private readonly record struct HistoryKey(string? CatalogId, Guid? ProgramExerciseId, bool IsTimed)
+    {
+        public static HistoryKey For(string? catalogId, Guid? programExerciseId, int? durationSeconds) =>
+            new(catalogId, catalogId is null ? programExerciseId : null, durationSeconds is not null);
+    }
+
+    private sealed record PreviousPerformance(decimal Weight, int Sets, int Repetitions, int? DurationSeconds);
 }
