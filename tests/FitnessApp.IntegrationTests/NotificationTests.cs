@@ -109,10 +109,12 @@ public sealed class NotificationTests
         Assert.Single(await db.InAppNotifications.ToArrayAsync());
     }
 
-    [Fact]
-    public async Task TrainingUsesMovedOccurrenceAndCompletionAndIndependentCategoryPreferences()
+    [Theory]
+    [InlineData("Testing")]
+    [InlineData("Staging")]
+    public async Task TrainingUsesMovedOccurrenceAndCompletionAndIndependentCategoryPreferences(string environment)
     {
-        using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync();
+        using var factory = new AuthWebApplicationFactory(environmentName: environment); await factory.InitializeDatabaseAsync();
         var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
         await using var scope = factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
         var run = new RunningSession { Id = Guid.NewGuid(), Date = Day, Position = 0, Structure = "Rolig tur" };
@@ -190,10 +192,12 @@ public sealed class NotificationTests
         Assert.Equal(InAppNotificationKind.MealReminder, Assert.Single(await db.InAppNotifications.ToArrayAsync()).Kind);
     }
 
-    [Fact]
-    public async Task InboxReadCutoffAndDestinationsAreOwnerScoped()
+    [Theory]
+    [InlineData("Testing")]
+    [InlineData("Staging")]
+    public async Task InboxReadCutoffAndDestinationsAreOwnerScoped(string environment)
     {
-        using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync();
+        using var factory = new AuthWebApplicationFactory(environmentName: environment); await factory.InitializeDatabaseAsync();
         var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved); var other = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
         using var client = await Login(factory, owner);
         await using var scope = factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
@@ -216,10 +220,12 @@ public sealed class NotificationTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PutAsJsonAsync("api/settings/notification-preferences", new UpdateNotificationPreferencesRequest(true, true, true, true, false, "Europe/Copenhagen"))).StatusCode);
     }
 
-    [Fact]
-    public async Task HistoricalAdminNoticesFollowCurrentRoleForAllInboxOperations()
+    [Theory]
+    [InlineData("Testing")]
+    [InlineData("Staging")]
+    public async Task HistoricalAdminNoticesFollowCurrentRoleForAllInboxOperations(string environment)
     {
-        using var factory = new AuthWebApplicationFactory(); await factory.InitializeDatabaseAsync();
+        using var factory = new AuthWebApplicationFactory(environmentName: environment); await factory.InitializeDatabaseAsync();
         var owner = await factory.CreateUserAsync(AccountApprovalStatus.Approved, AuthenticationConstants.AdminRole);
         using var client = await Login(factory, owner);
         await using var scope = factory.Services.CreateAsyncScope(); var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();

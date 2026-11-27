@@ -16,10 +16,12 @@ public sealed class PasswordResetEndpointTests
 {
     private static readonly string NewPassword = $"New!{Guid.NewGuid():N}aA1";
 
-    [Fact]
-    public async Task ApprovedAccountReceivesResetEmailFromTrustedOrigin()
+    [Theory]
+    [InlineData("Testing")]
+    [InlineData("Staging")]
+    public async Task ApprovedAccountReceivesResetEmailFromTrustedOrigin(string environment)
     {
-        using var factory = new AuthWebApplicationFactory();
+        using var factory = new AuthWebApplicationFactory(environmentName: environment);
         await factory.InitializeDatabaseAsync();
         var user = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
         using var client = factory.CreateHttpsClient();
@@ -41,10 +43,12 @@ public sealed class PasswordResetEndpointTests
         Assert.Contains("1 time", message.PlainTextBody);
     }
 
-    [Fact]
-    public async Task PublicResponseIsEquivalentForAllAccountStatesAndOnlyApprovedReceivesEmail()
+    [Theory]
+    [InlineData("Testing")]
+    [InlineData("Staging")]
+    public async Task PublicResponseIsEquivalentForAllAccountStatesAndOnlyApprovedReceivesEmail(string environment)
     {
-        using var factory = new AuthWebApplicationFactory();
+        using var factory = new AuthWebApplicationFactory(environmentName: environment);
         await factory.InitializeDatabaseAsync();
         var approved = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
         var pending = await factory.CreateUserAsync(AccountApprovalStatus.Pending);
@@ -167,10 +171,12 @@ public sealed class PasswordResetEndpointTests
             (await LoginAsync(client, user.Email!, NewPassword)).StatusCode);
     }
 
-    [Fact]
-    public async Task ValidResetChangesPasswordRevokesEverySessionAndPreservesAccountState()
+    [Theory]
+    [InlineData("Testing")]
+    [InlineData("Staging")]
+    public async Task ValidResetChangesPasswordRevokesEverySessionAndPreservesAccountState(string environment)
     {
-        using var factory = new AuthWebApplicationFactory();
+        using var factory = new AuthWebApplicationFactory(environmentName: environment);
         await factory.InitializeDatabaseAsync();
         var user = await factory.CreateUserAsync(AccountApprovalStatus.Approved);
         using var client = factory.CreateHttpsClient();

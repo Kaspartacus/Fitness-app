@@ -14,6 +14,7 @@ using FitnessApp.Infrastructure.Settings;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace FitnessApp.Infrastructure;
 
@@ -72,11 +73,12 @@ public static class DependencyInjection
 
     public static IServiceCollection AddEmailDelivery(
         this IServiceCollection services,
-        bool usePickupDirectory)
+        bool? usePickupDirectory = null)
     {
         services.AddSingleton<BoundedEmailQueue>();
         services.AddSingleton<IEmailQueue>(provider => provider.GetRequiredService<BoundedEmailQueue>());
-        services.AddSingleton<IEmailSender>(provider => usePickupDirectory
+        services.AddSingleton<IEmailSender>(provider => (usePickupDirectory ??
+            provider.GetRequiredService<IOptions<EmailDeliveryOptions>>().Value.Transport is "Pickup")
             ? ActivatorUtilities.CreateInstance<PickupDirectoryEmailSender>(provider)
             : ActivatorUtilities.CreateInstance<SmtpEmailSender>(provider));
         services.AddHostedService<EmailDeliveryWorker>();
