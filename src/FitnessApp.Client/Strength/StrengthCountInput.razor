@@ -1,0 +1,21 @@
+<div class="strength-count-field">
+    <label class="strength-input-label" for="@Id">@Label</label>
+    <div class="strength-count-controls">
+        <button type="button" class="strength-icon-action" aria-label="@($"Færre {Label.ToLowerInvariant()}")"
+                disabled="@(Value <= 1)" @onclick="() => SetValueAsync(Value - 1)">−</button>
+        <input class="strength-input" id="@Id" type="number" min="1" max="@Maximum"
+               @bind:get="Value" @bind:set="SetValueAsync" />
+        <button type="button" class="strength-icon-action" aria-label="@($"Flere {Label.ToLowerInvariant()}")"
+                disabled="@(Value >= Maximum)" @onclick="() => SetValueAsync(Value + 1)">+</button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public int Maximum { get; set; }
+    [Parameter] public int Value { get; set; }
+    [Parameter] public EventCallback<int> ValueChanged { get; set; }
+
+    private Task SetValueAsync(int value) => ValueChanged.InvokeAsync(Math.Clamp(value, 1, Maximum));
+}

@@ -318,6 +318,8 @@ On Linux, use `npx playwright install --with-deps --only-shell chromium` to inst
 
 The suite covers registration, the pending account's rejected login, and main navigation at 390 × 844 and 1440 × 900. It checks that desktop uses a sticky top bar and phone uses the bottom menu. Navigation coverage includes switching tabs, the active tab after browser back and forward, direct access to a protected subpage, and keyboard focus and activation. A 360 px mobile check verifies that the navigation remains visible without horizontal overflow.
 
+The strength scenario verifies the editor's set and repetition controls, reordering with a pointer or keyboard, and order after saving and reopening the workout. It also checks exercise notes, the sticky finish action, and retrying a failed save with the workout draft intact.
+
 Open `tests/FitnessApp.BrowserTests/test-results/` locally or download **playwright-browser-evidence** from the PR verification run's **Artifacts** section in GitHub Actions. CI requests 14 days of retention. PNGs show checked milestones and the page at failure. `failure-trace.json` lists named steps, durations and outcomes. The upload includes only these files. Native traces, network captures, and saved browser storage are disabled to keep credentials and session data out of evidence.
 
 Every application behavior change needs evidence in its handoff. For browser-visible changes, add or update a Playwright scenario for the changed flow and link its named screenshots on the relevant mobile and desktop sizes. Capture the screenshots after verifying the new behavior with assertions. Follow [the repository guidance](AGENTS.md#local-maps-and-procedures) for other verification evidence and reporting gaps.
