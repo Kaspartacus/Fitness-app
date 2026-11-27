@@ -26,10 +26,20 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using FitnessApp.Server.Staging;
+
+if (args is ["staging-healthcheck"])
+{
+    Environment.ExitCode = await StagingOperations.ProbeAsync();
+    return;
+}
 
 var bootstrapAdministrator = args.Length == 1 && args[0] == "bootstrap-admin";
 var importFrida = args.Length > 0 && args[0] == "import-frida";
+var migrateStaging = args is ["migrate-staging"];
 var builder = WebApplication.CreateBuilder(args);
+if (builder.Environment.IsStaging())
+    builder.Configuration.AddJsonFile("/run/fitness-staging/settings.json", optional: true);
 
 builder.Logging.ClearProviders();
 builder.Services.AddSingleton<LogSpool>();
@@ -54,6 +64,11 @@ builder.Services.AddOptions<PublicAppOptions>()
 builder.Services.AddSingleton<IValidateOptions<FitnessApp.Infrastructure.Email.EmailDeliveryOptions>, EmailDeliveryOptionsValidator>();
 builder.Services.AddOptions<FitnessApp.Infrastructure.Email.EmailDeliveryOptions>()
     .Bind(builder.Configuration.GetSection(FitnessApp.Infrastructure.Email.EmailDeliveryOptions.SectionName))
+    .PostConfigure<IHostEnvironment, IConfiguration>((options, environment, configuration) =>
+    {
+        if (environment.IsStaging() && !configuration.GetValue<bool>("Staging:AllowExternalEmail"))
+            options.Transport = "Pickup";
+    })
     .PostConfigure(options =>
     {
         if (!string.IsNullOrWhiteSpace(options.PickupDirectory))
@@ -92,11 +107,15 @@ var passwordResetTokenLifetime = builder.Environment.IsEnvironment("Testing") &&
         ? TimeSpan.FromMilliseconds(testLifetimeMilliseconds)
         : TimeSpan.FromMinutes(passwordResetTokenLifetimeMinutes);
 builder.Services.AddInfrastructure(connectionString, passwordResetTokenLifetime);
-var emailTransport = builder.Configuration.GetValue("Email:Transport", "Smtp");
-builder.Services.AddEmailDelivery(usePickupDirectory: emailTransport is "Pickup");
+builder.Services.AddEmailDelivery();
 builder.Services.AddScoped<IAccessTokenIssuer, JwtAccessTokenIssuer>();
 builder.Services.AddSingleton<IRefreshCredentialDeriver, RefreshCredentialDeriver>();
 builder.Services.AddOptions<WebPushOptions>().Bind(builder.Configuration.GetSection("WebPush"))
+    .PostConfigure<IHostEnvironment, IConfiguration>((options, environment, configuration) =>
+    {
+        if (environment.IsStaging() && !configuration.GetValue<bool>("Staging:AllowWebPush"))
+            options.PublicKey = options.PrivateKey = options.Subject = string.Empty;
+    })
     .Validate(o => (!o.Configured && o.PublicKey.Length == 0 && o.PrivateKey.Length == 0 && o.Subject.Length == 0) ||
         (o.Configured && PushEndpointPolicy.ValidKey(o.PublicKey, 65) && PushEndpointPolicy.ValidKey(o.PrivateKey, 32) &&
          Uri.TryCreate(o.Subject, UriKind.Absolute, out var subject) && (subject.Scheme is "mailto" or "https")),
@@ -177,6 +196,13 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddProblemDetails();
 
 var app = builder.Build();
+
+if (migrateStaging)
+{
+    Environment.ExitCode = app.Environment.IsStaging()
+        ? await StagingOperations.MigrateAsync(app.Services, CancellationToken.None) : 64;
+    return;
+}
 
 if (bootstrapAdministrator)
 {
@@ -290,6 +316,7 @@ app.UseExceptionHandler(new ExceptionHandlerOptions
     }
 });
 
+if (app.Environment.IsStaging()) app.UseStagingHealth();
 app.UseHttpsRedirection();
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();

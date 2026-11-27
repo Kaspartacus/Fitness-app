@@ -1,0 +1,14 @@
+{
+  "Authentication": {
+    "Jwt": {
+      "Issuer": "FitnessApp.Staging",
+      "Audience": "FitnessApp.Staging.Client",
+      "SigningKey": "REPLACE_WITH_AT_LEAST_32_RANDOM_BYTES_ENCODED_AS_BASE64"
+    }
+  },
+  "Kestrel": {
+    "Certificates": {
+      "Default": { "Password": "REPLACE_WITH_STAGING_CERTIFICATE_PASSWORD" }
+    }
+  }
+}

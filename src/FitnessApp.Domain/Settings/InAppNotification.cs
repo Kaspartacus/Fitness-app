@@ -3,7 +3,7 @@ namespace FitnessApp.Domain.Settings;
 public enum InAppNotificationKind
 {
     TrainingReminder,
-    AdminRegistrationRequest, // Historical only; never generated automatically.
+    AdminRegistrationRequest,
     MealReminder,
     NutritionProgress,
     PushTest,
