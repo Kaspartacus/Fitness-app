@@ -13,6 +13,9 @@ public sealed record ProgramClientResult<T>(T? Value, string? Error = null, bool
 
 public sealed class StrengthProgramClient(IHttpClientFactory factory)
 {
+    public Task<ProgramClientResult<List<CatalogExerciseResponse>>> GetCatalogAsync() =>
+        Send<List<CatalogExerciseResponse>>(HttpMethod.Get, "api/strength/exercises");
+
     public Task<ProgramClientResult<StrengthOverviewResponse>> GetOverviewAsync() =>
         Send<StrengthOverviewResponse>(HttpMethod.Get, "api/strength/overview");
 

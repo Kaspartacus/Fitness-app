@@ -35,6 +35,7 @@ public sealed class RegistrationMigrationTests
 
     private const string ThemePreferenceMigration = "20261015120000_AddThemePreference";
     private const string PrivateDiaryMigration = "20261021120000_AddPrivateDiary";
+    private const string StrengthExerciseCatalogMigration = "20261127060716_AddStrengthExerciseCatalog";
 
     [Fact]
     public async Task LatestMigrationAppliesToEmptyDatabase()
@@ -53,7 +54,8 @@ public sealed class RegistrationMigrationTests
                     CompletedWorkoutOccurrenceLinkMigration, NutritionModuleMigration,
                     ConsolidateNutritionGoalsAndReceiptsMigration, UserNutritionFoodsMigration,
                     NutritionFoodAdditionReceiptsMigration, NutritionRecipeAdditionReceiptsMigration,
-                    NutritionRecipeCreationReceiptsMigration, ScheduledNotificationsMigration, PersistentSessionsMigration, ThemePreferenceMigration, PrivateDiaryMigration],
+                    NutritionRecipeCreationReceiptsMigration, ScheduledNotificationsMigration, PersistentSessionsMigration, ThemePreferenceMigration, PrivateDiaryMigration,
+                    StrengthExerciseCatalogMigration],
                 await dbContext.Database.GetAppliedMigrationsAsync());
             var columns = await ReadUserColumnsAsync(databasePath);
             Assert.Contains("RegisteredAt", columns);
@@ -69,10 +71,15 @@ public sealed class RegistrationMigrationTests
             Assert.Contains("Weight", await ReadColumnsAsync(databasePath, "ProgramExercises"));
             Assert.Contains("Note", await ReadColumnsAsync(databasePath, "ProgramExercises"));
             Assert.Contains("Position", await ReadColumnsAsync(databasePath, "ProgramExercises"));
+            Assert.Contains("CatalogExerciseId", await ReadColumnsAsync(databasePath, "ProgramExercises"));
+            Assert.Contains("DurationSeconds", await ReadColumnsAsync(databasePath, "ProgramExercises"));
             Assert.DoesNotContain("IsWarmUp", await ReadColumnsAsync(databasePath, "ProgramExercises"));
             Assert.Contains("ProgramId", await ReadColumnsAsync(databasePath, "ProgramWorkouts"));
             Assert.Contains("WorkoutId", await ReadColumnsAsync(databasePath, "ProgramScheduleEntries"));
             Assert.Contains("IsCompleted", await ReadColumnsAsync(databasePath, "CompletedWorkoutExercises"));
+            Assert.Contains("CatalogExerciseId", await ReadColumnsAsync(databasePath, "CompletedWorkoutExercises"));
+            Assert.Contains("DurationSeconds", await ReadColumnsAsync(databasePath, "CompletedWorkoutExercises"));
+            Assert.Equal(12, await dbContext.StrengthCatalog.CountAsync());
             Assert.Contains("CompletionId", await ReadColumnsAsync(databasePath, "CompletedWorkouts"));
             Assert.Contains("ScheduledOccurrenceDate", await ReadColumnsAsync(databasePath, "CompletedWorkouts"));
             Assert.Contains("TargetDate", await ReadColumnsAsync(databasePath, "CalendarOccurrenceMoves"));

@@ -57,7 +57,8 @@
                         {
                             <div class="strength-exercise-preview">
                                 <span>@exercise.Name</span>
-                                <span>@exercise.Sets × @exercise.Repetitions</span>
+                                <span>@exercise.Sets × @(exercise.DurationSeconds is { } duration
+                                    ? StrengthDurationInput.Format(duration) : exercise.Repetitions.ToString())</span>
                             </div>
                         }
                         @if (workout.Exercises.Count > 3)
@@ -220,7 +221,9 @@
             Weight = exercise.Weight,
             Sets = exercise.Sets,
             Repetitions = exercise.Repetitions,
-            Note = exercise.Note
+            Note = exercise.Note,
+            CatalogExerciseId = exercise.CatalogExerciseId,
+            DurationSeconds = exercise.DurationSeconds
         }).ToList()
     };
 

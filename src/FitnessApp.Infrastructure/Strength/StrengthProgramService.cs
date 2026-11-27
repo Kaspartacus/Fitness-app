@@ -10,6 +10,9 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
 {
     private static readonly TimeZoneInfo CopenhagenTimeZone = FindCopenhagenTimeZone();
 
+    public async Task<IReadOnlyList<CatalogExercise>> GetCatalogAsync(CancellationToken cancellationToken) =>
+        await db.StrengthCatalog.AsNoTracking().OrderBy(exercise => exercise.Name).ToListAsync(cancellationToken);
+
     public async Task<StrengthOverviewData> GetOverviewAsync(string userId, CancellationToken cancellationToken)
     {
         var programs = await QueryPrograms().Where(program => program.UserId == userId)
@@ -105,7 +108,7 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
             return new ProgramResult(ProgramStatus.NotFound);
         }
 
-        if (!IsValidProgram(input))
+        if (!IsValidProgramStructure(input))
         {
             return new ProgramResult(ProgramStatus.Invalid);
         }
@@ -133,9 +136,31 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
             return new ProgramResult(ProgramStatus.Conflict);
         }
 
+        var previousCatalogIds = program?.Workouts.SelectMany(workout => workout.Exercises)
+            .ToDictionary(exercise => exercise.Id, exercise => exercise.CatalogExerciseId) ?? [];
+        var exercises = input.Workouts!.SelectMany(workout => workout.Exercises!);
+        // Older clients omit the catalog and duration fields. Do not let such an edit
+        // silently convert an existing catalog exercise into a legacy manual entry.
+        if (exercises.Any(exercise => exercise.Id is { } exerciseId && exercise.CatalogExerciseId is null &&
+            previousCatalogIds.GetValueOrDefault(exerciseId) is not null))
+        {
+            return new ProgramResult(ProgramStatus.Invalid);
+        }
+
+        var catalogIds = exercises.Select(exercise => exercise.CatalogExerciseId).OfType<string>()
+            .Distinct(StringComparer.Ordinal).ToArray();
+        var catalog = catalogIds.Length == 0
+            ? new Dictionary<string, CatalogExercise>(StringComparer.Ordinal)
+            : await db.StrengthCatalog.AsNoTracking().Where(exercise => catalogIds.Contains(exercise.Id))
+                .ToDictionaryAsync(exercise => exercise.Id, StringComparer.Ordinal, cancellationToken);
+        if (exercises.Any(exercise => !IsValidProgramExercise(exercise, catalog)))
+        {
+            return new ProgramResult(ProgramStatus.Invalid);
+        }
+
         var programId = id ?? Guid.NewGuid();
         var nextVersion = Guid.NewGuid();
-        var workouts = BuildWorkouts(programId, input.Workouts!);
+        var workouts = BuildWorkouts(programId, input.Workouts!, catalog, previousCatalogIds);
         var preservedSchedule = program?.Schedule
             .Where(entry => entry.WorkoutId is { } workoutId && workouts.Any(workout => workout.Id == workoutId))
             .Select(entry => new ProgramScheduleEntry
@@ -276,14 +301,18 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
                               where completed.UserId == userId && completed.ProgramId == programId && completed.WorkoutId == workoutId &&
                                     exercise.ProgramExerciseId != null && exercise.IsCompleted
                               orderby completed.CompletedAt descending
-                              select new { ProgramExerciseId = exercise.ProgramExerciseId!.Value, exercise.Weight, exercise.Sets, exercise.Repetitions })
+                              select new { ProgramExerciseId = exercise.ProgramExerciseId!.Value, exercise.CatalogExerciseId,
+                                  exercise.Weight, exercise.Sets, exercise.Repetitions, exercise.DurationSeconds })
             .ToListAsync(cancellationToken);
-        var latest = previous.GroupBy(item => item.ProgramExerciseId).ToDictionary(group => group.Key, group => group.First());
+        var latest = previous.GroupBy(item => (item.ProgramExerciseId, (string?)item.CatalogExerciseId))
+            .ToDictionary(group => group.Key, group => group.First());
         return new PlannedWorkoutData(program.Id, program.Name, workout.Id, workout.Name,
-            workout.Exercises.OrderBy(exercise => exercise.Position).Select(exercise => MapActive(exercise,
-                latest.TryGetValue(exercise.Id, out var performance) ? performance.Weight : null,
-                latest.TryGetValue(exercise.Id, out performance) ? performance.Sets : null,
-                latest.TryGetValue(exercise.Id, out performance) ? performance.Repetitions : null)).ToArray());
+            workout.Exercises.OrderBy(exercise => exercise.Position).Select(exercise =>
+            {
+                latest.TryGetValue((exercise.Id, exercise.CatalogExerciseId), out var performance);
+                return MapActive(exercise, performance?.Weight, performance?.Sets, performance?.Repetitions,
+                    performance?.DurationSeconds);
+            }).ToArray());
     }
 
     public async Task<ProgramStatus> CompleteWorkoutAsync(string userId, Guid programId, Guid workoutId, CompletionInput input,
@@ -317,7 +346,8 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
         if (input.Exercises is not { Count: > 0 } || input.Exercises.Count != planned.Exercises.Count ||
             input.Exercises.Any(exercise => exercise is null || exercise.ProgramExerciseId is null ||
                 !plannedByExerciseId.TryGetValue(exercise.ProgramExerciseId.Value, out var source) ||
-                !StrengthRules.IsValidExercise(source.Name, exercise.Weight, exercise.Sets, exercise.Repetitions, null)) ||
+                !StrengthRules.IsValidMeasurement(source.Name, exercise.Weight, exercise.Sets, exercise.Repetitions,
+                    null, source.DurationSeconds is not null, exercise.DurationSeconds)) ||
             input.Exercises.Select(exercise => exercise.ProgramExerciseId!.Value).Distinct().Count() != input.Exercises.Count)
         {
             return ProgramStatus.Invalid;
@@ -341,6 +371,8 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
                 Weight = exercise.Weight,
                 Sets = exercise.Sets,
                 Repetitions = exercise.Repetitions,
+                CatalogExerciseId = plannedByExerciseId[exercise.ProgramExerciseId!.Value].CatalogExerciseId,
+                DurationSeconds = exercise.DurationSeconds,
                 IsCompleted = exercise.IsCompleted,
                 Position = position
             }).ToList()
@@ -375,7 +407,11 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
                 completed.WorkoutName,
                 completed.Exercises.OrderBy(exercise => exercise.Position)
                     .Select(exercise => new CompletedWorkoutExerciseData(exercise.Name, exercise.Weight, exercise.Sets,
-                        exercise.Repetitions, exercise.IsCompleted))
+                        exercise.Repetitions, exercise.IsCompleted)
+                    {
+                        CatalogExerciseId = exercise.CatalogExerciseId,
+                        DurationSeconds = exercise.DurationSeconds
+                    })
                     .ToArray());
     }
 
@@ -383,13 +419,26 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
         .Include(program => program.Workouts).ThenInclude(workout => workout.Exercises)
         .Include(program => program.Schedule);
 
-    private static bool IsValidProgram(ProgramInput input) =>
+    private static bool IsValidProgramStructure(ProgramInput input) =>
         StrengthRules.IsValidName(input.Name) && input.Workouts is { Count: <= StrengthRules.MaxWorkouts } &&
         input.Workouts.All(workout => workout is not null && StrengthRules.IsValidName(workout.Name) &&
-            workout.Exercises is { Count: >= 1 and <= StrengthRules.MaxExercises } && workout.Exercises.All(exercise => exercise is not null &&
-                StrengthRules.IsValidExercise(exercise.Name, exercise.Weight, exercise.Sets, exercise.Repetitions, exercise.Note)));
+            workout.Exercises is { Count: >= 1 and <= StrengthRules.MaxExercises } &&
+            workout.Exercises.All(exercise => exercise is not null));
 
-    private static List<ProgramWorkout> BuildWorkouts(Guid programId, IReadOnlyList<WorkoutInput> input) =>
+    private static bool IsValidProgramExercise(ExerciseInput exercise, IReadOnlyDictionary<string, CatalogExercise> catalog)
+    {
+        CatalogExercise? definition = null;
+        if (exercise.CatalogExerciseId is { } id && !catalog.TryGetValue(id, out definition))
+        {
+            return false;
+        }
+
+        return StrengthRules.IsValidMeasurement(definition?.Name ?? exercise.Name, exercise.Weight, exercise.Sets,
+            exercise.Repetitions, exercise.Note, definition?.IsTimed == true, exercise.DurationSeconds);
+    }
+
+    private static List<ProgramWorkout> BuildWorkouts(Guid programId, IReadOnlyList<WorkoutInput> input,
+        IReadOnlyDictionary<string, CatalogExercise> catalog, IReadOnlyDictionary<Guid, string?> previousCatalogIds) =>
         input.Select((workout, workoutPosition) => new ProgramWorkout
         {
             Id = workout.Id ?? Guid.NewGuid(),
@@ -398,13 +447,17 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
             Position = workoutPosition,
             Exercises = workout.Exercises!.Select((exercise, exercisePosition) => new ProgramExercise
             {
-                Id = exercise.Id ?? Guid.NewGuid(),
+                Id = exercise.Id is { } previousId && previousCatalogIds[previousId] == exercise.CatalogExerciseId
+                    ? previousId
+                    : Guid.NewGuid(),
                 WorkoutId = workout.Id ?? Guid.Empty,
-                Name = exercise.Name!.Trim(),
+                Name = exercise.CatalogExerciseId is { } id ? catalog[id].Name : exercise.Name!.Trim(),
                 Weight = exercise.Weight,
                 Sets = exercise.Sets,
                 Repetitions = exercise.Repetitions,
                 Note = string.IsNullOrWhiteSpace(exercise.Note) ? null : exercise.Note.Trim(),
+                CatalogExerciseId = exercise.CatalogExerciseId,
+                DurationSeconds = exercise.DurationSeconds,
                 Position = exercisePosition
             }).ToList()
         }).Select(workout =>
@@ -428,11 +481,21 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
         workout.Exercises.OrderBy(exercise => exercise.Position).Select(Map).ToArray());
 
     private static ExerciseData Map(ProgramExercise exercise) => new(exercise.Id, exercise.Name, exercise.Weight,
-        exercise.Sets, exercise.Repetitions, exercise.Note);
+        exercise.Sets, exercise.Repetitions, exercise.Note)
+    {
+        CatalogExerciseId = exercise.CatalogExerciseId,
+        DurationSeconds = exercise.DurationSeconds
+    };
 
     private static ActiveExerciseData MapActive(ProgramExercise exercise, decimal? previousWeight = null,
-        int? previousSets = null, int? previousRepetitions = null) => new(exercise.Id, exercise.Name, exercise.Weight,
-        exercise.Sets, exercise.Repetitions, exercise.Note, previousWeight, previousSets, previousRepetitions);
+        int? previousSets = null, int? previousRepetitions = null, int? previousDurationSeconds = null) =>
+        new(exercise.Id, exercise.Name, exercise.Weight, exercise.Sets, exercise.Repetitions, exercise.Note,
+            previousWeight, previousSets, previousRepetitions)
+        {
+            CatalogExerciseId = exercise.CatalogExerciseId,
+            DurationSeconds = exercise.DurationSeconds,
+            PreviousDurationSeconds = previousDurationSeconds
+        };
 
     private static PlannedWorkoutData PlannedWorkout(StrengthProgram program, ProgramWorkout workout) => new(
         program.Id,
@@ -489,10 +552,11 @@ public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider tim
         completed.ProgramId == programId && completed.WorkoutId == workoutId &&
         completed.ScheduledOccurrenceDate == input.ScheduledOccurrenceDate && input.Exercises is { } exercises &&
         completed.Exercises.OrderBy(exercise => exercise.Position).Zip(exercises).All(pair =>
-            pair.First.ProgramExerciseId == pair.Second.ProgramExerciseId &&
+            pair.Second is not null && pair.First.ProgramExerciseId == pair.Second.ProgramExerciseId &&
             pair.First.Weight == pair.Second.Weight &&
             pair.First.Sets == pair.Second.Sets &&
             pair.First.Repetitions == pair.Second.Repetitions &&
+            pair.First.DurationSeconds == pair.Second.DurationSeconds &&
             pair.First.IsCompleted == pair.Second.IsCompleted) &&
         completed.Exercises.Count == exercises.Count;
 

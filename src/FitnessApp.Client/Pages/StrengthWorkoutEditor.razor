@@ -62,7 +62,16 @@
                                 <button class="strength-exercise-card-main" type="button" @onclick="() => OpenEditExercise(position)"
                                         aria-label="@($"Rediger øvelsen {exercise.Name}")" title="Rediger øvelse">
                                     <span class="strength-exercise-card-title">@(index + 1). @exercise.Name</span>
-                                    <span class="strength-exercise-card-values">@FormatWeight(exercise.Weight) kg · @exercise.Sets sæt × @exercise.Repetitions reps</span>
+                                    <span class="strength-exercise-card-values">
+                                        @if (exercise.DurationSeconds is { } duration)
+                                        {
+                                            @($"{exercise.Sets} sæt × {StrengthDurationInput.Format(duration)}")
+                                        }
+                                        else
+                                        {
+                                            @($"{FormatWeight(exercise.Weight)} kg · {exercise.Sets} sæt × {exercise.Repetitions} reps")
+                                        }
+                                    </span>
                                     @if (!string.IsNullOrWhiteSpace(exercise.Note))
                                     {
                                         <span class="strength-exercise-card-note">@exercise.Note</span>
@@ -100,25 +109,49 @@
     <ModalDialog IsOpen="@exerciseModalOpen" Title="@ExerciseModalTitle" InitialFocusSelector="#exercise-name"
                  DismissOnBackdrop="@(!exerciseDiscardConfirmationOpen)" DismissOnEscape="@(!exerciseDiscardConfirmationOpen)"
                  ShowCloseButton="@(!exerciseDiscardConfirmationOpen)" OnDismiss="RequestCloseExerciseModal">
-        <form class="strength-modal-form" @onsubmit="SaveExercise" @onsubmit:preventDefault>
-            <label class="strength-input-label" for="exercise-name">Navn på øvelse</label>
-            <input class="strength-input" id="exercise-name" maxlength="100" @bind="exerciseDraft.Name" @bind:event="oninput" @bind:after="MarkExerciseDirty" placeholder="For eksempel Squat" />
-            <div class="strength-exercise-number-grid">
-                <label class="strength-input-label">Vægt (kg)<input class="strength-input" type="number" min="0" max="1000" step="0.25" @bind="exerciseDraft.Weight" @bind:after="MarkExerciseDirty" /></label>
-                <StrengthCountInput Id="exercise-sets" Label="Sæt" Maximum="10" @bind-Value="exerciseDraft.Sets" @bind-Value:after="MarkExerciseDirty" />
-                <StrengthCountInput Id="exercise-reps" Label="Gentagelser" Maximum="30" @bind-Value="exerciseDraft.Repetitions" @bind-Value:after="MarkExerciseDirty" />
-            </div>
-            <label class="strength-input-label" for="exercise-note">Note (valgfri)</label>
-            <textarea class="strength-textarea" id="exercise-note" maxlength="250" rows="3" @bind="exerciseDraft.Note" @bind:event="oninput" @bind:after="MarkExerciseDirty" placeholder="Kort note til øvelsen"></textarea>
-            @if (exerciseError is not null)
+        <div class="strength-exercise-dialog">
+            <button class="strength-secondary-button" type="button" @onclick="() => catalogOpen = !catalogOpen"
+                    aria-expanded="@catalogOpen.ToString().ToLowerInvariant()">
+                @(catalogOpen ? "Tilbage til øvelsen" : "Vælg fra katalog")
+            </button>
+            @if (catalogOpen)
             {
-                <p class="strength-field-error" role="alert">@exerciseError</p>
+                <StrengthExerciseCatalog Selected="ChooseCatalogExercise" />
             }
-            <div class="app-modal-actions">
-                <button class="strength-quiet-button" type="button" @onclick="RequestCloseExerciseModal">Annuller</button>
-                <button class="strength-primary-button" type="submit">Gem øvelse</button>
-            </div>
-        </form>
+            else
+            {
+                <form class="strength-modal-form" @onsubmit="SaveExercise" @onsubmit:preventDefault>
+                    <label class="strength-input-label" for="exercise-name">Navn på øvelse</label>
+                    <input class="strength-input" id="exercise-name" maxlength="100" readonly="@(exerciseDraft.CatalogExerciseId is not null)"
+                           @bind="exerciseDraft.Name" @bind:event="oninput" @bind:after="MarkExerciseDirty" placeholder="For eksempel Squat" />
+                    <div class="strength-exercise-number-grid">
+                        @if (exerciseDraft.DurationSeconds is { } duration)
+                        {
+                            <StrengthDurationInput Value="duration" ValueChanged="SetExerciseDuration" />
+                        }
+                        else
+                        {
+                            <label class="strength-input-label">Vægt (kg)<input class="strength-input" type="number" min="0" max="1000" step="0.25" @bind="exerciseDraft.Weight" @bind:after="MarkExerciseDirty" /></label>
+                        }
+                        <StrengthCountInput Id="exercise-sets" Label="Sæt" Maximum="10" @bind-Value="exerciseDraft.Sets" @bind-Value:after="MarkExerciseDirty" />
+                        @if (exerciseDraft.DurationSeconds is null)
+                        {
+                            <StrengthCountInput Id="exercise-reps" Label="Gentagelser" Maximum="30" @bind-Value="exerciseDraft.Repetitions" @bind-Value:after="MarkExerciseDirty" />
+                        }
+                    </div>
+                    <label class="strength-input-label" for="exercise-note">Note (valgfri)</label>
+                    <textarea class="strength-textarea" id="exercise-note" maxlength="250" rows="3" @bind="exerciseDraft.Note" @bind:event="oninput" @bind:after="MarkExerciseDirty" placeholder="Kort note til øvelsen"></textarea>
+                    @if (exerciseError is not null)
+                    {
+                        <p class="strength-field-error" role="alert">@exerciseError</p>
+                    }
+                    <div class="app-modal-actions">
+                        <button class="strength-quiet-button" type="button" @onclick="RequestCloseExerciseModal">Annuller</button>
+                        <button class="strength-primary-button" type="submit">Gem øvelse</button>
+                    </div>
+                </form>
+            }
+        </div>
     </ModalDialog>
 
     <ModalDialog IsOpen="@exerciseDiscardConfirmationOpen" Title="Forkast øvelse?" Description="Dine ændringer i øvelsen bliver ikke gemt."
@@ -154,6 +187,7 @@
     private int? editingIndex;
     private int? deleteExerciseIndex;
     private bool exerciseModalOpen;
+    private bool catalogOpen;
     private bool exerciseModalDirty;
     private bool exerciseDiscardConfirmationOpen;
     private bool loading;
@@ -268,6 +302,7 @@
         }
 
         editingIndex = null;
+        catalogOpen = false;
         exerciseDraft = NewExercise();
         exerciseError = null;
         exerciseModalDirty = false;
@@ -283,6 +318,7 @@
         }
 
         editingIndex = index;
+        catalogOpen = false;
         exerciseDraft = Copy(workoutDraft.Exercises![index]);
         exerciseError = null;
         exerciseModalDirty = false;
@@ -320,6 +356,34 @@
 
         MarkDirty();
         CloseExerciseModal();
+    }
+
+    private void ChooseCatalogExercise(CatalogExerciseResponse definition)
+    {
+        if (exerciseDraft.CatalogExerciseId != definition.Id)
+        {
+            var wasTimed = exerciseDraft.DurationSeconds is not null;
+            exerciseDraft.CatalogExerciseId = definition.Id;
+            exerciseDraft.Name = definition.Name;
+            exerciseDraft.DurationSeconds = definition.IsTimed ? exerciseDraft.DurationSeconds ?? 30 : null;
+            if (definition.IsTimed)
+            {
+                exerciseDraft.Weight = 0;
+                exerciseDraft.Repetitions = 1;
+            }
+            else if (wasTimed)
+            {
+                exerciseDraft.Repetitions = 10;
+            }
+            MarkExerciseDirty();
+        }
+        catalogOpen = false;
+    }
+
+    private void SetExerciseDuration(int value)
+    {
+        exerciseDraft.DurationSeconds = value;
+        MarkExerciseDirty();
     }
 
     private void MarkExerciseDirty()
@@ -373,6 +437,7 @@
     private void CloseExerciseModal()
     {
         exerciseModalOpen = false;
+        catalogOpen = false;
         editingIndex = null;
         exerciseDraft = NewExercise();
         exerciseError = null;
@@ -540,8 +605,31 @@
     private static ExerciseRequest NewExercise() => new() { Sets = 3, Repetitions = 10 };
     private static WorkoutRequest Copy(WorkoutResponse source) => new() { Id = source.Id, Name = source.Name, Exercises = source.Exercises.Select(Copy).ToList() };
     private static WorkoutRequest Copy(WorkoutRequest source) => new() { Id = source.Id, Name = source.Name, Exercises = source.Exercises?.Select(Copy).ToList() };
-    private static ExerciseRequest Copy(ExerciseResponse source) => new() { Id = source.Id, Name = source.Name, Weight = source.Weight, Sets = source.Sets, Repetitions = source.Repetitions, Note = source.Note };
-    private static ExerciseRequest Copy(ExerciseRequest source) => new() { Id = source.Id, Name = source.Name, Weight = source.Weight, Sets = source.Sets, Repetitions = source.Repetitions, Note = source.Note };
-    private static string? Validate(ExerciseRequest exercise) => string.IsNullOrWhiteSpace(exercise.Name) || exercise.Weight is < 0 or > 1000 || exercise.Sets is < 1 or > 10 || exercise.Repetitions is < 1 or > 30 ? "Udfyld navn, vægt, sæt og reps korrekt." : exercise.Note?.Length > 250 ? "Noten må højst være 250 tegn." : null;
+    private static ExerciseRequest Copy(ExerciseResponse source) => new()
+    {
+        Id = source.Id, Name = source.Name, Weight = source.Weight, Sets = source.Sets,
+        Repetitions = source.Repetitions, Note = source.Note,
+        CatalogExerciseId = source.CatalogExerciseId, DurationSeconds = source.DurationSeconds
+    };
+    private static ExerciseRequest Copy(ExerciseRequest source) => new()
+    {
+        Id = source.Id, Name = source.Name, Weight = source.Weight, Sets = source.Sets,
+        Repetitions = source.Repetitions, Note = source.Note,
+        CatalogExerciseId = source.CatalogExerciseId, DurationSeconds = source.DurationSeconds
+    };
+    private static string? Validate(ExerciseRequest exercise)
+    {
+        if (string.IsNullOrWhiteSpace(exercise.Name) || exercise.Sets is < 1 or > 10)
+        {
+            return "Udfyld navn og sæt korrekt.";
+        }
+        if (exercise.DurationSeconds is { } duration
+            ? duration is < 1 or > 3599
+            : exercise.Weight is < 0 or > 1000 || exercise.Repetitions is < 1 or > 30)
+        {
+            return exercise.DurationSeconds is null ? "Kontrollér vægt og gentagelser." : "Angiv en varighed på mindst ét sekund.";
+        }
+        return exercise.Note?.Length > 250 ? "Noten må højst være 250 tegn." : null;
+    }
     private static string FormatWeight(decimal weight) => weight.ToString("0.##");
 }

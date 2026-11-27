@@ -226,7 +226,8 @@
         Exercises = workout.Exercises.Select(exercise => new ExerciseRequest
         {
             Id = exercise.Id, Name = exercise.Name, Weight = exercise.Weight, Sets = exercise.Sets,
-            Repetitions = exercise.Repetitions, Note = exercise.Note
+            Repetitions = exercise.Repetitions, Note = exercise.Note,
+            CatalogExerciseId = exercise.CatalogExerciseId, DurationSeconds = exercise.DurationSeconds
         }).ToList()
     };
 
@@ -244,6 +245,8 @@
         Weight = exercise.Weight,
         Sets = exercise.Sets,
         Repetitions = exercise.Repetitions,
-        Note = exercise.Note
+        Note = exercise.Note,
+        CatalogExerciseId = exercise.CatalogExerciseId,
+        DurationSeconds = exercise.DurationSeconds
     };
 }

@@ -1,0 +1,25 @@
+<div class="strength-duration-input">
+    <label class="strength-input-label">
+        Minutter
+        <input class="strength-input" type="number" min="0" max="59" inputmode="numeric"
+               @bind:get="Minutes" @bind:set="SetMinutesAsync" />
+    </label>
+    <label class="strength-input-label">
+        Sekunder
+        <input class="strength-input" type="number" min="0" max="59" inputmode="numeric"
+               @bind:get="Seconds" @bind:set="SetSecondsAsync" />
+    </label>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int Value { get; set; }
+    [Parameter, EditorRequired] public EventCallback<int> ValueChanged { get; set; }
+
+    private int Minutes => Value / 60;
+    private int Seconds => Value % 60;
+
+    private Task SetMinutesAsync(int value) => ValueChanged.InvokeAsync(Math.Clamp(value, 0, 59) * 60 + Seconds);
+    private Task SetSecondsAsync(int value) => ValueChanged.InvokeAsync(Minutes * 60 + Math.Clamp(value, 0, 59));
+
+    public static string Format(int duration) => $"{duration / 60} min {duration % 60:00} sek";
+}

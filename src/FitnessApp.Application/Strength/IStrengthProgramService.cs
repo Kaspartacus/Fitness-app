@@ -1,11 +1,26 @@
+using FitnessApp.Domain.Strength;
+
 namespace FitnessApp.Application.Strength;
 
-public sealed record ExerciseInput(Guid? Id, string? Name, decimal Weight, int Sets, int Repetitions, string? Note);
+public sealed record ExerciseInput(Guid? Id, string? Name, decimal Weight, int Sets, int Repetitions, string? Note)
+{
+    public string? CatalogExerciseId { get; init; }
+    public int? DurationSeconds { get; init; }
+}
 public sealed record WorkoutInput(Guid? Id, string? Name, IReadOnlyList<ExerciseInput>? Exercises);
 public sealed record ProgramInput(string? Name, Guid? Version, IReadOnlyList<WorkoutInput>? Workouts);
-public sealed record ExerciseData(Guid Id, string Name, decimal Weight, int Sets, int Repetitions, string? Note);
+public sealed record ExerciseData(Guid Id, string Name, decimal Weight, int Sets, int Repetitions, string? Note)
+{
+    public string? CatalogExerciseId { get; init; }
+    public int? DurationSeconds { get; init; }
+}
 public sealed record ActiveExerciseData(Guid Id, string Name, decimal Weight, int Sets, int Repetitions, string? Note,
-    decimal? PreviousWeight, int? PreviousSets, int? PreviousRepetitions);
+    decimal? PreviousWeight, int? PreviousSets, int? PreviousRepetitions)
+{
+    public string? CatalogExerciseId { get; init; }
+    public int? DurationSeconds { get; init; }
+    public int? PreviousDurationSeconds { get; init; }
+}
 public sealed record WorkoutData(Guid Id, string Name, IReadOnlyList<ExerciseData> Exercises);
 public sealed record ProgramData(Guid Id, string Name, Guid Version, IReadOnlyList<WorkoutData> Workouts);
 public sealed record ScheduleEntryData(DayOfWeek DayOfWeek, Guid? WorkoutId);
@@ -14,10 +29,17 @@ public sealed record PlannedWorkoutData(Guid ProgramId, string ProgramName, Guid
     IReadOnlyList<ActiveExerciseData> Exercises);
 public sealed record StrengthOverviewData(IReadOnlyList<ProgramData> Programs, PlannedWorkoutData? Today);
 public sealed record CompletedExerciseInput(Guid? ProgramExerciseId, string? Name, decimal Weight, int Sets,
-    int Repetitions, bool IsCompleted);
+    int Repetitions, bool IsCompleted)
+{
+    public int? DurationSeconds { get; init; }
+}
 public sealed record CompletionInput(Guid CompletionId, IReadOnlyList<CompletedExerciseInput>? Exercises,
     DateOnly? ScheduledOccurrenceDate = null);
-public sealed record CompletedWorkoutExerciseData(string Name, decimal Weight, int Sets, int Repetitions, bool IsCompleted);
+public sealed record CompletedWorkoutExerciseData(string Name, decimal Weight, int Sets, int Repetitions, bool IsCompleted)
+{
+    public string? CatalogExerciseId { get; init; }
+    public int? DurationSeconds { get; init; }
+}
 public sealed record CompletedWorkoutData(Guid Id, DateOnly Date, string WorkoutName,
     IReadOnlyList<CompletedWorkoutExerciseData> Exercises);
 public enum ProgramStatus { Saved, NotFound, Invalid, Conflict }
@@ -25,6 +47,7 @@ public sealed record ProgramResult(ProgramStatus Status, ProgramData? Program = 
 
 public interface IStrengthProgramService
 {
+    Task<IReadOnlyList<CatalogExercise>> GetCatalogAsync(CancellationToken cancellationToken);
     Task<StrengthOverviewData> GetOverviewAsync(string userId, CancellationToken cancellationToken);
     Task<IReadOnlyList<ProgramData>> ListAsync(string userId, CancellationToken cancellationToken);
     Task<ProgramData?> GetAsync(string userId, Guid id, CancellationToken cancellationToken);

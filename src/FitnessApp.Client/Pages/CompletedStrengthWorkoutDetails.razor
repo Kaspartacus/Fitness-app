@@ -39,7 +39,11 @@
                     <article class="strength-exercise-card completed-strength-exercise">
                         <div class="strength-exercise-card-main">
                             <strong class="strength-exercise-card-title">@exercise.Name</strong>
-                            <span class="strength-exercise-card-values">@FormatWeight(exercise.Weight) kg · @exercise.Sets × @exercise.Repetitions</span>
+                            <span class="strength-exercise-card-values">
+                                @(exercise.DurationSeconds is { } duration
+                                    ? $"{exercise.Sets} × {StrengthDurationInput.Format(duration)}"
+                                    : $"{FormatWeight(exercise.Weight)} kg · {exercise.Sets} × {exercise.Repetitions}")
+                            </span>
                             <span class="completed-strength-status @(exercise.IsCompleted ? "is-completed" : "is-skipped")">@(exercise.IsCompleted ? "Gennemført" : "Ikke markeret som færdig")</span>
                         </div>
                     </article>

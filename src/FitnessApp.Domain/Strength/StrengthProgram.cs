@@ -29,6 +29,8 @@ public sealed class ProgramExercise
     public int Sets { get; set; }
     public int Repetitions { get; set; }
     public string? Note { get; set; }
+    public string? CatalogExerciseId { get; set; }
+    public int? DurationSeconds { get; set; }
     public int Position { get; set; }
 }
 
@@ -66,18 +68,30 @@ public sealed class CompletedWorkoutExercise
     public int Sets { get; set; }
     public int Repetitions { get; set; }
     public bool IsCompleted { get; set; }
+    public string? CatalogExerciseId { get; set; }
+    public int? DurationSeconds { get; set; }
     public int Position { get; set; }
 }
+
+public sealed record CatalogExercise(string Id, string Name, string Category, string SearchAliases,
+    string ImageAlt, bool IsTimed);
 
 public static class StrengthRules
 {
     public const int MaxWorkouts = 12;
     public const int MaxExercises = 50;
     public const int MaxNoteLength = 250;
+    public const int MaxDurationSeconds = 3599;
 
     public static bool IsValidName(string? value) => value?.Trim().Length is >= 1 and <= 100;
 
     public static bool IsValidExercise(string? name, decimal weight, int sets, int repetitions, string? note) =>
         IsValidName(name) && weight is >= 0 and <= 1000 && sets is >= 1 and <= 10 &&
         repetitions is >= 1 and <= 30 && note?.Trim().Length is not > MaxNoteLength;
+
+    public static bool IsValidMeasurement(string? name, decimal weight, int sets, int repetitions, string? note,
+        bool isTimed, int? durationSeconds) =>
+        IsValidExercise(name, weight, sets, repetitions, note) &&
+        (isTimed ? weight == 0 && repetitions == 1 && durationSeconds is >= 1 and <= MaxDurationSeconds
+            : durationSeconds is null);
 }

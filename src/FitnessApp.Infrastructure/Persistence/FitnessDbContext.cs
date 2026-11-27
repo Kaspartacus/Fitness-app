@@ -21,6 +21,7 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
     public DbSet<StrengthProgram> StrengthPrograms => Set<StrengthProgram>();
     public DbSet<ProgramWorkout> ProgramWorkouts => Set<ProgramWorkout>();
     public DbSet<ProgramExercise> ProgramExercises => Set<ProgramExercise>();
+    public DbSet<CatalogExercise> StrengthCatalog => Set<CatalogExercise>();
     public DbSet<ProgramScheduleEntry> ProgramScheduleEntries => Set<ProgramScheduleEntry>();
     public DbSet<CompletedWorkout> CompletedWorkouts => Set<CompletedWorkout>();
     public DbSet<CompletedWorkoutExercise> CompletedWorkoutExercises => Set<CompletedWorkoutExercise>();
@@ -108,7 +109,18 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
             entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
             entity.Property(e => e.Weight).HasPrecision(7, 2);
             entity.Property(e => e.Note).HasMaxLength(250);
+            entity.Property(e => e.CatalogExerciseId).HasMaxLength(60);
             entity.HasIndex(e => new { e.WorkoutId, e.Position }).IsUnique();
+        });
+        builder.Entity<CatalogExercise>(entity =>
+        {
+            entity.HasKey(exercise => exercise.Id);
+            entity.Property(exercise => exercise.Id).HasMaxLength(60);
+            entity.Property(exercise => exercise.Name).HasMaxLength(100).IsRequired();
+            entity.Property(exercise => exercise.Category).HasMaxLength(30).IsRequired();
+            entity.Property(exercise => exercise.SearchAliases).HasMaxLength(400).IsRequired();
+            entity.Property(exercise => exercise.ImageAlt).HasMaxLength(250).IsRequired();
+            entity.HasData(FitnessApp.Infrastructure.Strength.StrengthCatalogSeed.Create());
         });
         builder.Entity<ProgramScheduleEntry>(entity =>
         {
@@ -137,6 +149,7 @@ public sealed class FitnessDbContext(DbContextOptions<FitnessDbContext> options)
             entity.HasKey(exercise => exercise.Id);
             entity.Property(exercise => exercise.Name).HasMaxLength(100).IsRequired();
             entity.Property(exercise => exercise.Weight).HasPrecision(7, 2);
+            entity.Property(exercise => exercise.CatalogExerciseId).HasMaxLength(60);
             entity.HasIndex(exercise => new { exercise.CompletedWorkoutId, exercise.Position }).IsUnique();
         });
 

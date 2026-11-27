@@ -13,6 +13,10 @@ internal static class StrengthProgramEndpoints
     {
         // The existing JWT validator checks the persisted session and live Approved status on every request.
         var group = app.MapGroup("/api/strength").RequireAuthorization();
+        group.MapGet("/exercises", async (IStrengthProgramService service, CancellationToken ct) =>
+            Results.Ok((await service.GetCatalogAsync(ct)).Select(exercise => new CatalogExerciseResponse(exercise.Id,
+                exercise.Name, exercise.Category, exercise.SearchAliases.Split('|'), exercise.ImageAlt, exercise.IsTimed))
+                .ToArray()));
         group.MapGet("/overview", async (ClaimsPrincipal user, IStrengthProgramService service, CancellationToken ct) =>
             Results.Ok(Map(await service.GetOverviewAsync(Owner(user), ct))));
         group.MapGet("/programs", async (ClaimsPrincipal user, IStrengthProgramService service, CancellationToken ct) =>
@@ -45,7 +49,8 @@ internal static class StrengthProgramEndpoints
             Status(await service.CompleteWorkoutAsync(Owner(user), programId, workoutId,
                 new CompletionInput(request.CompletionId, request.Exercises?.Select(exercise => exercise is null ? null! : new CompletedExerciseInput(
                     exercise.ProgramExerciseId, exercise.Name, exercise.Weight, exercise.Sets, exercise.Repetitions,
-                    exercise.IsCompleted)).ToArray(), request.ScheduledOccurrenceDate), ct)));
+                    exercise.IsCompleted) { DurationSeconds = exercise.DurationSeconds }).ToArray(),
+                request.ScheduledOccurrenceDate), ct)));
         group.MapGet("/completions/{completionId:guid}", async Task<Results<Ok<CompletedWorkoutResponse>, NotFound<object>>>
             (Guid completionId, ClaimsPrincipal user, IStrengthProgramService service, CancellationToken ct) =>
             (await service.GetCompletedWorkoutAsync(Owner(user), completionId, ct)) is { } completed
@@ -59,7 +64,11 @@ internal static class StrengthProgramEndpoints
         var result = await service.SaveAsync(Owner(user), id, new ProgramInput(request.Name, request.Version,
             request.Workouts?.Select(workout => workout is null ? null! : new WorkoutInput(workout.Id, workout.Name,
                 workout.Exercises?.Select(exercise => exercise is null ? null! : new ExerciseInput(exercise.Id,
-                    exercise.Name, exercise.Weight, exercise.Sets, exercise.Repetitions, exercise.Note)).ToArray())).ToArray()), ct);
+                    exercise.Name, exercise.Weight, exercise.Sets, exercise.Repetitions, exercise.Note)
+                {
+                    CatalogExerciseId = exercise.CatalogExerciseId,
+                    DurationSeconds = exercise.DurationSeconds
+                }).ToArray())).ToArray()), ct);
         return result.Status == ProgramStatus.Saved
             ? id is null ? Results.Created($"/api/strength/programs/{result.Program!.Id}", Map(result.Program)) : Results.Ok(Map(result.Program!))
             : Status(result.Status);
@@ -95,16 +104,29 @@ internal static class StrengthProgramEndpoints
         workout.Exercises.Select(Map).ToArray());
 
     private static ExerciseResponse Map(ExerciseData exercise) => new(exercise.Id, exercise.Name, exercise.Weight,
-        exercise.Sets, exercise.Repetitions, exercise.Note);
+        exercise.Sets, exercise.Repetitions, exercise.Note)
+    {
+        CatalogExerciseId = exercise.CatalogExerciseId,
+        DurationSeconds = exercise.DurationSeconds
+    };
 
     private static PlannedWorkoutResponse Map(PlannedWorkoutData workout) => new(workout.ProgramId, workout.ProgramName,
         workout.WorkoutId, workout.WorkoutName, workout.Exercises.Select(Map).ToArray());
 
     private static ActiveExerciseResponse Map(ActiveExerciseData exercise) => new(exercise.Id, exercise.Name, exercise.Weight,
         exercise.Sets, exercise.Repetitions, exercise.Note, exercise.PreviousWeight, exercise.PreviousSets,
-        exercise.PreviousRepetitions);
+        exercise.PreviousRepetitions)
+    {
+        CatalogExerciseId = exercise.CatalogExerciseId,
+        DurationSeconds = exercise.DurationSeconds,
+        PreviousDurationSeconds = exercise.PreviousDurationSeconds
+    };
 
     private static CompletedWorkoutResponse Map(CompletedWorkoutData workout) => new(workout.Id, workout.Date,
         workout.WorkoutName, workout.Exercises.Select(exercise => new CompletedWorkoutExerciseResponse(exercise.Name,
-            exercise.Weight, exercise.Sets, exercise.Repetitions, exercise.IsCompleted)).ToArray());
+            exercise.Weight, exercise.Sets, exercise.Repetitions, exercise.IsCompleted)
+        {
+            CatalogExerciseId = exercise.CatalogExerciseId,
+            DurationSeconds = exercise.DurationSeconds
+        }).ToArray());
 }

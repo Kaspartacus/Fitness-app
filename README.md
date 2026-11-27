@@ -142,9 +142,13 @@ Approval permits a later login but does **not** prove ownership of the submitted
 
 ## Strength programs
 
-An Approved user opens **Styrketræning** from the protected home page to create, view, edit, reorder, and delete personal programs. A program holds up to 12 ordered workouts, and every workout holds 1–50 ordered exercises. The Figma-aligned mobile flow includes today’s workout, weekly planning, start training, editable actual weight/sets/repetitions, completion, and the latest saved performance for every exercise. Each exercise stores a name, 0–1000 kg planned weight, 1–10 planned sets, 1–30 planned repetitions, and an optional note of up to 250 characters. Warm-up is represented as an ordinary exercise when wanted; there is no separate warm-up flag.
+An Approved user opens **Styrketræning** from the protected home page to create, view, edit, reorder, and delete personal programs. A program holds up to 12 ordered workouts, and every workout holds 1–50 ordered exercises. The Figma-aligned mobile flow includes today’s workout, weekly planning, start training, editable actual measurements, completion, and the latest saved performance for each exercise in that workout. Exercises have a name, 1–10 planned sets, and an optional note of up to 250 characters. Weight-based exercises use 0–1000 kg and 1–30 planned repetitions. Warm-up is represented as an ordinary exercise when wanted; there is no separate warm-up flag.
 
 The server derives ownership from the validated session. Lists, reads, updates, and deletes are scoped to that user, including for administrators. Program and exercise changes commit atomically. A version token rejects stale updates or deletions made from another tab and lets the user retain the local draft before choosing whether to reload.
+
+In the workout editor, **Vælg fra katalog** searches English names and Danish aliases and filters by category. The initial set covers squat, deadlift, bench press, push-up, dumbbell row, pull-up, biceps curl, triceps extension, lunge, calf raise, plank, and side plank. A catalog selection keeps its stable ID across programs. Manual entries remain available. Plank and side plank use minutes and seconds per set. A saved result keeps the duration that was logged, independently of later edits to the program. Existing exercises and results retain their original names and measurements.
+
+To add a catalog exercise, add a permanent slug, canonical English name, Danish aliases, category, measurement type, and Danish image description in `StrengthCatalogSeed.cs` and generate a migration. Place a matching `<slug>.webp` in `src/FitnessApp.Client/wwwroot/images/exercises/`. The starter images were generated individually with ImageGen using one exercise pose per image, a slate-blue studio background, and no lettering or branding. Review new images for pose, equipment, and agreement with the alternative text before adding them.
 
 ## Running
 
