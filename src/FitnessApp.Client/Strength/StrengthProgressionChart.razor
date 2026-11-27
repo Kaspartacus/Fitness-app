@@ -1,0 +1,57 @@
+@using System.Globalization
+@using FitnessApp.Contracts.Strength
+
+@{
+    var first = Days[0].Date;
+    var last = Days[^1].Date;
+    var span = last.DayNumber - first.DayNumber;
+    var ceiling = Math.Max(2, Math.Ceiling(Days.Max(Value) / 2) * 2);
+    var points = Days.Select(day => (
+        X: span == 0 ? 180m : 8 + 344m * (day.Date.DayNumber - first.DayNumber) / span,
+        Y: 108 - 100 * Value(day) / ceiling)).ToArray();
+}
+
+<article class="strength-editor-card strength-progression-chart">
+    <h2>@Title</h2>
+    <p><strong>@RecordText</strong> · Bedst i perioden</p>
+    <div aria-hidden="true">
+        <div class="strength-progression-plot">
+            <div class="strength-progression-axis">
+                <span>@Tick(ceiling)</span>
+                <span>@Tick(ceiling / 2)</span>
+                <span>0</span>
+            </div>
+            <svg viewBox="0 0 360 116" focusable="false">
+                <path class="strength-progression-gridlines" d="M8 8H352 M8 58H352 M8 108H352" />
+                <polyline class="strength-progression-line" points="@string.Join(" ", points.Select(point => $"{Coordinate(point.X)},{Coordinate(point.Y)}"))" />
+                @foreach (var point in points)
+                {
+                    <circle class="strength-progression-point" cx="@Coordinate(point.X)" cy="@Coordinate(point.Y)" r="3.4" />
+                }
+            </svg>
+        </div>
+        <div class="strength-progression-dates">
+            @if (span > 0)
+            {
+                <span>@first.ToString("d/M", CultureInfo.InvariantCulture)</span>
+                <span>@last.ToString("d/M", CultureInfo.InvariantCulture)</span>
+            }
+            else
+            {
+                <span class="strength-progression-single-date">@first.ToString("d/M", CultureInfo.InvariantCulture)</span>
+            }
+        </div>
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Unit { get; set; } = "";
+    [Parameter, EditorRequired] public string RecordText { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<StrengthProgressionDayResponse> Days { get; set; } = [];
+    [Parameter, EditorRequired] public Func<StrengthProgressionDayResponse, decimal> Value { get; set; } = null!;
+
+    private string Tick(decimal value) => $"{value.ToString("0", CultureInfo.InvariantCulture)} {Unit}";
+
+    private static string Coordinate(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+}

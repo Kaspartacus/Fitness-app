@@ -261,6 +261,17 @@ test('edit and finish a strength workout', async ({ page, evidence }, testInfo) 
     await expectOrder(reordered);
     await expect(squat).toBeFocused();
     await evidence.screenshot('strength-reordered');
+
+    const editSquat = exerciseList.getByRole('button', { name: 'Rediger øvelsen Squat', exact: true });
+    await editSquat.press('Enter');
+    const dialog = page.getByRole('dialog', { name: 'Rediger øvelse' });
+    await dialog.getByRole('button', { name: 'Flere sæt', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Gem øvelse', exact: true }).press('Enter');
+    await expect(dialog).toBeHidden();
+    await expect(editSquat).toBeFocused();
+    await expect(editSquat.getByText(/5 sæt/)).toBeVisible();
+    await evidence.screenshot('strength-edit-focus-restored');
+
     await page.getByRole('button', { name: 'Gem træning', exact: true }).click();
     await page.getByRole('link', { name: 'Rediger', exact: true }).click();
     await expectOrder(reordered);
@@ -296,6 +307,71 @@ test('edit and finish a strength workout', async ({ page, evidence }, testInfo) 
     await finish.click();
     await confirm.getByRole('button', { name: 'Gem træning' }).click();
     await expect(page.getByRole('heading', { name: programName })).toBeVisible();
+  });
+});
+
+test('view strength progression by exercise and period', async ({ page, evidence }, testInfo) => {
+  const exercise = page.getByLabel('Øvelse', { exact: true });
+  const period = page.getByLabel('Periode', { exact: true });
+  const results = page.getByRole('table', { name: 'Resultater pr. dag' });
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.name));
+
+  await evidence.step('Open the dashboard link and compare weight and repetitions', async () => {
+    await page.goto('/login');
+    await submitLogin(page, adminEmail);
+    await page.getByRole('link', { name: 'Se styrkeprogression' }).click();
+    await expect(page).toHaveURL('/progression');
+    await expect(page.getByRole('heading', { name: 'Styrkeprogression' })).toBeVisible();
+    await expect(period).toHaveValue('90');
+    await exercise.selectOption({ label: 'Bench Press' });
+    const weight = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Højeste vægt' }) });
+    await expect(weight.getByText('52,5 kg', { exact: true })).toBeVisible();
+    await expect(weight.locator('circle')).toHaveCount(3);
+    await expect(page.getByRole('heading', { name: 'Flest gentagelser pr. sæt' })).toBeVisible();
+    await expect(results.getByRole('cell', { name: '32,5', exact: true })).toBeVisible();
+    await expect(results.getByRole('cell', { name: '10', exact: true })).toBeVisible();
+    await expect(page.getByText('2.365 kg', { exact: true })).toBeVisible();
+    await evidence.screenshot('strength-progression-weight');
+  });
+
+  await evidence.step('Switch to a timed exercise and verify mobile layout', async () => {
+    await exercise.selectOption({ label: 'Side Plank' });
+    await expect(page.getByRole('heading', { name: 'Længste varighed' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Højeste vægt' })).toHaveCount(0);
+    await expect(results.getByRole('cell', { name: '1:16', exact: true })).toBeVisible();
+    await expect(results.getByRole('cell', { name: '0:38', exact: true })).toBeVisible();
+    await evidence.screenshot('strength-progression-duration');
+    if (testInfo.project.use.hasTouch) {
+      await page.setViewportSize({ width: 360, height: 844 });
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(360);
+      await expect(exercise).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Profil og indstillinger' })).toBeInViewport({ ratio: 1 });
+      await evidence.screenshot('strength-progression-360');
+    }
+  });
+
+  await evidence.step('Filter historical results and retry a failed request', async () => {
+    const narrow = page.waitForResponse((response) => response.url().endsWith('/api/strength/progression?days=30'));
+    await period.selectOption('30');
+    expect((await narrow).ok()).toBe(true);
+    await expect(period).toBeEnabled();
+    await expect(exercise).toHaveValue('catalog:side-plank:time');
+    await expect(page.getByText('Du har ingen gennemførte registreringer for øvelsen i perioden.')).toBeVisible();
+    await expect(results).toHaveCount(0);
+    await evidence.screenshot('strength-progression-empty-period');
+
+    await page.route('**/api/strength/progression?days=365', (route) =>
+      route.fulfill({ status: 503 }), { times: 1 });
+    await period.selectOption('365');
+    await expect(page.getByRole('alert')).toContainText('Kunne ikke kontakte serveren');
+    await page.getByRole('button', { name: 'Prøv igen' }).click();
+    await exercise.selectOption({ label: 'Side Plank' });
+    await expect(results.getByRole('cell', { name: '1:16', exact: true })).toBeVisible();
+    await page.goto('/styrke');
+    await page.getByRole('link', { name: 'Se styrkeprogression' }).click();
+    await expect(page.getByRole('heading', { name: 'Styrkeprogression' })).toBeVisible();
+    expect(errors).toEqual([]);
   });
 });
 
@@ -409,6 +485,9 @@ test('enter a weight and reuse personal catalog history across programs', async 
     await weight.press('Tab');
     await expect(weight).toHaveValue('25,5');
     await expect(weight).not.toHaveAttribute('aria-invalid', 'true');
+    await weight.fill('');
+    await weight.press('Tab');
+    await expect(weight).toHaveAttribute('aria-invalid', 'true');
     await weight.fill('1001');
     await weight.press('Tab');
     await expect(weight).toHaveAttribute('aria-invalid', 'true');
@@ -443,10 +522,13 @@ test('enter a weight and reuse personal catalog history across programs', async 
 
   await evidence.step('Prefill the last saved weight when the plan has no weight', async () => {
     await page.getByRole('link', { name: 'Rediger', exact: true }).click();
-    await page.getByRole('button', { name: 'Rediger øvelsen Squat' }).click();
+    const editSquat = page.getByRole('button', { name: 'Rediger øvelsen Squat' });
+    await editSquat.click();
     const dialog = page.getByRole('dialog', { name: 'Rediger øvelse' });
+    await expect(dialog.getByRole('textbox', { name: 'Navn på øvelse' })).toBeFocused();
     await dialog.getByRole('spinbutton', { name: 'Vægt (kg)' }).fill('0');
     await dialog.getByRole('button', { name: 'Gem øvelse' }).click();
+    await expect(editSquat.getByText(/^0 kg/)).toBeVisible();
     await page.getByRole('button', { name: 'Gem træning', exact: true }).click();
     await page.getByRole('link', { name: 'Start træning', exact: true }).click();
     await expect(weight).toHaveValue('25,5');

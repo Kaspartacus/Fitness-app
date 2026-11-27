@@ -17,6 +17,19 @@ internal static class StrengthProgramEndpoints
             Results.Ok((await service.GetCatalogAsync(ct)).Select(exercise => new CatalogExerciseResponse(exercise.Id,
                 exercise.Name, exercise.Category, exercise.SearchAliases.Split('|'), exercise.ImageAlt, exercise.IsTimed))
                 .ToArray()));
+        group.MapGet("/progression", async (int days, ClaimsPrincipal user, IStrengthProgramService service,
+            CancellationToken ct) =>
+        {
+            if (days is not (30 or 90 or 365))
+            {
+                return Results.BadRequest();
+            }
+
+            var progression = await service.GetProgressionAsync(Owner(user), days, ct);
+            return Results.Ok(progression.Select(exercise => new StrengthExerciseProgressionResponse(exercise.Key,
+                exercise.Name, exercise.IsTimed, exercise.Days.Select(day => new StrengthProgressionDayResponse(
+                    day.Date, day.MaxWeight, day.MaxRepetitions, day.VolumeKg, day.MaxDurationSeconds)).ToArray())).ToArray());
+        });
         group.MapGet("/overview", async (ClaimsPrincipal user, IStrengthProgramService service, CancellationToken ct) =>
             Results.Ok(Map(await service.GetOverviewAsync(Owner(user), ct))));
         group.MapGet("/programs", async (ClaimsPrincipal user, IStrengthProgramService service, CancellationToken ct) =>

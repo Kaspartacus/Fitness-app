@@ -1,0 +1,167 @@
+@page "/progression"
+@attribute [Authorize]
+@using System.Globalization
+@using FitnessApp.Client.Strength
+@using FitnessApp.Contracts.Strength
+@inject StrengthProgramClient Programs
+
+<PageTitle>Styrkeprogression</PageTitle>
+
+<main class="strength-app strength-with-bottom-nav strength-progression" aria-labelledby="progression-title">
+    <header class="strength-mobile-header">
+        <div>
+            <h1 id="progression-title">Styrkeprogression</h1>
+            <p>Følg dine gennemførte øvelser over tid.</p>
+        </div>
+        <ProfileSettingsLink />
+    </header>
+
+    <div class="strength-progression-filters">
+        <div class="strength-input-label">
+            <label for="progression-period">Periode</label>
+            <select id="progression-period" class="strength-input" @bind="days" @bind:after="LoadAsync" disabled="@loading">
+                <option value="30">Seneste 30 dage</option>
+                <option value="90">Seneste 90 dage</option>
+                <option value="365">Seneste 365 dage</option>
+            </select>
+        </div>
+        @if (exercises.Count > 0 && error is null)
+        {
+            <div class="strength-input-label">
+                <label for="progression-exercise">Øvelse</label>
+                <select @key="exercises" id="progression-exercise" class="strength-input"
+                        @bind="selectedKey" disabled="@loading">
+                    @foreach (var exercise in exercises)
+                    {
+                        <option value="@exercise.Key">@exercise.Name</option>
+                    }
+                </select>
+            </div>
+        }
+    </div>
+
+    @if (loading)
+    {
+        <p class="strength-feedback" role="status">Indlæser progression…</p>
+    }
+    else if (error is not null)
+    {
+        <section class="strength-status-card" role="alert">
+            <p>@error</p>
+            <button class="strength-secondary-button" type="button" @onclick="LoadAsync">Prøv igen</button>
+        </section>
+    }
+    else if (Selected is not { Days.Count: > 0 } selected)
+    {
+        <section class="strength-empty-compact" aria-label="Ingen resultater">
+            <p>@(Selected is null ? "Du har ingen gennemførte øvelser i perioden." :
+                "Du har ingen gennemførte registreringer for øvelsen i perioden.")</p>
+            <a href="/styrke">Åbn styrketræning</a>
+        </section>
+    }
+    else
+    {
+        <div class="strength-progression-charts">
+            @if (selected.IsTimed)
+            {
+                <StrengthProgressionChart Title="Længste varighed" Unit="sek." Days="selected.Days"
+                                          Value="day => day.MaxDurationSeconds!.Value"
+                                          RecordText="@Duration(selected.Days.Max(day => day.MaxDurationSeconds!.Value))" />
+            }
+            else
+            {
+                <StrengthProgressionChart Title="Højeste vægt" Unit="kg" Days="selected.Days"
+                                          Value="day => day.MaxWeight!.Value"
+                                          RecordText="@($"{Number(selected.Days.Max(day => day.MaxWeight!.Value))} kg")" />
+                <StrengthProgressionChart Title="Flest gentagelser pr. sæt" Unit="gent." Days="selected.Days"
+                                          Value="day => day.MaxRepetitions!.Value"
+                                          RecordText="@($"{selected.Days.Max(day => day.MaxRepetitions!.Value)} gent.")" />
+            }
+        </div>
+
+        <section class="strength-editor-card strength-progression-data" aria-labelledby="progression-data-title">
+            <h2 id="progression-data-title">Resultater pr. dag</h2>
+            @if (!selected.IsTimed)
+            {
+                <p>Løftet i perioden <strong>@Number(selected.Days.Sum(day => day.VolumeKg!.Value)) kg</strong>.
+                    Volumen for hver registrering beregnes som vægt × sæt × gentagelser.</p>
+            }
+            <table aria-labelledby="progression-data-title">
+                <thead>
+                    <tr>
+                        <th scope="col">Dato</th>
+                        @if (selected.IsTimed)
+                        {
+                            <th scope="col">Længste sæt (min:sek)</th>
+                        }
+                        else
+                        {
+                            <th scope="col">Vægt (kg)</th>
+                            <th scope="col">Gent. pr. sæt</th>
+                            <th scope="col">Volumen (kg)</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var day in selected.Days.Reverse())
+                    {
+                        <tr>
+                            <th scope="row"><time datetime="@day.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@day.Date.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture)</time></th>
+                            @if (selected.IsTimed)
+                            {
+                                <td>@Duration(day.MaxDurationSeconds!.Value)</td>
+                            }
+                            else
+                            {
+                                <td>@Number(day.MaxWeight!.Value)</td>
+                                <td>@day.MaxRepetitions</td>
+                                <td>@Number(day.VolumeKg!.Value)</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </section>
+    }
+
+    <StrengthBottomNavigation />
+</main>
+
+@code {
+    private static readonly NumberFormatInfo DanishNumbers = new()
+    {
+        NumberDecimalSeparator = ",",
+        NumberGroupSeparator = "."
+    };
+    private IReadOnlyList<StrengthExerciseProgressionResponse> exercises = [];
+    private int days = 90;
+    private string? selectedKey;
+    private string? error;
+    private bool loading;
+    private StrengthExerciseProgressionResponse? Selected => exercises.FirstOrDefault(exercise => exercise.Key == selectedKey);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        error = null;
+        var result = await Programs.GetProgressionAsync(days);
+        error = result.Error;
+        if (result.Value is { } updated)
+        {
+            if (Selected is { } previous && updated.All(exercise => exercise.Key != previous.Key))
+            {
+                updated.Add(previous with { Days = [] });
+            }
+
+            exercises = updated;
+            selectedKey ??= exercises.FirstOrDefault()?.Key;
+        }
+        loading = false;
+    }
+
+    private static string Number(decimal value) => value.ToString("#,0.##", DanishNumbers);
+
+    private static string Duration(int seconds) => $"{seconds / 60}:{seconds % 60:00}";
+}

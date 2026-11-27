@@ -74,3 +74,8 @@ public sealed record CompletedWorkoutExerciseResponse(string Name, decimal Weigh
 }
 public sealed record CompletedWorkoutResponse(Guid Id, DateOnly Date, string WorkoutName,
     IReadOnlyList<CompletedWorkoutExerciseResponse> Exercises);
+
+public sealed record StrengthProgressionDayResponse(DateOnly Date, decimal? MaxWeight, int? MaxRepetitions,
+    decimal? VolumeKg, int? MaxDurationSeconds);
+public sealed record StrengthExerciseProgressionResponse(string Key, string Name, bool IsTimed,
+    IReadOnlyList<StrengthProgressionDayResponse> Days);

@@ -531,6 +531,8 @@ a {
     padding: 1.5rem;
 }
 
+.dashboard-strength-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+
 .dashboard-card-accent {
     border-color: var(--color-accent-border);
     background: linear-gradient(145deg, var(--color-info-gradient), var(--color-surface) 58%);
@@ -896,6 +898,40 @@ a:focus-visible {
 .strength-outline-button, .strength-secondary-button { border-color: var(--strength-border); background: var(--strength-raised); color: var(--strength-text); }
 .strength-wide-button { width: 100%; }
 .strength-card-button { width: 100%; margin-top: 1.1rem; }
+.strength-progression-link { margin-bottom: 1.5rem; }
+.strength-app.strength-progression { width: min(100%, 57rem); }
+.strength-progression .strength-mobile-header { margin-bottom: 1.35rem; }
+.strength-progression .strength-mobile-header > div:first-child { min-width: 0; }
+.strength-progression .strength-mobile-header h1 { font-size: clamp(1.3rem, 5.8vw, 1.85rem); overflow-wrap: anywhere; }
+.strength-progression .strength-mobile-header p { margin: 0.35rem 0 0; }
+.strength-progression-filters, .strength-progression-charts { display: grid; gap: 0.75rem; margin-bottom: 1rem; }
+.strength-progression-filters .strength-input-label, .strength-progression-filters select { min-width: 0; }
+.strength-progression-chart { min-width: 0; }
+.strength-progression-chart p { margin-bottom: 0.8rem; font-size: 0.84rem; }
+.strength-progression-chart p strong, .strength-progression-data p strong { color: var(--strength-text); }
+.strength-progression-plot { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.4rem; }
+.strength-progression-axis { display: flex; flex-direction: column; justify-content: space-between; gap: 0.1rem; }
+.strength-progression-axis, .strength-progression-dates { color: var(--strength-muted); font-size: 0.71rem; }
+.strength-progression-plot svg { display: block; width: 100%; }
+.strength-progression-gridlines { fill: none; stroke: var(--color-input-border); }
+.strength-progression-line { fill: none; stroke: var(--color-chart-primary); stroke-width: 2.6; stroke-linejoin: round; }
+.strength-progression-point { fill: var(--color-chart-primary); }
+.strength-progression-dates { display: flex; justify-content: space-between; padding: 0.25rem 0.45rem 0 3rem; }
+.strength-progression-single-date { margin-inline: auto; }
+.strength-progression-data { overflow-wrap: anywhere; }
+.strength-progression-data p { margin-bottom: 0.7rem; font-size: 0.84rem; }
+.strength-progression-data table { width: 100%; border-collapse: collapse; font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+.strength-progression-data :is(th, td) { padding: 0.55rem 0.25rem; text-align: right; }
+.strength-progression-data tr > :first-child { text-align: left; }
+.strength-progression-data thead { color: var(--strength-muted); }
+.strength-progression-data tbody tr { border-top: 1px solid var(--strength-border); }
+.strength-progression-data tbody th { font-weight: 500; }
+
+@media (min-width: 42rem) {
+    .strength-progression-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+    .strength-progression-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .strength-program-grid, .strength-workout-list, .strength-workout-editor, .strength-active-exercises, .strength-schedule-list { display: grid; gap: 0.8rem; }
 .strength-workout-editor { min-width: 0; margin: 0; padding: 0; border: 0; }
 .strength-program-card { overflow: hidden; }

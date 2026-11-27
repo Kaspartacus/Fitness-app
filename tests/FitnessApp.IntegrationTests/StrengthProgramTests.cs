@@ -254,6 +254,91 @@ public sealed class StrengthProgramTests
     }
 
     [Fact]
+    public async Task ProgressionUsesOwnerSnapshotsAndCopenhagenDaysAcrossPrograms()
+    {
+        using var factory = new AuthWebApplicationFactory();
+        await factory.InitializeDatabaseAsync();
+        using var owner = await Login(factory);
+        using var other = await Login(factory);
+        var draft = new SaveProgramRequest
+        {
+            Name = "Progression",
+            Workouts =
+            [
+                new WorkoutRequest
+                {
+                    Name = "Styrkepas",
+                    Exercises =
+                    [
+                        new ExerciseRequest { CatalogExerciseId = "squat", Weight = 30 },
+                        new ExerciseRequest { CatalogExerciseId = "plank", DurationSeconds = 45, Repetitions = 1 },
+                        new ExerciseRequest { Name = "Squat", Weight = 10 }
+                    ]
+                }
+            ]
+        };
+        var first = await Create(owner, draft);
+        var second = await Create(owner, draft);
+        var foreign = await Create(other, draft);
+        const string path = "/api/strength/progression?days=";
+        Assert.Empty((await owner.GetFromJsonAsync<StrengthExerciseProgressionResponse[]>(path + 30))!);
+
+        var zone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Copenhagen");
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone).DateTime);
+        var firstDay = today.AddDays(-29);
+        var boundary = TimeZoneInfo.ConvertTimeToUtc(firstDay.ToDateTime(TimeOnly.MinValue), zone);
+        await Complete(owner, first, 22.5m, 8, 62, boundary);
+        await Complete(owner, second, 30m, 6, 75, boundary.AddHours(2));
+        await Complete(owner, second, 35m, 7, 82, boundary.AddDays(3));
+        await Complete(owner, first, 42m, 9, 90, boundary.AddSeconds(-1));
+        await Complete(owner, first, 125m, 21, 300, boundary.AddHours(3), performed: false);
+        await Complete(other, foreign, 300m, 22, 240, boundary.AddHours(3));
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await owner.DeleteAsync($"{Programs}/{first.Id}?version={first.Version}")).StatusCode);
+
+        var recent = (await owner.GetFromJsonAsync<StrengthExerciseProgressionResponse[]>(path + 30))!;
+        var squat = Assert.Single(recent, exercise => exercise.Key == "catalog:squat:weight");
+        Assert.Equal(new StrengthProgressionDayResponse(firstDay, 30m, 8, 720m, null), squat.Days[0]);
+        Assert.Equal(new StrengthProgressionDayResponse(firstDay.AddDays(3), 35m, 7, 490m, null), squat.Days[1]);
+        Assert.Equal(2, squat.Days.Count);
+        var plank = Assert.Single(recent, exercise => exercise.IsTimed);
+        Assert.Equal(new StrengthProgressionDayResponse(firstDay, null, null, null, 75), plank.Days[0]);
+        Assert.Equal(new StrengthProgressionDayResponse(firstDay.AddDays(3), null, null, null, 82), plank.Days[1]);
+        var manual = recent.Where(exercise => exercise.Key.StartsWith("manual:", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(2, manual.Length);
+        Assert.Equal([1, 2], manual.Select(exercise => exercise.Days.Count).Order());
+
+        var earlier = (await owner.GetFromJsonAsync<StrengthExerciseProgressionResponse[]>(path + 90))!
+            .Single(exercise => exercise.Key == squat.Key);
+        Assert.Equal(new StrengthProgressionDayResponse(firstDay.AddDays(-1), 42m, 9, 756m, null), earlier.Days[0]);
+        Assert.Equal(3, earlier.Days.Count);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.GetAsync(path + 366)).StatusCode);
+
+        async Task Complete(HttpClient client, ProgramResponse program, decimal weight, int repetitions, int duration,
+            DateTime completedAt, bool performed = true)
+        {
+            var workout = program.Workouts[0];
+            var input = Completion(workout);
+            var exercises = input.Exercises!;
+            exercises[0].Weight = weight;
+            exercises[0].Sets = 2;
+            exercises[0].Repetitions = repetitions;
+            exercises[0].IsCompleted = performed;
+            exercises[1].DurationSeconds = duration;
+            exercises[1].IsCompleted = performed;
+            exercises[2].IsCompleted = performed;
+            Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync(
+                $"{Programs}/{program.Id}/workouts/{workout.Id}/complete", input)).StatusCode);
+
+            await using var scope = factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+            var saved = await db.CompletedWorkouts.SingleAsync(item => item.CompletionId == input.CompletionId);
+            saved.CompletedAt = completedAt;
+            await db.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
     public async Task ProgramPersistsMultipleOrderedWorkoutsWithExerciseNotes()
     {
         using var factory = new AuthWebApplicationFactory();
@@ -400,6 +485,7 @@ public sealed class StrengthProgramTests
         if (state == "revoked") await client.PostAsync("/api/auth/logout", null);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/strength/overview")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/strength/exercises")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/strength/progression?days=90")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"{Programs}/{program.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PutAsJsonAsync($"{Programs}/{program.Id}/schedule", new ScheduleResponse(program.Version, Week()))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync($"{Programs}/{program.Id}/workouts/{program.Workouts[0].Id}/complete", Completion(program.Workouts[0]))).StatusCode);
