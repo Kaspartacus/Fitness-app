@@ -1,0 +1,103 @@
+@page "/styrke/milepaele"
+@attribute [Authorize]
+@using System.Globalization
+@using FitnessApp.Client.Strength
+@using FitnessApp.Contracts.Strength
+@inject StrengthProgramClient Programs
+
+<PageTitle>Styrkebadges</PageTitle>
+
+<main class="strength-app strength-with-bottom-nav" aria-labelledby="milestones-title">
+    <header class="strength-back-header">
+        <a href="/styrke" class="strength-icon-button" aria-label="Tilbage til styrketræning">←</a>
+        <div><h1 id="milestones-title">Styrkebadges</h1></div>
+        <span class="strength-header-spacer"></span>
+    </header>
+
+    @if (loading)
+    {
+        <p class="strength-feedback" role="status">Indlæser dine badges…</p>
+    }
+    else if (error is not null)
+    {
+        <section class="strength-status-card" role="alert">
+            <p>@error</p>
+            <button class="strength-secondary-button" type="button" @onclick="LoadAsync">Prøv igen</button>
+        </section>
+    }
+    else if (milestones is not null)
+    {
+        <div class="strength-milestones-grid">
+            <article class="strength-editor-card strength-milestone @(milestones.RecordEarnedOn.HasValue ? "is-earned" : null)"
+                     aria-labelledby="strength-record-badge">
+                <div class="strength-milestone-heading">
+                    <h2 id="strength-record-badge">Personlig rekord</h2>
+                    <span class="strength-milestone-status">@(milestones.RecordEarnedOn.HasValue ? "Optjent" : "Undervejs")</span>
+                </div>
+                <p>På en ny træningsdag skal du overgå dit hidtil bedste resultat for samme øvelse. Der tælles højeste vægt eller længste sæt for en tidsøvelse.</p>
+                @if (milestones.RecordEarnedOn is { } recordDate)
+                {
+                    <p>Optjent <time datetime="@IsoDate(recordDate)">@DisplayDate(recordDate)</time></p>
+                }
+                else if (milestones.HasRecordBaseline)
+                {
+                    <p>Du har registreret dit udgangspunkt. Næste skridt er en forbedring på en senere dag.</p>
+                }
+                else
+                {
+                    <p>Din første gennemførte øvelse giver dig et resultat at sammenligne med.</p>
+                }
+            </article>
+
+            <article class="strength-editor-card strength-milestone @(milestones.VolumeEarnedOn.HasValue ? "is-earned" : null)"
+                     aria-labelledby="strength-volume-badge">
+                <div class="strength-milestone-heading">
+                    <h2 id="strength-volume-badge">@Kg(milestones.VolumeGoalKg) løftet</h2>
+                    <span class="strength-milestone-status">@(milestones.VolumeEarnedOn.HasValue ? "Optjent" : "Undervejs")</span>
+                </div>
+                <p>Samlet løftet vægt beregnes som vægt × sæt × gentagelser for hver gennemført vægtøvelse.</p>
+                <div class="strength-milestone-progress">
+                    <progress max="@milestones.VolumeGoalKg" value="@VolumeProgress" aria-label="Fremskridt mod løftet vægt"></progress>
+                    <p><strong>@Kg(milestones.TotalVolumeKg)</strong> løftet i alt · mål @Kg(milestones.VolumeGoalKg)</p>
+                </div>
+                @if (milestones.VolumeEarnedOn is { } volumeDate)
+                {
+                    <p>Optjent <time datetime="@IsoDate(volumeDate)">@DisplayDate(volumeDate)</time></p>
+                }
+            </article>
+        </div>
+    }
+
+    <StrengthBottomNavigation />
+</main>
+
+@code {
+    private static readonly NumberFormatInfo DanishNumbers = new()
+    {
+        NumberDecimalSeparator = ",",
+        NumberGroupSeparator = "."
+    };
+
+    private StrengthMilestonesResponse? milestones;
+    private bool loading;
+    private string? error;
+
+    private string VolumeProgress => Math.Min(milestones!.TotalVolumeKg, milestones.VolumeGoalKg)
+        .ToString(CultureInfo.InvariantCulture);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        error = null;
+        var result = await Programs.GetMilestonesAsync();
+        milestones = result.Value;
+        error = result.Error;
+        loading = false;
+    }
+
+    private static string Kg(decimal value) => $"{value.ToString("#,0.##", DanishNumbers)} kg";
+    private static string IsoDate(DateOnly date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    private static string DisplayDate(DateOnly date) => date.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+}

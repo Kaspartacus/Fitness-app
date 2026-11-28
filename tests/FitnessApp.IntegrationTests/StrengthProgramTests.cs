@@ -339,6 +339,94 @@ public sealed class StrengthProgramTests
     }
 
     [Fact]
+    public async Task MilestonesUseLifetimeOwnerHistoryAndAwardEachBadgeOnItsFirstQualifyingDay()
+    {
+        using var factory = new AuthWebApplicationFactory();
+        await factory.InitializeDatabaseAsync();
+        using var owner = await Login(factory);
+        using var other = await Login(factory);
+        var draft = new SaveProgramRequest
+        {
+            Name = "Milepæle",
+            Workouts =
+            [
+                new WorkoutRequest
+                {
+                    Name = "Styrkepas",
+                    Exercises =
+                    [
+                        new ExerciseRequest { CatalogExerciseId = "squat", Weight = 20 },
+                        new ExerciseRequest { CatalogExerciseId = "plank", DurationSeconds = 45, Repetitions = 1 }
+                    ]
+                }
+            ]
+        };
+        var first = await Create(owner, draft);
+        var second = await Create(owner, draft);
+        var foreign = await Create(other, draft);
+        var firstDay = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-410);
+        var zone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Copenhagen");
+        const string endpoint = "/api/strength/milestones";
+        var empty = new StrengthMilestonesResponse(0, 1000, null, false, null);
+
+        await Complete(other, foreign, firstDay, 100m, 10, 90);
+        using var emptyResponse = await owner.GetAsync(endpoint);
+        Assert.Equal(HttpStatusCode.OK, emptyResponse.StatusCode);
+        Assert.True(emptyResponse.Headers.CacheControl?.NoStore);
+        Assert.Equal(empty, await emptyResponse.Content.ReadFromJsonAsync<StrengthMilestonesResponse>());
+        await Complete(owner, first, firstDay, 20m, 10, 45);
+        await Complete(owner, second, firstDay, 30m, 5, 50);
+        Assert.Equal(new(700m, 1000, null, true, null),
+            await owner.GetFromJsonAsync<StrengthMilestonesResponse>(endpoint));
+
+        var volumeDate = firstDay.AddDays(1);
+        await Complete(owner, second, volumeDate, 30m, 5, 50, retry: true);
+        Assert.Equal(new(1000m, 1000, volumeDate, true, null),
+            await owner.GetFromJsonAsync<StrengthMilestonesResponse>(endpoint));
+
+        var recordDate = firstDay.AddDays(2);
+        await Complete(owner, second, recordDate, 27.5m, 4, 55);
+        await Complete(owner, second, firstDay.AddDays(3), 35m, 4, 65);
+        await Complete(owner, second, firstDay.AddDays(1), 100m, 10, 120, performed: false);
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync($"{Programs}/{first.Id}?version={first.Version}")).StatusCode);
+        Assert.Equal(new(1500m, 1000, volumeDate, true, recordDate),
+            await owner.GetFromJsonAsync<StrengthMilestonesResponse>(endpoint));
+        Assert.Equal(new(2000m, 1000, firstDay, true, null),
+            await other.GetFromJsonAsync<StrengthMilestonesResponse>(endpoint));
+        await Complete(other, foreign, volumeDate, 110m, 10, 90);
+        Assert.Equal(new(4200m, 1000, firstDay, true, volumeDate),
+            await other.GetFromJsonAsync<StrengthMilestonesResponse>(endpoint));
+        Assert.Equal(new(1500m, 1000, volumeDate, true, recordDate),
+            await owner.GetFromJsonAsync<StrengthMilestonesResponse>(endpoint));
+
+        async Task Complete(HttpClient client, ProgramResponse program, DateOnly day, decimal weight,
+            int repetitions, int duration, bool performed = true, bool retry = false)
+        {
+            var workout = Assert.Single(program.Workouts);
+            var input = Completion(workout);
+            var measurements = input.Exercises!;
+            measurements[0].Weight = weight;
+            measurements[0].Sets = 2;
+            measurements[0].Repetitions = repetitions;
+            measurements[0].IsCompleted = performed;
+            measurements[1].DurationSeconds = duration;
+            measurements[1].IsCompleted = performed;
+            var url = $"{Programs}/{program.Id}/workouts/{workout.Id}/complete";
+            Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync(url, input)).StatusCode);
+
+            await using var scope = factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<FitnessDbContext>();
+            var saved = await db.CompletedWorkouts.SingleAsync(item => item.CompletionId == input.CompletionId);
+            saved.CompletedAt = TimeZoneInfo.ConvertTimeToUtc(day.ToDateTime(TimeOnly.MinValue), zone);
+            await db.SaveChangesAsync();
+            if (retry)
+            {
+                Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync(url, input)).StatusCode);
+            }
+        }
+    }
+
+    [Fact]
     public async Task ProgramPersistsMultipleOrderedWorkoutsWithExerciseNotes()
     {
         using var factory = new AuthWebApplicationFactory();
@@ -486,6 +574,7 @@ public sealed class StrengthProgramTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/strength/overview")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/strength/exercises")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/strength/progression?days=90")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/strength/milestones")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"{Programs}/{program.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PutAsJsonAsync($"{Programs}/{program.Id}/schedule", new ScheduleResponse(program.Version, Week()))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync($"{Programs}/{program.Id}/workouts/{program.Workouts[0].Id}/complete", Completion(program.Workouts[0]))).StatusCode);

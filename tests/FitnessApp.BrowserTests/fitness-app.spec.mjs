@@ -375,6 +375,44 @@ test('view strength progression by exercise and period', async ({ page, evidence
   });
 });
 
+test('view earned strength badges and retry an interrupted load', async ({ page, evidence }, testInfo) => {
+  await evidence.step('Open the strength badges from strength training and retry the request', async () => {
+    await page.goto('/login');
+    await submitLogin(page, adminEmail);
+    await page.getByRole('navigation', { name: 'Hovednavigation' })
+      .getByRole('link', { name: 'Træning', exact: true }).click();
+    await page.route('**/api/strength/milestones', (route) => route.fulfill({ status: 503 }), { times: 1 });
+    await page.getByRole('link', { name: 'Se styrkebadges' }).click();
+    await expect(page).toHaveURL('/styrke/milepaele');
+    await expect(page.getByRole('alert')).toContainText('Kunne ikke kontakte serveren');
+    await page.getByRole('button', { name: 'Prøv igen' }).click();
+  });
+
+  await evidence.step('Check the two earned badges and their dates', async () => {
+    const record = page.getByRole('article', { name: 'Personlig rekord' });
+    const volume = page.getByRole('article', { name: '1.000 kg løftet' });
+    await expect(record.getByText('Optjent', { exact: true })).toBeVisible();
+    await expect(volume.getByText('Optjent', { exact: true })).toBeVisible();
+    const earned = [record.locator('time'), volume.locator('time')];
+    for (const date of earned) {
+      await expect(date).toHaveAttribute('datetime', /^\d{4}-\d{2}-\d{2}$/);
+    }
+    const progress = volume.getByRole('progressbar', { name: 'Fremskridt mod løftet vægt' });
+    await expect(progress).toHaveAttribute('max', '1000');
+    await expect(progress).toHaveAttribute('value', '1000');
+    await evidence.screenshot('strength-badges-earned');
+
+    if (testInfo.project.use.hasTouch) {
+      await page.setViewportSize({ width: 360, height: 844 });
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(360);
+      await expect(page.getByRole('heading', { name: 'Styrkebadges' })).toBeVisible();
+      await evidence.screenshot('strength-badges-360');
+    }
+    await page.getByRole('link', { name: 'Tilbage til styrketræning' }).click();
+    await expectStrength(page);
+  });
+});
+
 test('find a catalog exercise and save a timed workout', async ({ page, evidence }, testInfo) => {
   const program = `Katalogtræning ${testInfo.project.name}`;
   const dialog = page.getByRole('dialog', { name: 'Tilføj øvelse' });

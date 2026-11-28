@@ -19,6 +19,9 @@ public sealed class StrengthProgramClient(IHttpClientFactory factory)
     public Task<ProgramClientResult<List<StrengthExerciseProgressionResponse>>> GetProgressionAsync(int days) =>
         Send<List<StrengthExerciseProgressionResponse>>(HttpMethod.Get, $"api/strength/progression?days={days}");
 
+    public Task<ProgramClientResult<StrengthMilestonesResponse>> GetMilestonesAsync() =>
+        Send<StrengthMilestonesResponse>(HttpMethod.Get, "api/strength/milestones");
+
     public Task<ProgramClientResult<StrengthOverviewResponse>> GetOverviewAsync() =>
         Send<StrengthOverviewResponse>(HttpMethod.Get, "api/strength/overview");
 

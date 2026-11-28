@@ -898,7 +898,29 @@ a:focus-visible {
 .strength-outline-button, .strength-secondary-button { border-color: var(--strength-border); background: var(--strength-raised); color: var(--strength-text); }
 .strength-wide-button { width: 100%; }
 .strength-card-button { width: 100%; margin-top: 1.1rem; }
-.strength-progression-link { margin-bottom: 1.5rem; }
+.strength-overview-actions { display: flex; flex-wrap: wrap; gap: 0.65rem; margin-bottom: 1.5rem; }
+.strength-milestones-grid { display: grid; gap: 1rem; }
+.strength-milestone { min-width: 0; align-content: start; }
+.strength-milestone-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.strength-milestone-heading h2 { margin: 0; }
+.strength-milestone-status {
+    padding: 0.3rem 0.55rem;
+    border-radius: 2rem;
+    background: var(--strength-raised);
+    color: var(--strength-text);
+    font-size: 0.76rem;
+    font-weight: 750;
+}
+.strength-milestone.is-earned { border-color: var(--color-success-border); }
+.strength-milestone.is-earned .strength-milestone-status { background: var(--color-success-bg); color: var(--color-success-text); }
+.strength-milestone-progress progress { width: 100%; accent-color: var(--color-chart-primary); }
+.strength-milestone-progress p { margin: 0.25rem 0 0; }
+.strength-milestone-progress strong { color: var(--strength-text); }
+
+@media (min-width: 42rem) {
+    .strength-milestones-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .strength-app.strength-progression { width: min(100%, 57rem); }
 .strength-progression .strength-mobile-header { margin-bottom: 1.35rem; }
 .strength-progression .strength-mobile-header > div:first-child { min-width: 0; }

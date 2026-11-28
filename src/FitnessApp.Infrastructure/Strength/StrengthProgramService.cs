@@ -8,17 +8,52 @@ namespace FitnessApp.Infrastructure.Strength;
 
 public sealed class StrengthProgramService(FitnessDbContext db, TimeProvider timeProvider) : IStrengthProgramService
 {
+    private const int VolumeMilestoneKg = 1000;
     private static readonly TimeZoneInfo CopenhagenTimeZone = FindCopenhagenTimeZone();
 
     public async Task<IReadOnlyList<CatalogExercise>> GetCatalogAsync(CancellationToken cancellationToken) =>
         await db.StrengthCatalog.AsNoTracking().OrderBy(exercise => exercise.Name).ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<StrengthExerciseProgressionData>> GetProgressionAsync(string userId, int days,
+    public Task<IReadOnlyList<StrengthExerciseProgressionData>> GetProgressionAsync(string userId, int days,
         CancellationToken cancellationToken)
     {
         var now = UtcNow();
         var firstDay = CopenhagenDate(now).AddDays(1 - days);
         var start = TimeZoneInfo.ConvertTimeToUtc(firstDay.ToDateTime(TimeOnly.MinValue), CopenhagenTimeZone);
+        return GetDailyProgressionAsync(userId, start, now, cancellationToken);
+    }
+
+    public async Task<StrengthMilestonesData> GetMilestonesAsync(string userId, CancellationToken cancellationToken)
+    {
+        var history = await GetDailyProgressionAsync(userId, DateTime.MinValue, UtcNow(), cancellationToken);
+        decimal volume = 0;
+        DateOnly? volumeEarnedOn = null;
+        foreach (var day in history.SelectMany(exercise => exercise.Days).Where(day => day.VolumeKg.HasValue)
+                     .OrderBy(day => day.Date))
+        {
+            volume += day.VolumeKg!.Value;
+            if (volume >= VolumeMilestoneKg)
+            {
+                volumeEarnedOn ??= day.Date;
+            }
+        }
+
+        var recordEarnedOn = history.Select(exercise =>
+        {
+            // Day one establishes the baseline. Improving it later earns the badge once.
+            var baseline = RecordMeasurement(exercise.Days[0]);
+            return exercise.Days.Skip(1).FirstOrDefault(day => RecordMeasurement(day) > baseline)?.Date;
+        }).Min();
+
+        return new StrengthMilestonesData(volume, VolumeMilestoneKg, volumeEarnedOn, history.Count > 0, recordEarnedOn);
+    }
+
+    private static decimal RecordMeasurement(StrengthProgressionDayData day) =>
+        day.MaxWeight ?? day.MaxDurationSeconds!.Value;
+
+    private async Task<IReadOnlyList<StrengthExerciseProgressionData>> GetDailyProgressionAsync(string userId,
+        DateTime start, DateTime now, CancellationToken cancellationToken)
+    {
         var measurements = await (from workout in db.CompletedWorkouts.AsNoTracking()
                                   where workout.UserId == userId && workout.CompletedAt >= start && workout.CompletedAt <= now
                                   from exercise in workout.Exercises
