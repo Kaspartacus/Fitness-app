@@ -17,6 +17,12 @@ internal static class StrengthProgramEndpoints
             Results.Ok((await service.GetCatalogAsync(ct)).Select(exercise => new CatalogExerciseResponse(exercise.Id,
                 exercise.Name, exercise.Category, exercise.SearchAliases.Split('|'), exercise.ImageAlt, exercise.IsTimed))
                 .ToArray()));
+        group.MapGet("/milestones", async (ClaimsPrincipal user, IStrengthProgramService service, CancellationToken ct) =>
+        {
+            var milestones = await service.GetMilestonesAsync(Owner(user), ct);
+            return Results.Ok(new StrengthMilestonesResponse(milestones.TotalVolumeKg, milestones.VolumeGoalKg,
+                milestones.VolumeEarnedOn, milestones.HasRecordBaseline, milestones.RecordEarnedOn));
+        });
         group.MapGet("/progression", async (int days, ClaimsPrincipal user, IStrengthProgramService service,
             CancellationToken ct) =>
         {

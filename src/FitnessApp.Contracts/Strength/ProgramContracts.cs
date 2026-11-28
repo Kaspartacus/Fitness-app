@@ -79,3 +79,6 @@ public sealed record StrengthProgressionDayResponse(DateOnly Date, decimal? MaxW
     decimal? VolumeKg, int? MaxDurationSeconds);
 public sealed record StrengthExerciseProgressionResponse(string Key, string Name, bool IsTimed,
     IReadOnlyList<StrengthProgressionDayResponse> Days);
+
+public sealed record StrengthMilestonesResponse(decimal TotalVolumeKg, int VolumeGoalKg, DateOnly? VolumeEarnedOn,
+    bool HasRecordBaseline, DateOnly? RecordEarnedOn);
